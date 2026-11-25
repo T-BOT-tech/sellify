@@ -3882,7 +3882,7 @@ const WORKFORCE_API_ENTITIES = Object.freeze({
   members: 'member', profiles: 'profile', engagements: 'engagement',
   calendars: 'calendar', 'calendar-exceptions': 'calendar_exception',
   availability: 'availability', assignments: 'assignment', shifts: 'shift',
-  allocations: 'allocation', utilization: 'utilization',
+  allocations: 'allocation', utilization: 'utilization', 'leave-requests': 'leave_request', absences: 'absence',
 });
 const WORKFORCE_API_FIELDS = Object.freeze({
   department: ['code','name','description'],
@@ -3898,6 +3898,8 @@ const WORKFORCE_API_FIELDS = Object.freeze({
   shift: ['resource_id','location_id','starts_at','ends_at','timezone','break_rules'],
   allocation: ['resource_id','starts_at','ends_at'],
   utilization: ['resource_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source'],
+  leave_request: ['leave_category','starts_at','ends_at','timezone','all_day','reason'],
+  absence: ['absence_type','starts_at','ends_at','timezone','all_day','reason'],
 });
 const WORKFORCE_API_CREATE_ONLY_FIELDS = Object.freeze({
   member: ['user_id'],
@@ -3910,6 +3912,8 @@ const WORKFORCE_API_CREATE_ONLY_FIELDS = Object.freeze({
   shift: ['member_id','recurrence_source_id','assignment_source_id'],
   allocation: ['member_id','booking_id','operational_task_id'],
   utilization: ['member_id','booking_id','operational_task_id'],
+  leave_request: ['member_id'],
+  absence: ['member_id'],
 });
 const WORKFORCE_CREATE_REQUIRED = Object.freeze({
   department: ['code','name'],
@@ -3925,6 +3929,8 @@ const WORKFORCE_CREATE_REQUIRED = Object.freeze({
   shift: ['member_id','starts_at','ends_at','timezone'],
   allocation: ['member_id','starts_at','ends_at'],
   utilization: ['member_id','planned_starts_at','planned_ends_at','status','evidence_source'],
+  leave_request: ['member_id','leave_category','starts_at','ends_at','timezone','reason'],
+  absence: ['member_id','absence_type','starts_at','ends_at','timezone','reason'],
 });
 function workforceApiBody(body, entity, operation, action = null) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -3936,7 +3942,13 @@ function workforceApiBody(body, entity, operation, action = null) {
       ? ['expected_version','member_id','reason']
       : entity === 'shift' && action === 'cancel'
         ? ['expected_version','reason']
-        : operation === 'create'
+        : entity === 'leave_request' && ['approve','reject'].includes(action)
+          ? ['expected_version','decision_reason']
+          : entity === 'leave_request' && ['withdraw','cancel'].includes(action)
+            ? ['expected_version','reason']
+            : entity === 'absence' && action === 'void'
+              ? ['expected_version','reason']
+              : operation === 'create'
           ? [...WORKFORCE_API_FIELDS[entity], ...(WORKFORCE_API_CREATE_ONLY_FIELDS[entity] || []), ...(entity === 'utilization' ? ['status'] : []), 'id', 'idempotency_key']
           : operation === 'update'
             ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
@@ -3955,7 +3967,9 @@ function workforceApiBody(body, entity, operation, action = null) {
   } else if (!Number.isInteger(Number(body.expected_version)) || Number(body.expected_version) < 1) {
     throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'WORKFORCE_EXPECTED_VERSION_REQUIRED' });
   }
-  const validationOperation = action === 'reassign' || (entity === 'shift' && action === 'cancel') ? action : operation;
+  const validationOperation = action === 'reassign' || (entity === 'shift' && action === 'cancel')
+    || (entity === 'leave_request' && ['approve','reject','withdraw','cancel'].includes(action))
+    || (entity === 'absence' && action === 'void') ? action : operation;
   const validation = validateWorkforceApiPayload(entity, validationOperation, body);
   if (!validation.valid) throw Object.assign(new Error(validation.errors.join('; ')), {
     statusCode: 400, code: 'WORKFORCE_VALIDATION_FAILED',
@@ -4037,6 +4051,7 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     organization_id: String(tenant.organizationId), tenant_id: String(tenant.id), chat_id: String(tenant.chatId),
     actor: session, actor_id: session.userId,
     provider_user_id: providerScoped ? String(session.userId) : null,
+    member_user_id: String(session.role || '').toLowerCase() === 'staff' ? String(session.userId) : null,
     ...(resourceId ? { resource_id: resourceId } : {}),
     ...(session.locationId ? { location_id: String(session.locationId) } : {}),
   }));
@@ -4067,9 +4082,13 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     }
     return sendJSON(res, 200, { records, count: records.length, authority: 'workforce' }, req);
   }
-  if (req.method === 'GET' && recordId && action === 'history' && entity === 'shift') {
-    const records = repository.listShiftHistory('shift', recordId, contexts[0]);
-    return sendJSON(res, 200, { records, authority: 'workforce' }, req);
+  if (req.method === 'GET' && recordId && action === 'history' && ['shift','leave_request','absence'].includes(entity)) {
+    let lastError = null;
+    for (const context of contexts) {
+      try { return sendJSON(res, 200, { records: repository.listEntityHistory(entity, recordId, context), authority: 'workforce' }, req); }
+      catch (error) { if (error.code !== 'WORKFORCE_SCOPE_NOT_FOUND') throw error; lastError = error; }
+    }
+    throw lastError || Object.assign(new Error('Workforce history not found'), { statusCode: 404, code: 'WORKFORCE_SCOPE_NOT_FOUND' });
   }
   if (req.method === 'GET' && recordId && !action) {
     let lastError = null;
@@ -4110,7 +4129,7 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
   }
   if (req.method === 'POST' && recordId && action) {
     const body = workforceApiBody(await readBody(req), entity, 'lifecycle', action);
-    if (!['activate','suspend','deactivate','release','cancel','submit','approve','confirm','start','complete','end','link-account','unlink-account','generate','reassign'].includes(action)) {
+    if (!['activate','suspend','deactivate','release','cancel','submit','approve','reject','withdraw','void','confirm','start','complete','end','link-account','unlink-account','generate','reassign'].includes(action)) {
       throw Object.assign(new Error('Unsupported Workforce lifecycle action'), { statusCode: 400, code: 'WORKFORCE_LIFECYCLE_OPERATION_INVALID' });
     }
     let lastError = null;
@@ -4168,7 +4187,7 @@ const ROUTES = [
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
-  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/shifts\/([^/]+)\/history$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), 'shifts', decodeURIComponent(m[2]), 'history') },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/(shifts|leave-requests|absences)\/([^/]+)\/history$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), 'history') },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)\/(activate|suspend|deactivate|release|cancel|submit|approve|confirm|start|complete|end|link-account|unlink-account|generate|reassign)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), m[4]) },
