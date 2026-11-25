@@ -220,6 +220,7 @@ try {
     user_id: 'user-a',
     member_type: 'PROVIDER',
     display_name: 'Provider A',
+    primary_location_id: 'location-a',
     employee_number: 'EMP-001',
     department_id: department.record.id,
     position_id: position.record.id,
