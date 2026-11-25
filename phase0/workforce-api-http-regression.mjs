@@ -276,7 +276,7 @@ try {
     ['profiles', { member_id: memberId, effective_from: '2026-11-24T00:00:00.000Z', skills: ['HTTP regression skill'], visibility: 'ORGANIZATION' }],
     ['engagements', {
       member_id: memberId, engagement_type: 'EMPLOYMENT',
-      starts_at: '2026-11-26T08:00:00.000Z', ends_at: '2026-12-26T08:00:00.000Z',
+      starts_at: '2026-11-25T00:00:00.000Z', ends_at: '2026-12-26T08:00:00.000Z',
     }],
     ['shift-templates', {
       name: 'Morning Shift', start_local_time: '08:00', end_local_time: '16:30',
@@ -346,7 +346,7 @@ try {
     '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/assignments',
     'workforce-http-location-assignment-' + suffix,
     { member_id: memberId, assignment_type: 'LOCATION', location_id: primaryLocation.id,
-      starts_at: '2026-11-27T06:00:00.000Z', ends_at: '2026-11-27T14:00:00.000Z' },
+      starts_at: '2026-11-27T05:00:00.000Z', ends_at: '2026-11-27T13:30:00.000Z' },
   );
   for (const [plural, record] of Object.entries(createdEntities)) {
     const collectionPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/' + plural;
@@ -383,15 +383,36 @@ try {
   }
 
   let shiftTemplate = await lifecycle('shift-templates', createdEntities['shift-templates'], 'deactivate', 1, 'INACTIVE');
-  await lifecycle('shift-templates', shiftTemplate, 'activate', 2, 'ACTIVE');
+  shiftTemplate = await lifecycle('shift-templates', shiftTemplate, 'activate', 2, 'ACTIVE');
   let engagement = await lifecycle('engagements', createdEntities.engagements, 'submit', 1, 'PENDING_APPROVAL');
   engagement = await lifecycle('engagements', engagement, 'activate', 2, 'ACTIVE');
+  const activeLocationAssignment = await lifecycle('assignments', locationAssignment, 'activate', 1, 'ACTIVE');
+  const generated = await jsonRequest(
+    baseUrl,
+    '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/shift-templates/' + encodeURIComponent(shiftTemplate.id) + '/generate',
+    { token: ownerSession.token, method: 'POST', headers: { 'Idempotency-Key': 'workforce-http-generate-' + suffix },
+      body: { expected_version: shiftTemplate.version, member_id: memberId, from_date: '2026-11-27', to_date: '2026-11-27' } },
+  );
+  assert.equal(generated.response.status, 201, JSON.stringify(generated.payload));
+  assert.equal(generated.payload.created_count, 1);
+  assert.equal(generated.payload.created_records?.[0]?.generated_local_date, '2026-11-27');
+  assert.equal(generated.payload.created_records?.[0]?.starts_at, '2026-11-27T05:00:00.000Z');
+  assert.equal(generated.payload.created_records?.[0]?.ends_at, '2026-11-27T13:30:00.000Z');
+  assert.equal(generated.payload.created_records?.[0]?.timezone, 'Africa/Addis_Ababa');
+  const generatedReplay = await jsonRequest(
+    baseUrl,
+    '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/shift-templates/' + encodeURIComponent(shiftTemplate.id) + '/generate',
+    { token: ownerSession.token, method: 'POST', headers: { 'Idempotency-Key': 'workforce-http-generate-replay-' + suffix },
+      body: { expected_version: shiftTemplate.version, member_id: memberId, from_date: '2026-11-27', to_date: '2026-11-27' } },
+  );
+  assert.equal(generatedReplay.response.status, 200, JSON.stringify(generatedReplay.payload));
+  assert.equal(generatedReplay.payload.created_count, 0);
+  assert.equal(generatedReplay.payload.existing_count, 1, 'repeated generation must return the existing dated shift');
   engagement = await lifecycle('engagements', engagement, 'suspend', 3, 'SUSPENDED');
   engagement = await lifecycle('engagements', engagement, 'activate', 4, 'ACTIVE');
   await lifecycle('engagements', engagement, 'end', 5, 'ENDED');
   await lifecycle('calendar-exceptions', createdEntities['calendar-exceptions'], 'cancel', 1, 'CANCELLED');
   await lifecycle('assignments', createdEntities.assignments, 'activate', 1, 'ACTIVE');
-  const activeLocationAssignment = await lifecycle('assignments', locationAssignment, 'activate', 1, 'ACTIVE');
   await lifecycle('assignments', activeLocationAssignment, 'suspend', 2, 'SUSPENDED');
   let shift = await lifecycle('shifts', createdEntities.shifts, 'confirm', 1, 'CONFIRMED');
   shift = await lifecycle('shifts', shift, 'start', 2, 'IN_PROGRESS');
@@ -432,7 +453,7 @@ try {
     'a session from another tenant must not create Workforce records');
 
   console.log('Workforce authenticated HTTP API regression: PASS');
-  console.log('Session authentication, Workforce entity CRUD routes including shift templates, entity-specific lifecycle, idempotency, optimistic concurrency, and tenant isolation: VERIFIED');
+  console.log('Session authentication, Workforce CRUD, template-based dated shift generation, DST-aware time conversion, idempotency, conflict detection, optimistic concurrency, and tenant isolation: VERIFIED');
 } catch (error) {
   console.error(error);
   if (output) console.error('Backend output:\n' + output);
