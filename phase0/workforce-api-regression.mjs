@@ -102,6 +102,8 @@ for (const token of [
   'listServiceResources(chatId',
   'provider_user_id',
 ]) assert.ok(handler.includes(token), `missing API boundary: ${token}`);
+assert.ok(handler.includes('repository.generateShiftsFromTemplate'));
+assert.ok(handler.includes("action === 'generate'"));
 assert.equal(handler.includes('createServiceBooking('), false);
 assert.equal(handler.includes('createLogisticsSchedulingActivity('), false);
 
