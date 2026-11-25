@@ -14,6 +14,8 @@ import {
   WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION,
   runWorkforceOrganizationStructureMigration,
   WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION,
+  runWorkforceShiftTemplateMigration,
+  WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION,
   WORKFORCE_MEMBER_ORG_REFERENCES_MIGRATION_VERSION,
   WORKFORCE_DEPARTMENT_MIGRATION_VERSION,
   WORKFORCE_POSITION_MIGRATION_VERSION,
@@ -30,12 +32,13 @@ try {
     CREATE TABLE organizations (id TEXT PRIMARY KEY);
     CREATE TABLE tenants (chat_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL UNIQUE);
     CREATE TABLE users (id TEXT PRIMARY KEY);
-    CREATE TABLE locations (id TEXT PRIMARY KEY);
+    CREATE TABLE locations (id TEXT PRIMARY KEY, organization_id TEXT);
     CREATE TABLE service_resources (id TEXT PRIMARY KEY);
     CREATE TABLE service_bookings (id TEXT PRIMARY KEY, organization_id TEXT, chat_id TEXT, status TEXT);
     INSERT INTO organizations(id) VALUES ('org-a'), ('org-b');
     INSERT INTO tenants(chat_id, tenant_id) VALUES ('chat-a', 'tenant-a'), ('chat-b', 'tenant-b');
     INSERT INTO users(id) VALUES ('user-a'), ('user-b');
+    INSERT INTO locations(id, organization_id) VALUES ('location-a','org-a'), ('location-b','org-b');
   `);
 
   const first = runWorkforceSqliteMigrations(db);
@@ -190,6 +193,11 @@ try {
   }
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workforce_departments'").get());
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workforce_positions'").get());
+  const shiftTemplateMigration = runWorkforceShiftTemplateMigration(db);
+  const shiftTemplateReplay = runWorkforceShiftTemplateMigration(db);
+  assert.deepEqual(shiftTemplateMigration, { applied: true, version: WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION });
+  assert.deepEqual(shiftTemplateReplay, { applied: false, version: WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION });
+  assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workforce_shift_templates'").get());
   db.prepare("INSERT INTO workforce_departments (id,organization_id,tenant_id,chat_id,code,name,created_at,updated_at) VALUES ('dept-a','org-a','tenant-a','chat-a','OPS','Operations','2026-01-01','2026-01-01')").run();
   db.prepare("INSERT INTO workforce_positions (id,organization_id,tenant_id,chat_id,code,name,department_id,created_at,updated_at) VALUES ('position-a','org-a','tenant-a','chat-a','LEAD','Team Lead','dept-a','2026-01-01','2026-01-01')").run();
   db.prepare('UPDATE workforce_members SET department_id = ?, position_id = ? WHERE id = ?').run('dept-a','position-a','member-a');
@@ -200,6 +208,24 @@ try {
   db.prepare('UPDATE workforce_members SET supervisor_member_id = ? WHERE id = ?').run('member-external','member-a');
   assert.throws(() => db.prepare('UPDATE workforce_members SET supervisor_member_id = ? WHERE id = ?').run('member-a','member-external'));
   db.prepare('UPDATE workforce_members SET supervisor_member_id = NULL WHERE id = ?').run('member-a');
+  db.prepare(`
+    INSERT INTO workforce_shift_templates
+      (id,organization_id,tenant_id,chat_id,name,start_local_time,end_local_time,timezone,
+       break_rules_json,work_days_json,department_id,position_id,location_id,effective_from,created_at,updated_at)
+    VALUES ('template-a','org-a','tenant-a','chat-a','Morning Shift','08:00','16:30','Africa/Addis_Ababa',
+      '[{"start_local_time":"12:00","end_local_time":"12:30"}]','[1,2,3,4,5]','dept-a','position-a','location-a','2026-01-01','2026-01-01','2026-01-01')
+  `).run();
+  assert.equal(db.prepare('SELECT name FROM workforce_shift_templates WHERE id=?').get('template-a').name, 'Morning Shift');
+  assert.throws(() => db.prepare(`
+    INSERT INTO workforce_shift_templates
+      (id,organization_id,tenant_id,chat_id,name,start_local_time,end_local_time,timezone,effective_from,department_id,created_at,updated_at)
+    VALUES ('template-cross','org-b','tenant-b','chat-b','Cross','08:00','16:00','Africa/Addis_Ababa','2026-01-01','dept-a','2026-01-01','2026-01-01')
+  `).run(), /WORKFORCE_TEMPLATE_DEPARTMENT_SCOPE_INVALID/);
+  assert.throws(() => db.prepare(`
+    INSERT INTO workforce_shift_templates
+      (id,organization_id,tenant_id,chat_id,name,start_local_time,end_local_time,timezone,effective_from,location_id,created_at,updated_at)
+    VALUES ('template-location-cross','org-b','tenant-b','chat-b','Cross','08:00','16:00','Africa/Addis_Ababa','2026-01-01','location-a','2026-01-01','2026-01-01')
+  `).run(), /WORKFORCE_TEMPLATE_LOCATION_SCOPE_INVALID/);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   const preservedMemberIndexes = new Set(db.prepare('PRAGMA index_list(workforce_members)').all().map(index => index.name));
   for (const name of ['idx_workforce_members_org_status','idx_workforce_members_tenant_status','idx_workforce_members_user','idx_workforce_members_location']) {
@@ -217,9 +243,10 @@ try {
     WORKFORCE_DEPARTMENT_MIGRATION_VERSION,
     WORKFORCE_POSITION_MIGRATION_VERSION,
     WORKFORCE_REPORTING_RELATIONSHIP_MIGRATION_VERSION,
+    WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION,
   ]) assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?').get(version).count, 1);
 
-  console.log('PASS Workforce SQLite migrations 86-93: external professionals, employee numbers, departments, positions, reporting references, rollback, idempotency, and foreign-key integrity');
+  console.log('PASS Workforce SQLite migrations 86-94: external professionals, employee numbers, departments, positions, reporting references, shift templates, rollback, idempotency, and foreign-key integrity');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
