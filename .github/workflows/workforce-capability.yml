@@ -34,6 +34,8 @@ jobs:
         run: node phase0/workforce-profile-engagement-regression.mjs
       - name: workforce-calendar-availability-regression
         run: node phase0/workforce-calendar-availability-regression.mjs
+      - name: workforce-four-state-availability-assessment-contract
+        run: node phase0/workforce-availability-assessment-regression.mjs
       - name: workforce-assignment-shift-regression
         run: node phase0/workforce-assignment-shift-regression.mjs
       - name: workforce-allocation-utilization-regression
