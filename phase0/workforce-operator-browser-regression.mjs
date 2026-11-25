@@ -299,7 +299,8 @@ try {
     }) });
   });
 
-  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  await page.goto(baseUrl, { waitUntil: 'commit' });
+  await page.locator('body').waitFor({ state: 'attached', timeout: 10000 });
   await dismissSettingsOverlay();
   await page.evaluate(async () => {
     const state = await import('/src/state.js');
