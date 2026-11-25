@@ -77,6 +77,10 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
     errors.push('employee_number must be a string of at most 80 characters');
   }
   for (const field of ['primary_location_id','department_id','position_id','supervisor_member_id']) {
+  if (entity === 'assignment' && input.assignment_type === 'LOCATION'
+    && (typeof input.location_id !== 'string' || !input.location_id.trim())) {
+    errors.push('location_id is required for LOCATION assignments');
+  }
     if (input[field] !== undefined && input[field] !== null &&
       (typeof input[field] !== 'string' || !input[field].trim())) errors.push(field + ' must be a non-empty string or null');
   }
