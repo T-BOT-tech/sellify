@@ -149,6 +149,8 @@ try {
     member_type: 'PROVIDER',
     display_name: 'Provider A',
     employee_number: 'EMP-001',
+    department_id: department.record.id,
+    position_id: position.record.id,
   }, scopeA);
   assert.equal(duplicate.duplicate, true);
   assert.equal(duplicate.record.id, created.record.id);
