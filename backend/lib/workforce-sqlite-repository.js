@@ -148,7 +148,7 @@ function normalizeRepositoryValue(field, value) {
     return value.trim();
   }
   if (field === 'start_local_time' || field === 'end_local_time') {
-    if (typeof value !== 'string' || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(value)) {
+    if (typeof value !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) {
       throw fail('WORKFORCE_LOCAL_TIME_INVALID', field + ' must use HH:MM in local time');
     }
     return value;
@@ -169,8 +169,8 @@ function normalizeRepositoryValue(field, value) {
   }
   if (field === 'break_rules_json') {
     if (!Array.isArray(value) || value.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule)
-      || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.start_local_time || ''))
-      || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.end_local_time || ''))
+      || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(rule.start_local_time || ''))
+      || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(rule.end_local_time || ''))
       || rule.start_local_time === rule.end_local_time)) {
       throw fail('WORKFORCE_BREAK_RULES_INVALID', 'break_rules must be intervals with valid start_local_time and end_local_time');
     }
@@ -313,7 +313,7 @@ export class WorkforceSqliteRepository {
       if (!calendar) throw fail('WORKFORCE_CALENDAR_SCOPE_INVALID', 'Calendar does not belong to the active organization and tenant', 422);
     }
     if (entity === 'shift_template') {
-      const validDate = value => typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+      const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
         && Number.isFinite(Date.parse(value + 'T00:00:00Z'))
         && new Date(value + 'T00:00:00Z').toISOString().slice(0,10) === value;
       if (!validDate(data.effective_from) || (data.effective_until != null && !validDate(data.effective_until))
