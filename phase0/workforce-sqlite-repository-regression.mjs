@@ -41,6 +41,13 @@ try {
       chat_id TEXT NOT NULL REFERENCES tenants(chat_id), status TEXT NOT NULL DEFAULT 'REQUESTED',
       requested_start TEXT, requested_end TEXT
     );
+    CREATE TABLE orders (
+      server_order_id TEXT PRIMARY KEY, chat_id TEXT NOT NULL
+    );
+    CREATE TABLE fulfillments (
+      id TEXT PRIMARY KEY, server_order_id TEXT NOT NULL, organization_id TEXT NOT NULL,
+      fulfillment_type TEXT NOT NULL, scheduled_at TEXT
+    );
     CREATE TABLE delivery_assignments (
       id TEXT PRIMARY KEY, fulfillment_id TEXT NOT NULL, organization_id TEXT NOT NULL,
       courier_user_id TEXT NOT NULL, status TEXT NOT NULL, assigned_at TEXT NOT NULL,
@@ -716,6 +723,37 @@ try {
     VALUES (?, ?, ?, 'CONFIRMED', ?, ?, ?)
   `).run('booking-assessment-a', scopeA.organization_id, scopeA.chat_id,
     '2026-11-25T06:00:00.000Z', '2026-11-25T07:00:00.000Z', created.record.id);
+  db.prepare('INSERT INTO orders(server_order_id, chat_id) VALUES (?, ?)').run('order-other-tenant', 'chat-a2');
+  db.prepare(`
+    INSERT INTO fulfillments(id, server_order_id, organization_id, fulfillment_type, scheduled_at)
+    VALUES (?, ?, ?, 'delivery', ?)
+  `).run('fulfillment-other-tenant', 'order-other-tenant', scopeA.organization_id, '2026-11-25T06:30:00.000Z');
+  db.prepare(`
+    INSERT INTO delivery_assignments
+      (id, fulfillment_id, organization_id, courier_user_id, status, assigned_at, updated_at)
+    VALUES (?, ?, ?, ?, 'ACCEPTED', ?, ?)
+  `).run('delivery-assignment-other-tenant', 'fulfillment-other-tenant', scopeA.organization_id,
+    'user-a', '2026-11-25T05:00:00.000Z', '2026-11-25T05:00:00.000Z');
+  const crossTenantLogisticsAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.equal(crossTenantLogisticsAssessment.source_versions
+    .find(item => item.source === 'operational_commitments')?.status, 'COMPLETE',
+  'a Logistics assignment belonging to another tenant in the same organization must not contaminate this assessment');
+  assert.ok(!crossTenantLogisticsAssessment.findings.some(item =>
+    item.code === 'LOGISTICS_DELIVERY_WINDOW_UNKNOWN'
+      && item.record_id === 'delivery-assignment-other-tenant'));
+  db.prepare('INSERT INTO orders(server_order_id, chat_id) VALUES (?, ?)').run('order-assessment-a', scopeA.chat_id);
+  db.prepare(`
+    INSERT INTO fulfillments(id, server_order_id, organization_id, fulfillment_type, scheduled_at)
+    VALUES (?, ?, ?, 'delivery', ?)
+  `).run('fulfillment-assessment-a', 'order-assessment-a', scopeA.organization_id, '2026-11-25T06:30:00.000Z');
   db.prepare(`
     INSERT INTO delivery_assignments
       (id, fulfillment_id, organization_id, courier_user_id, status, assigned_at, updated_at)
