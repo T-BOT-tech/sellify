@@ -28,6 +28,7 @@ const providerRead = {
   record: { organization_id: 'org-a', tenant_id: 'tenant-a', resource_id: 'resource-a', location_id: 'location-a' },
 };
 assert.equal(authorizeWorkforceRepositoryAccess(providerRead), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...providerRead, entity: 'shift_template', operation: 'list' }), false, 'service providers must not read manager shift templates');
 assert.equal(authorizeWorkforceRepositoryAccess({
   ...providerRead, operation: 'update',
 }), false);
