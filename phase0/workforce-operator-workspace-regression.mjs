@@ -13,6 +13,21 @@ assert.ok(ui.includes("import { authHeaders } from '../auth/tenant.js'"),
 assert.ok(ui.includes("'/workforce/' + entity + suffix"),
   'all Workforce requests must use the canonical tenant-scoped API');
 assert.ok(ui.includes("endpoint('members')"), 'the roster must load canonical Workforce members');
+assert.ok(ui.includes("endpoint('departments')") && ui.includes("endpoint('positions')"),
+  'organization structure must load from canonical Workforce endpoints');
+assert.ok(ui.includes('workforceMemberSearch') && ui.includes('workforceMemberTypeFilter')
+  && ui.includes('workforceMemberStatusFilter') && ui.includes('workforceDepartmentFilter')
+  && ui.includes('workforcePositionFilter') && ui.includes('workforceLocationFilter'),
+  'professional directory must support search and member, status, department, position and location filters');
+assert.ok(ui.includes('MEMBER_PAGE_SIZE') && ui.includes('data-member-page'),
+  'professional directory must paginate results');
+assert.ok(ui.includes('employee_number') && ui.includes('department_id') && ui.includes('position_id')
+  && ui.includes('supervisor_member_id'),
+  'member creation must support employee numbers and organizational references');
+assert.ok(ui.includes('saveMemberCreate') && ui.includes('saveDepartment') && ui.includes('savePosition'),
+  'authorized operators must be able to create member, department and position records');
+assert.ok(ui.includes('organizationAction') && ui.includes('memberAction'),
+  'lifecycle actions must call the authorized Workforce API');
 assert.ok(ui.includes("endpoint('utilization', '/summary')"), 'the workspace must load canonical utilization analytics');
 assert.ok(ui.includes("JSON.stringify({ expected_version: version })"),
   'member lifecycle requests must carry optimistic concurrency versions');
@@ -37,6 +52,8 @@ assert.ok(html.includes('id="tab-workforce"') && html.includes('id="workforceWor
   'the Workforce screen host must exist');
 assert.ok(html.includes('id="navWorkforce"') && html.includes("switchTab('workforce')"),
   'the More sheet must expose Workforce navigation');
+assert.ok(styles.includes('.workforce-directory-filters') && styles.includes('.workforce-admin-grid'),
+  'the responsive directory and organization administration styles must be present');
 assert.ok(html.includes('.workforce-metrics') && html.includes('.workforce-availability-form'),
   'the responsive Workforce styles must be present');
 
