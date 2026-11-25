@@ -6,6 +6,7 @@ import { WORKFORCE_CALENDAR_EXCEPTION_TYPES } from './workforce-calendar-contrac
 import { WORKFORCE_AVAILABILITY_STATES } from './workforce-availability-contract.js';
 import { WORKFORCE_ASSIGNMENT_TYPES } from './workforce-assignment-contract.js';
 import { WORKFORCE_UTILIZATION_STATUSES } from './workforce-utilization-contract.js';
+import { WORKFORCE_LEAVE_CATEGORIES, WORKFORCE_ABSENCE_TYPES, validateWorkforceLeaveRequest, validateWorkforceAbsence, validateWorkforceLeaveTransition } from './workforce-leave-contract.js';
 
 const ENUM_FIELDS = Object.freeze({
   member_type: WORKFORCE_MEMBER_TYPES,
@@ -15,6 +16,8 @@ const ENUM_FIELDS = Object.freeze({
   availability: WORKFORCE_AVAILABILITY_STATES,
   assignment_type: WORKFORCE_ASSIGNMENT_TYPES,
   status: WORKFORCE_UTILIZATION_STATUSES,
+  leave_category: WORKFORCE_LEAVE_CATEGORIES,
+  absence_type: WORKFORCE_ABSENCE_TYPES,
 });
 
 const DATE_PAIRS = Object.freeze({
@@ -27,6 +30,8 @@ const DATE_PAIRS = Object.freeze({
   shift: [['starts_at','ends_at']],
   allocation: [['starts_at','ends_at']],
   utilization: [['planned_starts_at','planned_ends_at'],['actual_starts_at','actual_ends_at']],
+  leave_request: [['starts_at','ends_at']],
+  absence: [['starts_at','ends_at']],
 });
 
 export function validateWorkforceApiPayload(entity, operation, input = {}) {
@@ -146,6 +151,10 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
       errors.push('timezone must be a valid IANA timezone');
     }
   }
+  if (entity === 'leave_request' && ['create','update'].includes(operation)) errors.push(...validateWorkforceLeaveRequest(input, { partial: operation === 'update' }).errors);
+  if (entity === 'absence' && ['create','update'].includes(operation)) errors.push(...validateWorkforceAbsence(input, { partial: operation === 'update' }).errors);
+  if (entity === 'leave_request' && ['approve','reject','withdraw','cancel'].includes(operation)) errors.push(...validateWorkforceLeaveTransition(operation, input).errors);
+  if (entity === 'absence' && operation === 'void') errors.push(...validateWorkforceLeaveTransition(operation, input).errors);
   if (entity === 'shift' && ['cancel','reassign'].includes(operation)) {
     if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.trim().length > 500) {
       errors.push('reason must be a non-empty string of at most 500 characters');

@@ -5,7 +5,7 @@
  * A single generic lifecycle is unsafe because shifts, allocations,
  * engagements, and members have different approval and terminal states.
  */
-export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.5';
+export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.6';
 
 export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
   'department','position','shift_template',
@@ -19,6 +19,8 @@ export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
   'shift',
   'allocation',
   'utilization',
+  'leave_request',
+  'absence',
 ]);
 
 export const WORKFORCE_REPOSITORY_BASE_OPERATIONS = Object.freeze([
@@ -39,9 +41,11 @@ export const WORKFORCE_REPOSITORY_ENTITY_OPERATIONS = Object.freeze({
   calendar_exception: Object.freeze(['create', 'get', 'list', 'update', 'cancel']),
   availability: Object.freeze(['create', 'get', 'list', 'update']),
   assignment: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'suspend', 'end']),
-  shift: Object.freeze(['create', 'get', 'list', 'update', 'confirm', 'start', 'complete', 'cancel']),
+  shift: Object.freeze(['create', 'get', 'list', 'update', 'confirm', 'start', 'complete', 'cancel', 'reassign']),
   allocation: Object.freeze(['create', 'get', 'list', 'update', 'submit', 'approve', 'release', 'cancel']),
   utilization: Object.freeze(['create', 'get', 'list', 'update', 'start', 'complete', 'cancel']),
+  leave_request: Object.freeze(['create','get','list','update','submit','approve','reject','withdraw','cancel']),
+  absence: Object.freeze(['create','get','list','update','void']),
 });
 
 export const WORKFORCE_REPOSITORY_OPERATIONS = Object.freeze([
@@ -70,6 +74,11 @@ export function workforceRepositoryContract() {
     entity_specific_lifecycle: true,
     reuses_existing_user_identity: true,
     supports_optional_identity_link: true,
+    supports_leave_request_approval: true,
+    supports_unplanned_absence_recording: true,
+    pending_leave_blocks_availability: false,
+    approved_leave_blocks_availability: true,
+    recorded_absence_blocks_availability: true,
     supports_account_linking: true,
     reuses_existing_organization_authority: true,
     creates_duplicate_user_identity: false,

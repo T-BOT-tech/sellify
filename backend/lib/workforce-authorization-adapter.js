@@ -20,6 +20,8 @@ const PERMISSION_BY_ENTITY = Object.freeze({
   shift: { view: 'workforce:assignment:view', manage: 'workforce:assignment:manage' },
   allocation: { view: 'workforce:allocation:view', manage: 'workforce:allocation:manage', release: 'workforce:allocation:release' },
   utilization: { view: 'workforce:utilization:view', manage: 'workforce:utilization:manage' },
+  leave_request: { view: 'workforce:leave:view', manage: 'workforce:leave:manage', request: 'workforce:leave:request', withdraw: 'workforce:leave:withdraw' },
+  absence: { view: 'workforce:absence:view', manage: 'workforce:absence:manage' },
 });
 
 const READ_OPERATIONS = new Set(['get','list']);
@@ -32,6 +34,8 @@ function permissionFor(entity, operation) {
   if (entity === 'member' && operation === 'suspend') return 'workforce:member:suspend';
   if (entity === 'member' && ['link_account','unlink_account'].includes(operation)) return mapping.manage;
   if (entity === 'allocation' && operation === 'release') return mapping.release;
+  if (entity === 'leave_request' && ['create','submit'].includes(operation)) return mapping.request;
+  if (entity === 'leave_request' && operation === 'withdraw') return mapping.withdraw;
   return mapping.manage;
 }
 
