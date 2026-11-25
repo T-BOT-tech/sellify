@@ -9,6 +9,7 @@ import {
 const PERMISSION_BY_ENTITY = Object.freeze({
   department: { view: 'workforce:department:view', manage: 'workforce:department:manage' },
   position: { view: 'workforce:position:view', manage: 'workforce:position:manage' },
+  shift_template: { view: 'workforce:shift_template:view', manage: 'workforce:shift_template:manage' },
   member: { view: 'workforce:member:view', manage: 'workforce:member:manage' },
   profile: { view: 'workforce:profile:view', manage: 'workforce:profile:manage' },
   engagement: { view: 'workforce:engagement:view', manage: 'workforce:engagement:manage' },
@@ -55,6 +56,7 @@ export function authorizeWorkforceRepositoryAccess(request = {}) {
   const providerScoped = contextualRoles.some((entry) => String(entry?.role || '').trim().toLowerCase() === 'service_provider');
   const scopedResourceId = request.resource_id == null ? null : String(request.resource_id);
   if (providerScoped && !scopedResourceId) return false;
+  if (providerScoped && entity === 'shift_template') return false;
 
   const resourceId = providerScoped
     ? scopedResourceId
