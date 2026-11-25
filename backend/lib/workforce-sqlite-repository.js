@@ -826,6 +826,18 @@ export class WorkforceSqliteRepository {
       throw fail('WORKFORCE_LIFECYCLE_CONFLICT', `Cannot ${operation} ${entity} from ${record[spec.state]}`, 409);
     }
     if (Number(record.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+    if (entity === 'department' && operation === 'deactivate') {
+      const members = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_members WHERE organization_id=? AND tenant_id=? AND department_id=? AND status='ACTIVE'")
+        .get(scope.organization_id, scope.tenant_id, String(id)).count;
+      const positions = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_positions WHERE organization_id=? AND tenant_id=? AND department_id=? AND status='ACTIVE'")
+        .get(scope.organization_id, scope.tenant_id, String(id)).count;
+      if (Number(members) || Number(positions)) throw fail('WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS', 'Reassign active members and positions before deactivating this department', 409);
+    }
+    if (entity === 'position' && operation === 'deactivate') {
+      const members = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_members WHERE organization_id=? AND tenant_id=? AND position_id=? AND status='ACTIVE'")
+        .get(scope.organization_id, scope.tenant_id, String(id)).count;
+      if (Number(members)) throw fail('WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS', 'Reassign active members before deactivating this position', 409);
+    }
     const now = this.clock();
     this.db.exec('BEGIN IMMEDIATE');
     try {
