@@ -5,7 +5,7 @@
  * A single generic lifecycle is unsafe because shifts, allocations,
  * engagements, and members have different approval and terminal states.
  */
-export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.3';
+export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.4';
 
 export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
   'department','position','shift_template',
