@@ -146,6 +146,10 @@ try {
   });
 
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  const settingsModal = page.locator('#settingsModal');
+  if (await settingsModal.evaluate(element => element.classList.contains('open'))) {
+    await settingsModal.getByRole('button', { name: 'Close Settings' }).click();
+  }
   await page.evaluate(async () => {
     const state = await import('/src/state.js');
     state.setConfig({
