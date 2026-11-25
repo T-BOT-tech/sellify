@@ -10,6 +10,9 @@ const base = {
   actor: manager,
 };
 assert.equal(authorizeWorkforceRepositoryAccess(base), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'department', operation: 'list' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'position', operation: 'create' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'department', operation: 'list', actor: viewer }), false);
 
 const viewer = { ...manager, role: 'viewer' };
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, actor: viewer }), false);
