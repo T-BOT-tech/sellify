@@ -1012,12 +1012,42 @@ try {
   assert.equal(startedShift.status, 'IN_PROGRESS');
   assert.equal(completedShift.status, 'COMPLETED');
 
-  repository.update('availability', availability.record.id, {
-    expected_version: 2, availability: 'AVAILABLE',
+  const allocationMember = repository.create('member', {
+    idempotency_key: 'allocation-member-a',
+    member_type: 'CONTRACTOR',
+    display_name: 'Allocation Test Contractor',
+    primary_location_id: 'location-a',
+  }, scopeA);
+  repository.activate('member', allocationMember.record.id, { expected_version: 1 }, scopeA);
+  const allocationEngagement = repository.create('engagement', {
+    idempotency_key: 'allocation-engagement-a',
+    member_id: allocationMember.record.id,
+    engagement_type: 'CONTRACT',
+    starts_at: '2026-11-25T00:00:00.000Z',
+    ends_at: '2026-12-01T00:00:00.000Z',
+  }, scopeA);
+  repository.submit('engagement', allocationEngagement.record.id, { expected_version: 1 }, scopeA);
+  repository.activate('engagement', allocationEngagement.record.id, { expected_version: 2 }, scopeA);
+  repository.create('calendar', {
+    idempotency_key: 'allocation-calendar-a',
+    member_id: allocationMember.record.id,
+    timezone: 'Africa/Addis_Ababa',
+    weekly_schedule: [{ day: 'WEDNESDAY', intervals: [{ start: '09:00', end: '17:00' }] }],
+    holiday_calendar: [],
+    effective_from: '2026-11-25',
+  }, scopeA);
+  repository.create('availability', {
+    idempotency_key: 'allocation-availability-a',
+    member_id: allocationMember.record.id,
+    availability: 'AVAILABLE',
+    starts_at: '2026-11-25T08:00:00.000Z',
+    ends_at: '2026-11-25T09:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+    effective_from: '2026-11-25',
   }, scopeA);
   const allocation = repository.create('allocation', {
     idempotency_key: 'allocation-create-a',
-    member_id: created.record.id,
+    member_id: allocationMember.record.id,
     resource_id: 'resource-a',
     booking_id: 'booking-a',
     starts_at: '2026-11-25T08:00:00.000Z',
@@ -1031,7 +1061,7 @@ try {
   'committed allocations cannot be edited through the generic update path');
   const overlappingAllocation = repository.create('allocation', {
     idempotency_key: 'allocation-overlap-a',
-    member_id: created.record.id,
+    member_id: allocationMember.record.id,
     resource_id: 'resource-a',
     booking_id: 'booking-a',
     starts_at: '2026-11-25T08:00:00.000Z',
