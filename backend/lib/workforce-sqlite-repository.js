@@ -6,9 +6,11 @@ import {
 } from './workforce-repository-contract.js';
 
 const TABLES = Object.freeze({
+  department: { table: 'workforce_departments', id: 'id', state: 'status', fields: ['code','name','description'], createOnlyFields: [], json: [] },
+  position: { table: 'workforce_positions', id: 'id', state: 'status', fields: ['code','name','description','department_id','classification'], createOnlyFields: [], json: [] },
   member: {
     table: 'workforce_members', id: 'id', state: 'status',
-    fields: ['member_type','primary_location_id','timezone','display_name','employee_number'],
+    fields: ['member_type','primary_location_id','timezone','display_name','employee_number','department_id','position_id','supervisor_member_id'],
     createOnlyFields: ['user_id'],
     json: [],
   },
@@ -69,6 +71,7 @@ const TABLES = Object.freeze({
 });
 
 const INITIAL_STATES = Object.freeze({
+  department: 'ACTIVE', position: 'ACTIVE',
   member: 'DRAFT',
   engagement: 'DRAFT',
   calendar: 'ACTIVE',
@@ -81,6 +84,8 @@ const INITIAL_STATES = Object.freeze({
 });
 
 const TRANSITIONS = Object.freeze({
+  department: { activate: { from: ['INACTIVE'], to: 'ACTIVE' }, deactivate: { from: ['ACTIVE'], to: 'INACTIVE' } },
+  position: { activate: { from: ['INACTIVE'], to: 'ACTIVE' }, deactivate: { from: ['ACTIVE'], to: 'INACTIVE' } },
   member: {
     activate: { from: ['DRAFT','SUSPENDED'], to: 'ACTIVE' },
     suspend: { from: ['ACTIVE'], to: 'SUSPENDED' },
@@ -125,6 +130,31 @@ const TIMESTAMP_FIELDS = new Set([
 ]);
 
 function normalizeRepositoryValue(field, value) {
+  if (field === 'code') {
+    if (typeof value !== 'string') throw fail('WORKFORCE_CODE_INVALID', 'code must be a string');
+    const normalized = value.trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9._/-]{0,39}$/.test(normalized)) throw fail('WORKFORCE_CODE_INVALID', 'code must be 1-40 letters, numbers, dots, underscores, slashes or hyphens');
+    return normalized;
+  }
+  if (field === 'name') {
+    if (typeof value !== 'string' || !value.trim() || value.trim().length > 120) throw fail('WORKFORCE_NAME_INVALID', 'name must be a non-empty string of at most 120 characters');
+    return value.trim();
+  }
+  if (field === 'description') {
+    if (value == null) return '';
+    if (typeof value !== 'string' || value.length > 1000) throw fail('WORKFORCE_DESCRIPTION_INVALID', 'description must be a string of at most 1000 characters');
+    return value.trim();
+  }
+  if (field === 'classification') {
+    if (value == null) return null;
+    if (typeof value !== 'string' || value.trim().length > 80) throw fail('WORKFORCE_CLASSIFICATION_INVALID', 'classification must be a string of at most 80 characters');
+    return value.trim() || null;
+  }
+  if (['department_id','position_id','supervisor_member_id'].includes(field)) {
+    if (value == null) return null;
+    if (typeof value !== 'string' || !value.trim()) throw fail('WORKFORCE_REFERENCE_INVALID', field + ' must be a non-empty ID or null');
+    return value.trim();
+  }
   if (field === 'employee_number') {
     if (value == null) return null;
     if (typeof value !== 'string') throw fail('WORKFORCE_EMPLOYEE_NUMBER_INVALID', 'employee_number must be a string');
@@ -153,7 +183,7 @@ function normalizeRepositoryValue(field, value) {
 
 const FILTER_COLUMNS = new Set([
   'member_id','resource_id','location_id','booking_id','operational_task_id',
-  'calendar_id','status','state','availability','exception_type','assignment_type','employee_number',
+  'calendar_id','status','state','availability','exception_type','assignment_type','employee_number','department_id','position_id','supervisor_member_id','code',
 ]);
 
 function fail(code, message, statusCode = 400) {
