@@ -86,7 +86,7 @@ try {
   assert.equal(created.record.department_id, department.record.id);
   assert.equal(created.record.position_id, position.record.id);
   const otherOrganizationMember = repository.create('member', {
-    idempotency_key: 'member-create-b-employee-number', user_id: 'user-b', member_type: 'EMPLOYEE', employee_number: 'EMP-001',
+    idempotency_key: 'member-create-b-employee-number', member_type: 'EMPLOYEE', employee_number: 'EMP-001',
   }, scopeB);
   assert.equal(otherOrganizationMember.record.employee_number, 'EMP-001', 'employee numbers may repeat in another organization');
   assert.throws(() => repository.create('member', {
