@@ -649,8 +649,8 @@ try {
   }, scopeA);
   assert.throws(() => repository.update('shift', shiftUpdateCandidate.record.id, {
     expected_version: 1,
-    starts_at: '2026-11-26T05:30:00.000Z',
-    ends_at: '2026-11-26T06:30:00.000Z',
+    starts_at: '2026-11-30T05:30:00.000Z',
+    ends_at: '2026-11-30T06:30:00.000Z',
   }, scopeA), error => error.code === 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT',
   'shift updates must rerun overlap and active scheduling-policy checks inside the write transaction');
   const conflictedGeneration = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
