@@ -687,8 +687,11 @@ try {
     ends_at: '2026-11-25T07:00:00.000Z',
     timezone: 'Africa/Addis_Ababa',
   }, scopeA);
-  assert.equal(assessment.state, 'UNKNOWN',
-    'assessment must fail closed while scheduling-policy evidence is incomplete');
+  assert.equal(assessment.state, 'UNAVAILABLE',
+    'an explicit UNAVAILABLE availability window must prevent availability');
+  assert.ok(assessment.findings.some(item => item.code === 'AVAILABILITY_WINDOW_BLOCK'
+    && item.state === 'UNAVAILABLE'),
+  'the assessment must explain the declared unavailable window');
   assert.equal(assessment.is_booking, false);
   assert.equal(assessment.source_versions.find(item => item.source === 'operational_commitments')?.status, 'COMPLETE',
     'linked members with no active Logistics delivery assignment have complete assignment evidence');
