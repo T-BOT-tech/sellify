@@ -1483,7 +1483,7 @@ export function mountWorkforceWorkspace(root = document) {
     });
     root.addEventListener('submit', event => {
       const id = event.target?.id;
-      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm','workforceLeaveRequestForm','workforceAbsenceForm'].includes(id)
+      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm','workforceLeaveRequestForm','workforceAbsenceForm','workforceSchedulingPolicyForm'].includes(id)
         && !['workforce-leave-action-form','workforce-absence-void-form','workforce-scheduling-policy-action-form'].some(name => event.target?.classList?.contains(name))
         && !['workforce-shift-generation-form','workforce-shift-reassign-form','workforce-shift-cancel-form'].some(name => event.target?.classList?.contains(name))) return;
       event.preventDefault();
