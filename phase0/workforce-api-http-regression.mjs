@@ -309,6 +309,32 @@ try {
     );
   }
 
+
+  const assessmentPath = item + '/availability-assessment';
+  const unauthenticatedAssessment = await jsonRequest(baseUrl, assessmentPath, {
+    method: 'POST',
+    body: {
+      starts_at: '2026-11-26T06:00:00.000Z',
+      ends_at: '2026-11-26T07:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa',
+    },
+  });
+  assert.equal(unauthenticatedAssessment.response.status, 401,
+    'availability assessment requires an authenticated tenant session');
+  const assessmentResponse = await jsonRequest(baseUrl, assessmentPath, {
+    token: ownerSession.token,
+    method: 'POST',
+    body: {
+      starts_at: '2026-11-26T06:00:00.000Z',
+      ends_at: '2026-11-26T07:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa',
+    },
+  });
+  assert.equal(assessmentResponse.response.status, 200, JSON.stringify(assessmentResponse.payload));
+  assert.equal(assessmentResponse.payload.assessment?.state, 'UNKNOWN',
+    'incomplete calendar and operational evidence must never be projected as AVAILABLE');
+  assert.equal(assessmentResponse.payload.assessment?.is_booking, false);
+
   const calendarId = createdEntities.calendars.id;
   const additionalFixtures = [
     ['calendar-exceptions', {
