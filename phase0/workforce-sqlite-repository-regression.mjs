@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration } from '../backend/lib/workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration } from '../backend/lib/workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from '../backend/lib/workforce-sqlite-repository.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-repository-'));
@@ -61,6 +61,14 @@ try {
   runWorkforceServiceBookingMigration(db);
   runWorkforceExternalMemberMigration(db);
   runWorkforceEmployeeNumberMigration(db);
+  runWorkforceOrganizationStructureMigration(db);
+
+  const department = repository.create('department', { idempotency_key: 'department-ops', code: 'ops', name: 'Operations' }, scopeA);
+  assert.equal(department.record.code, 'OPS');
+  const position = repository.create('position', { idempotency_key: 'position-lead', code: 'lead', name: 'Team Lead', department_id: department.record.id }, scopeA);
+  assert.equal(position.record.department_id, department.record.id);
+  assert.throws(() => repository.create('position', { idempotency_key: 'position-cross', code: 'cross', name: 'Cross', department_id: department.record.id }, scopeB), error => error.code === 'WORKFORCE_DEPARTMENT_SCOPE_INVALID');
+  assert.throws(() => repository.create('department', { idempotency_key: 'department-duplicate', code: 'OPS', name: 'Duplicate' }, scopeA), error => error.code === 'WORKFORCE_CONSTRAINT_CONFLICT');
 
   const created = repository.create('member', {
     idempotency_key: 'member-create-a',
@@ -68,13 +76,17 @@ try {
     member_type: 'PROVIDER',
     display_name: 'Provider A',
     employee_number: ' EMP-001 ',
+    department_id: department.record.id,
+    position_id: position.record.id,
   }, scopeA);
   assert.equal(created.duplicate, false);
   assert.equal(created.record.status, 'DRAFT');
   assert.equal(created.record.version, 1);
   assert.equal(created.record.employee_number, 'EMP-001', 'employee number is normalized');
+  assert.equal(created.record.department_id, department.record.id);
+  assert.equal(created.record.position_id, position.record.id);
   const otherOrganizationMember = repository.create('member', {
-    idempotency_key: 'member-create-b', user_id: 'user-b', member_type: 'EMPLOYEE', employee_number: 'EMP-001',
+    idempotency_key: 'member-create-b-employee-number', user_id: 'user-b', member_type: 'EMPLOYEE', employee_number: 'EMP-001',
   }, scopeB);
   assert.equal(otherOrganizationMember.record.employee_number, 'EMP-001', 'employee numbers may repeat in another organization');
   assert.throws(() => repository.create('member', {
@@ -163,6 +175,15 @@ try {
   const activated = repository.activate('member', created.record.id, { expected_version: 2 }, scopeA);
   assert.equal(activated.status, 'ACTIVE');
   assert.equal(activated.version, 3);
+  const supervisor = repository.create('member', { idempotency_key: 'member-supervisor', member_type: 'EMPLOYEE', display_name: 'Operations Supervisor' }, scopeA);
+  const activeSupervisor = repository.activate('member', supervisor.record.id, { expected_version: 1 }, scopeA);
+  const reporting = repository.update('member', created.record.id, { expected_version: 3, supervisor_member_id: activeSupervisor.id }, scopeA);
+  assert.equal(reporting.supervisor_member_id, activeSupervisor.id);
+  assert.throws(() => repository.update('member', activeSupervisor.id, { expected_version: 2, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_REPORTING_CYCLE_INVALID');
+  assert.throws(() => repository.update('member', created.record.id, { expected_version: 4, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_SELF_INVALID');
+  assert.equal(Number(db.prepare('SELECT COUNT(*) AS count FROM audit_events WHERE entity_id = ? AND action = ?').get(created.record.id, 'workforce.member.reporting_relationship_changed').count), 1);
+  assert.throws(() => repository.deactivate('department', department.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS');
+  assert.throws(() => repository.deactivate('position', position.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS');
 
   assert.throws(() => repository.get('member', created.record.id, scopeB),
     (error) => error.code === 'WORKFORCE_SCOPE_NOT_FOUND');
