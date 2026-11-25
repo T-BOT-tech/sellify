@@ -4134,6 +4134,19 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     const result = repository.generateShiftsFromTemplate(recordId, { ...body, idempotency_key: key }, contexts[0]);
     return sendJSON(res, result.created_count ? 201 : 200, { ...result, authority: 'workforce' }, req);
   }
+  if (req.method === 'POST' && recordId && action === 'availability-assessment' && entity === 'member') {
+    const body = await readBody(req);
+    const context = contexts[0];
+    const candidate = {
+      ...body,
+      organization_id: context.organization_id,
+      tenant_id: context.tenant_id,
+      chat_id: context.chat_id,
+      member_id: String(recordId),
+    };
+    const assessment = repository.assessAvailability(candidate, context);
+    return sendJSON(res, 200, { assessment, authority: 'workforce_availability_assessment' }, req);
+  }
   if (req.method === 'POST' && recordId && action) {
     const body = workforceApiBody(await readBody(req), entity, 'lifecycle', action);
     if (!['activate','suspend','deactivate','release','cancel','submit','approve','reject','withdraw','void','confirm','start','complete','end','link-account','unlink-account','generate','reassign'].includes(action)) {
@@ -4197,7 +4210,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/(shifts|leave-requests|absences|scheduling-policies)\/([^/]+)\/history$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), 'history') },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
-  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)\/(activate|suspend|deactivate|release|cancel|submit|approve|reject|withdraw|void|confirm|start|complete|end|link-account|unlink-account|generate|reassign)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), m[4]) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)\/(activate|suspend|deactivate|release|cancel|submit|approve|reject|withdraw|void|confirm|start|complete|end|link-account|unlink-account|generate|reassign|availability-assessment)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), m[4]) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-delivery-assessment$/, handler: (req, res, m) => handleServiceDeliveryAssessment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
