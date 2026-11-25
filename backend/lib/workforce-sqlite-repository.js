@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { validateWorkforceRecurrenceRule } from './workforce-recurrence-contract.js';
+import { validateWorkforceRecurrenceRule, workforceAvailabilityOccurrencesInRange } from './workforce-recurrence-contract.js';
 import { WORKFORCE_LEAVE_TRANSITIONS, WORKFORCE_ABSENCE_TRANSITIONS, validateWorkforceLeaveRequest, validateWorkforceAbsence, validateWorkforceLeaveTransition, isValidWorkforceLeaveCategory, isValidWorkforceAbsenceType } from './workforce-leave-contract.js';
 import { validateWorkforceSchedulingPolicy, validateWorkforceSchedulingPolicyRules, evaluateWorkforceSchedulingConstraints } from './workforce-scheduling-constraints-contract.js';
 import { buildShiftWindowFromTemplate, isoWeekday, localDateTimeToUtc } from './workforce-shift-time.js';
@@ -925,11 +925,19 @@ export class WorkforceSqliteRepository {
         AND status='ACTIVE' AND starts_at<? AND (ends_at IS NULL OR ends_at>?)
     `).all(scope.organization_id, scope.tenant_id, scope.chat_id, calendar.id, end, start) : [];
     const windows = this.db.prepare(`
-      SELECT id, version, updated_at, availability, starts_at, ends_at, recurrence_rule
+      SELECT id, version, updated_at, availability, starts_at, ends_at, timezone, recurrence_rule,
+        effective_from, effective_until
       FROM workforce_availability_windows
       WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
-        AND starts_at<? AND ends_at>?
-    `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id), end, start);
+      ORDER BY starts_at
+    `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id));
+    const windowAssessments = windows.map(item => ({
+      item, result: workforceAvailabilityOccurrencesInRange(item, start, end),
+    }));
+    const invalidAvailabilityWindow = windowAssessments.find(({ item, result }) =>
+      !result.valid || !['AVAILABLE','UNAVAILABLE','TENTATIVE','BLACKOUT'].includes(item.availability));
+    const overlappingAvailabilityWindows = windowAssessments.flatMap(({ item, result }) =>
+      result.valid ? result.occurrences.map(occurrence => ({ ...item, occurrence })) : []);
     const policy = this.assessSchedulingConstraints(String(candidate.member_id), {
       starts_at: start, ends_at: end, timezone: candidate.timezone,
       location_id: candidate.location_id || member.primary_location_id || null,
@@ -976,7 +984,21 @@ export class WorkforceSqliteRepository {
       message:'An active holiday, leave, or blackout exception overlaps the requested interval',
       record_id:exceptions[0].id,
     });
-    if (windows.some(item => item.availability === 'UNAVAILABLE' || item.availability === 'BLACKOUT')) findings.push({ code:'AVAILABILITY_WINDOW_BLOCK', state:'UNAVAILABLE', source:'availability_windows', message:'An unavailable or blackout window overlaps the requested interval' });
+    if (invalidAvailabilityWindow) findings.push({
+      code:'AVAILABILITY_WINDOW_EVALUATION_UNKNOWN', state:'UNKNOWN', source:'availability_windows',
+      message: invalidAvailabilityWindow.result.reason || 'An availability window could not be evaluated safely',
+      record_id: invalidAvailabilityWindow.item.id,
+    });
+    for (const item of overlappingAvailabilityWindows) {
+      if (item.availability === 'UNAVAILABLE' || item.availability === 'BLACKOUT') findings.push({
+        code:'AVAILABILITY_WINDOW_BLOCK', state:'UNAVAILABLE', source:'availability_windows',
+        message:'An unavailable or blackout window overlaps the requested interval', record_id:item.id,
+      });
+      else if (item.availability === 'TENTATIVE') findings.push({
+        code:'AVAILABILITY_WINDOW_TENTATIVE', state:'UNKNOWN', source:'availability_windows',
+        message:'A tentative availability window overlaps the requested interval and is not confirmed', record_id:item.id,
+      });
+    }
 
     const evidence = (status, row, reason) => ({
       status, ...(reason ? { reason } : {}),
@@ -995,7 +1017,8 @@ export class WorkforceSqliteRepository {
       calendar_exceptions: evidence(calendar && !unsupportedCalendarException ? 'COMPLETE' : 'MISSING', calendar,
         !calendar ? 'No active calendar was found to scope exceptions'
           : unsupportedCalendarException ? 'A calendar exception has no verified evaluation semantics' : null),
-      availability_windows: evidence(windows.every(item => !item.recurrence_rule) ? 'COMPLETE' : 'MISSING', windows[0], windows.some(item => item.recurrence_rule) ? 'Recurring availability window evaluation is not yet implemented' : null),
+      availability_windows: queryEvidence(invalidAvailabilityWindow
+        ? (invalidAvailabilityWindow.result.reason || 'An availability window could not be evaluated safely') : null),
       leave_requests: queryEvidence(pendingLeave.length ? 'An overlapping leave request is pending approval' : null),
       absences: queryEvidence(),
       shifts: queryEvidence(),
