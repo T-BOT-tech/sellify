@@ -30,7 +30,8 @@ assert.ok(ui.includes('workforceEngagementForm') && ui.includes('saveEngagement'
   'authorized managers must be able to create member-scoped engagements');
 assert.ok(ui.includes('workforceProfileForm') && ui.includes('saveProfile'),
   'authorized managers must be able to create and update structured professional profiles');
-assert.ok(['skills','qualifications','languages','service_capabilities'].every(field => ui.includes("name=\"" + field + "\"")),
+assert.ok(['Skills (comma-separated)','Qualifications (comma-separated)','Languages (comma-separated)','Service capabilities (comma-separated)']
+  .every(label => ui.includes(label)),
   'professional profile UI must expose the canonical structured profile fields');
 assert.ok(ui.includes('expected_version = Number(form.dataset.version)'),
   'profile updates must use optimistic concurrency');
