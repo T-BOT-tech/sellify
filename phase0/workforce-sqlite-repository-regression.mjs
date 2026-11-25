@@ -277,10 +277,12 @@ try {
   const submittedEngagement = repository.submit('engagement', engagement.record.id, { expected_version: 1 }, scopeA);
   const activeEngagement = repository.activate('engagement', engagement.record.id, { expected_version: 2 }, scopeA);
   const suspendedEngagement = repository.suspend('engagement', engagement.record.id, { expected_version: 3 }, scopeA);
-  const endedEngagement = repository.end('engagement', engagement.record.id, { expected_version: 4 }, scopeA);
+  const reactivatedEngagement = repository.activate('engagement', engagement.record.id, { expected_version: 4 }, scopeA);
+  const endedEngagement = repository.end('engagement', engagement.record.id, { expected_version: 5 }, scopeA);
   assert.equal(submittedEngagement.status, 'PENDING_APPROVAL');
   assert.equal(activeEngagement.status, 'ACTIVE');
   assert.equal(suspendedEngagement.status, 'SUSPENDED');
+  assert.equal(reactivatedEngagement.status, 'ACTIVE');
   assert.equal(endedEngagement.status, 'ENDED');
 
   const calendar = repository.create('calendar', {
