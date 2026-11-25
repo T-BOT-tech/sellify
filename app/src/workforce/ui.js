@@ -441,15 +441,47 @@ export function mountWorkforceWorkspace(root = document) {
       const refresh = event.target.closest('#workforceRefresh');
       const select = event.target.closest('.workforce-select-member');
       const action = event.target.closest('.workforce-member-action');
+      const structureAction = event.target.closest('.workforce-structure-action');
+      const page = event.target.closest('[data-member-page]');
       const clear = event.target.closest('#workforceClearMember');
       if (refresh) refreshWorkspace(root);
       if (select) { workspace.dataset.selectedMemberId = select.dataset.memberId || ''; refreshMember(root, select.dataset.memberId); }
       if (action) memberAction(action, root);
+      if (structureAction) organizationAction(structureAction, root);
+      if (page) {
+        const current = Number(workspace.dataset.memberPage || 0);
+        workspace.dataset.memberPage = String(Math.max(0, current + (page.dataset.memberPage === 'next' ? 1 : -1)));
+        renderMemberDirectory(root);
+      }
       if (clear) { workspace.dataset.selectedMemberId = ''; workspace.querySelector('#workforceMemberDetails').hidden = true; }
     });
+    root.addEventListener('input', event => {
+      if (['workforceMemberSearch','workforceLocationFilter'].includes(event.target?.id)) {
+        workspace.dataset.memberPage = '0'; renderMemberDirectory(root);
+      }
+    });
+    root.addEventListener('change', event => {
+      if (['workforceMemberTypeFilter','workforceMemberStatusFilter','workforceDepartmentFilter','workforcePositionFilter'].includes(event.target?.id)) {
+        workspace.dataset.memberPage = '0'; renderMemberDirectory(root);
+      }
+      const data = workspaceData.get(workspace);
+      if (event.target?.form?.id === 'workforceMemberCreateForm' && event.target.name === 'department_id' && data) {
+        const positions = data.positions.filter(item => !item.department_id || String(item.department_id) === String(event.target.value));
+        fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="position_id"]'), positions);
+      }
+      if (event.target?.form?.id === 'workforceMemberCreateForm' && event.target.name === 'position_id' && data) {
+        const position = data.positions.find(item => String(item.id) === String(event.target.value));
+        if (position?.department_id) workspace.querySelector('#workforceMemberCreateForm [name="department_id"]').value = position.department_id;
+      }
+    });
     root.addEventListener('submit', event => {
-      if (event.target?.id !== 'workforceAvailabilityForm') return;
-      event.preventDefault(); saveAvailability(event.target, root);
+      const id = event.target?.id;
+      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm'].includes(id)) return;
+      event.preventDefault();
+      if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
+      if (id === 'workforceMemberCreateForm') saveMemberCreate(event.target, root);
+      if (id === 'workforceDepartmentForm') saveDepartment(event.target, root);
+      if (id === 'workforcePositionForm') savePosition(event.target, root);
     });
   }
   const tenantKey = config.chatId && config.sessionToken ? String(config.chatId) + ':' + String(config.sessionToken) : '';
@@ -458,7 +490,6 @@ export function mountWorkforceWorkspace(root = document) {
     refreshWorkspace(root);
   }
 }
-
 export function renderWorkforce() {
   const host = document.getElementById('workforceWorkspaceHost');
   if (!host) return;
