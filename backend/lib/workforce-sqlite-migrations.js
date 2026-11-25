@@ -998,3 +998,45 @@ export function runWorkforceLeaveAbsenceMigration(db, now = () => new Date().toI
     return { applied: true, version };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+
+
+/** M10 / migration 98 — organization-scoped, versioned scheduling policies. */
+export const WORKFORCE_SCHEDULING_POLICY_MIGRATION_VERSION = 98;
+
+export function runWorkforceSchedulingPolicyMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_SCHEDULING_POLICY_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS workforce_scheduling_policies (
+        id TEXT NOT NULL PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+        rules_json TEXT NOT NULL CHECK (json_valid(rules_json) AND json_type(rules_json)='object'),
+        effective_from TEXT NOT NULL CHECK (length(effective_from)=10),
+        effective_until TEXT CHECK (effective_until IS NULL OR length(effective_until)=10),
+        status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','ACTIVE','INACTIVE')),
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        CHECK (effective_until IS NULL OR effective_until >= effective_from),
+        UNIQUE (organization_id, tenant_id, idempotency_key),
+        UNIQUE (id, organization_id, tenant_id, chat_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_workforce_scheduling_policies_scope_status
+        ON workforce_scheduling_policies(organization_id, tenant_id, status, effective_from DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_workforce_scheduling_policy_active_org
+        ON workforce_scheduling_policies(organization_id, tenant_id) WHERE status='ACTIVE';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}

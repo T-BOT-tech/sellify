@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { validateWorkforceRecurrenceRule } from './workforce-recurrence-contract.js';
 import { WORKFORCE_LEAVE_TRANSITIONS, WORKFORCE_ABSENCE_TRANSITIONS, validateWorkforceLeaveRequest, validateWorkforceAbsence, validateWorkforceLeaveTransition, isValidWorkforceLeaveCategory, isValidWorkforceAbsenceType } from './workforce-leave-contract.js';
+import { validateWorkforceSchedulingPolicy, validateWorkforceSchedulingPolicyRules } from './workforce-scheduling-constraints-contract.js';
 import { buildShiftWindowFromTemplate, isoWeekday } from './workforce-shift-time.js';
 import {
   WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
@@ -73,6 +74,7 @@ const TABLES = Object.freeze({
   },
   leave_request: { table: 'workforce_leave_requests', id: 'id', state: 'status', fields: ['leave_category','starts_at','ends_at','timezone','all_day','reason'], createOnlyFields: ['member_id'], json: [] },
   absence: { table: 'workforce_absences', id: 'id', state: 'status', fields: ['absence_type','starts_at','ends_at','timezone','all_day','reason'], createOnlyFields: ['member_id'], json: [] },
+  scheduling_policy: { table: 'workforce_scheduling_policies', id: 'id', state: 'status', fields: ['name','rules','effective_from','effective_until'], createOnlyFields: [], json: ['rules_json'] },
 });
 
 const INITIAL_STATES = Object.freeze({
@@ -88,6 +90,7 @@ const INITIAL_STATES = Object.freeze({
   utilization: 'PLANNED',
   leave_request: 'DRAFT',
   absence: 'RECORDED',
+  scheduling_policy: 'DRAFT',
 });
 
 const TRANSITIONS = Object.freeze({
@@ -132,6 +135,7 @@ const TRANSITIONS = Object.freeze({
   },
   leave_request: WORKFORCE_LEAVE_TRANSITIONS,
   absence: WORKFORCE_ABSENCE_TRANSITIONS,
+  scheduling_policy: { activate: { from: ['DRAFT','INACTIVE'], to: 'ACTIVE' }, deactivate: { from: ['ACTIVE'], to: 'INACTIVE' } },
 });
 
 const RESOURCE_SCOPED_ENTITIES = new Set(['availability','assignment','shift','allocation','utilization']);
@@ -185,6 +189,11 @@ function normalizeRepositoryValue(field, value) {
       new Intl.DateTimeFormat('en-US', { timeZone: value });
       return value.trim();
     } catch { throw fail('WORKFORCE_TIMEZONE_INVALID', 'timezone must be a valid IANA timezone'); }
+  }
+  if (field === 'rules_json') {
+    const result = validateWorkforceSchedulingPolicyRules(value);
+    if (!result.valid) throw fail('WORKFORCE_SCHEDULING_RULES_INVALID', result.errors.join('; '));
+    return value;
   }
   if (field === 'work_days_json') {
     if (!Array.isArray(value) || value.some(day => !Number.isInteger(day) || day < 1 || day > 7)
@@ -931,6 +940,10 @@ export class WorkforceSqliteRepository {
       if (!result.valid) throw fail('WORKFORCE_ABSENCE_INVALID', result.errors.join('; '));
       data.recorded_by = context.actor_id || null;
     }
+    if (entity === 'scheduling_policy') {
+      const result = validateWorkforceSchedulingPolicy({ ...data, rules: data.rules_json });
+      if (!result.valid) throw fail('WORKFORCE_SCHEDULING_POLICY_INVALID', result.errors.join('; '));
+    }
     this.assertReferences(entity, data, scope, payload.id || null);
     const requestHash = fingerprint({ entity, data });
     const existing = this.db.prepare(`
@@ -982,7 +995,9 @@ export class WorkforceSqliteRepository {
       }
       const placeholders = columns.map(() => '?').join(', ');
       this.db.prepare(`INSERT INTO ${spec.table} (${columns.join(', ')}) VALUES (${placeholders})`).run(...values);
-      this.writeAudit(scope, entity, id, 'created', { version: 1 }, context);
+      this.writeAudit(scope, entity, id, 'created', entity === 'scheduling_policy'
+        ? { version: 1, policy_version: 1, rules: data.rules_json }
+        : { version: 1 }, context);
       const row = this.db.prepare(`
         SELECT * FROM ${spec.table}
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
@@ -1022,6 +1037,10 @@ export class WorkforceSqliteRepository {
       const result = validateWorkforceAbsence(referenceData);
       if (!result.valid) throw fail('WORKFORCE_ABSENCE_INVALID', result.errors.join('; '));
     }
+    if (entity === 'scheduling_policy') {
+      const result = validateWorkforceSchedulingPolicy({ ...referenceData, rules: data.rules_json ?? existing.rules });
+      if (!result.valid) throw fail('WORKFORCE_SCHEDULING_POLICY_INVALID', result.errors.join('; '));
+    }
     this.assertReferences(entity, referenceData, scope, String(id));
     const now = this.clock();
     const assignments = Object.keys(data).map((key) => `${key} = ?`);
@@ -1035,7 +1054,9 @@ export class WorkforceSqliteRepository {
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ? AND version = ?
       `).run(...values);
       if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
-      this.writeAudit(scope, entity, String(id), 'updated', { version: expected + 1 }, context);
+      this.writeAudit(scope, entity, String(id), 'updated', entity === 'scheduling_policy'
+        ? { version: expected + 1, policy_version: expected + 1, rules: data.rules_json ?? existing.rules }
+        : { version: expected + 1 }, context);
       if (entity === 'member' && Object.hasOwn(data, 'supervisor_member_id')) {
         this.writeAudit(scope, entity, String(id), 'reporting_relationship_changed', { from: existing.supervisor_member_id || null, to: data.supervisor_member_id || null, version: expected + 1 }, context);
       }

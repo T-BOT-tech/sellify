@@ -7,6 +7,7 @@ import { WORKFORCE_AVAILABILITY_STATES } from './workforce-availability-contract
 import { WORKFORCE_ASSIGNMENT_TYPES } from './workforce-assignment-contract.js';
 import { WORKFORCE_UTILIZATION_STATUSES } from './workforce-utilization-contract.js';
 import { WORKFORCE_LEAVE_CATEGORIES, WORKFORCE_ABSENCE_TYPES, validateWorkforceLeaveRequest, validateWorkforceAbsence, validateWorkforceLeaveTransition } from './workforce-leave-contract.js';
+import { validateWorkforceSchedulingPolicy } from './workforce-scheduling-constraints-contract.js';
 
 const ENUM_FIELDS = Object.freeze({
   member_type: WORKFORCE_MEMBER_TYPES,
@@ -32,6 +33,7 @@ const DATE_PAIRS = Object.freeze({
   utilization: [['planned_starts_at','planned_ends_at'],['actual_starts_at','actual_ends_at']],
   leave_request: [['starts_at','ends_at']],
   absence: [['starts_at','ends_at']],
+  scheduling_policy: [['effective_from','effective_until']],
 });
 
 export function validateWorkforceApiPayload(entity, operation, input = {}) {
@@ -153,6 +155,7 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
   }
   if (entity === 'leave_request' && ['create','update'].includes(operation)) errors.push(...validateWorkforceLeaveRequest(input, { partial: operation === 'update' }).errors);
   if (entity === 'absence' && ['create','update'].includes(operation)) errors.push(...validateWorkforceAbsence(input, { partial: operation === 'update' }).errors);
+  if (entity === 'scheduling_policy' && ['create','update'].includes(operation)) errors.push(...validateWorkforceSchedulingPolicy(input, { partial: operation === 'update' }).errors);
   if (entity === 'leave_request' && ['approve','reject','withdraw','cancel'].includes(operation)) errors.push(...validateWorkforceLeaveTransition(operation, input).errors);
   if (entity === 'absence' && operation === 'void') errors.push(...validateWorkforceLeaveTransition(operation, input).errors);
   if (entity === 'shift' && ['cancel','reassign'].includes(operation)) {

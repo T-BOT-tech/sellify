@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration, runWorkforceLeaveAbsenceMigration } from '../backend/lib/workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration, runWorkforceLeaveAbsenceMigration, runWorkforceSchedulingPolicyMigration } from '../backend/lib/workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from '../backend/lib/workforce-sqlite-repository.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-repository-'));
@@ -66,6 +66,7 @@ try {
   runWorkforceShiftTemplateReferenceGuardMigration(db);
   runWorkforceShiftInstanceProvenanceMigration(db);
   runWorkforceLeaveAbsenceMigration(db);
+  runWorkforceSchedulingPolicyMigration(db);
 
   const department = repository.create('department', { idempotency_key: 'department-ops', code: 'ops', name: 'Operations' }, scopeA);
   assert.equal(department.record.code, 'OPS');
@@ -422,6 +423,45 @@ try {
     timezone: 'Africa/Addis_Ababa', break_rules: [],
   }, managerScopeA);
   assert.equal(shiftAfterAbsenceCorrection.record.status, 'PLANNED');
+
+  const schedulingPolicy = repository.create('scheduling_policy', {
+    idempotency_key: 'scheduling-policy-org-a',
+    name: 'Operations scheduling policy',
+    effective_from: '2026-11-25',
+    rules: { max_shift_minutes: 600, max_daily_minutes: 600, minimum_rest_minutes: 660,
+      minimum_break_after_minutes: 360, minimum_break_duration_minutes: 30,
+      enforcement: { max_daily_minutes: 'WARN' } },
+  }, managerScopeA);
+  assert.equal(schedulingPolicy.record.status, 'DRAFT');
+  assert.equal(schedulingPolicy.record.version, 1);
+  assert.equal(schedulingPolicy.record.rules.max_daily_minutes, 600);
+  const activeSchedulingPolicy = repository.activate('scheduling_policy', schedulingPolicy.record.id, {
+    expected_version: 1,
+  }, managerScopeA);
+  assert.equal(activeSchedulingPolicy.status, 'ACTIVE');
+  assert.equal(activeSchedulingPolicy.version, 2);
+  const updatedSchedulingPolicy = repository.update('scheduling_policy', activeSchedulingPolicy.id, {
+    expected_version: 2, rules: { max_shift_minutes: 540, max_daily_minutes: 540,
+      enforcement: { max_daily_minutes: 'BLOCK' } },
+  }, managerScopeA);
+  assert.equal(updatedSchedulingPolicy.version, 3);
+  assert.equal(updatedSchedulingPolicy.rules.max_shift_minutes, 540);
+  assert.throws(() => repository.update('scheduling_policy', activeSchedulingPolicy.id, {
+    expected_version: 2, name: 'Stale policy update',
+  }, managerScopeA), error => error.code === 'WORKFORCE_VERSION_CONFLICT');
+  const policyHistory = repository.listEntityHistory('scheduling_policy', activeSchedulingPolicy.id, managerScopeA);
+  assert.ok(policyHistory.some(event => event.metadata.policy_version === 3
+    && event.metadata.rules.max_shift_minutes === 540),
+  'scheduling policy audit must preserve the exact rules used by each policy version');
+  const policyB = repository.create('scheduling_policy', {
+    idempotency_key: 'scheduling-policy-org-b', name: 'Other organization policy',
+    effective_from: '2026-11-25', rules: { max_weekly_minutes: 2400 },
+  }, { ...scopeB, actor: { role: 'manager' } });
+  const activePolicyB = repository.activate('scheduling_policy', policyB.record.id, {
+    expected_version: 1,
+  }, { ...scopeB, actor: { role: 'manager' } });
+  assert.equal(activePolicyB.status, 'ACTIVE');
+
 
   const replacementProfessional = repository.create('member', {
     idempotency_key: 'member-shift-reassignment', member_type: 'EMPLOYEE',

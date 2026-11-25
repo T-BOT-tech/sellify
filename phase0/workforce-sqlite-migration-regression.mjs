@@ -22,6 +22,8 @@ import {
   WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION,
   runWorkforceLeaveAbsenceMigration,
   WORKFORCE_LEAVE_ABSENCE_MIGRATION_VERSION,
+  runWorkforceSchedulingPolicyMigration,
+  WORKFORCE_SCHEDULING_POLICY_MIGRATION_VERSION,
   WORKFORCE_MEMBER_ORG_REFERENCES_MIGRATION_VERSION,
   WORKFORCE_DEPARTMENT_MIGRATION_VERSION,
   WORKFORCE_POSITION_MIGRATION_VERSION,
@@ -220,6 +222,25 @@ try {
   }
   assert.ok(db.prepare('PRAGMA index_list(workforce_leave_requests)').all().some(index => index.name === 'idx_workforce_leave_approval_inbox'));
   assert.ok(db.prepare('PRAGMA index_list(workforce_absences)').all().some(index => index.name === 'idx_workforce_absences_member_status_start'));
+  const schedulingPolicyMigration = runWorkforceSchedulingPolicyMigration(db);
+  const schedulingPolicyReplay = runWorkforceSchedulingPolicyMigration(db);
+  assert.deepEqual(schedulingPolicyMigration, { applied: true, version: WORKFORCE_SCHEDULING_POLICY_MIGRATION_VERSION });
+  assert.deepEqual(schedulingPolicyReplay, { applied: false, version: WORKFORCE_SCHEDULING_POLICY_MIGRATION_VERSION });
+  assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workforce_scheduling_policies'").get());
+  assert.ok(db.prepare('PRAGMA index_list(workforce_scheduling_policies)').all().some(index => index.name === 'uq_workforce_scheduling_policy_active_org'));
+  db.prepare(`INSERT INTO workforce_scheduling_policies
+    (id,organization_id,tenant_id,chat_id,name,rules_json,effective_from,status,idempotency_key,request_hash,created_at,updated_at)
+    VALUES ('policy-a','org-a','tenant-a','chat-a','Default policy','{"max_daily_minutes":600}', '2026-01-01','DRAFT','policy-key-a','policy-hash-a','2026-01-01','2026-01-01')`).run();
+  db.prepare("UPDATE workforce_scheduling_policies SET status='ACTIVE' WHERE id='policy-a'").run();
+  assert.throws(() => db.prepare(`INSERT INTO workforce_scheduling_policies
+    (id,organization_id,tenant_id,chat_id,name,rules_json,effective_from,status,idempotency_key,request_hash,created_at,updated_at)
+    VALUES ('policy-a2','org-a','tenant-a','chat-a','Second active policy','{"max_shift_minutes":480}', '2026-01-01','ACTIVE','policy-key-a2','policy-hash-a2','2026-01-01','2026-01-01')`).run(),
+    'an organization must not have two active scheduling policies');
+  assert.throws(() => db.prepare(`INSERT INTO workforce_scheduling_policies
+    (id,organization_id,tenant_id,chat_id,name,rules_json,effective_from,idempotency_key,request_hash,created_at,updated_at)
+    VALUES ('policy-invalid','org-a','tenant-a','chat-a','Invalid rules','[]','2026-01-01','policy-key-invalid','policy-hash-invalid','2026-01-01','2026-01-01')`).run(),
+    'rules_json must be a JSON object');
+
   db.prepare(`INSERT INTO workforce_leave_requests
     (id,organization_id,tenant_id,chat_id,member_id,leave_category,starts_at,ends_at,timezone,reason,requested_by,idempotency_key,request_hash,created_at,updated_at)
     VALUES ('leave-a','org-a','tenant-a','chat-a','member-a','ANNUAL','2026-04-01T00:00:00.000Z','2026-04-03T00:00:00.000Z','Africa/Addis_Ababa','Annual leave','user-a','leave-key-a','hash-a','2026-01-01','2026-01-01')`).run();

@@ -20,7 +20,7 @@ export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
   'allocation',
   'utilization',
   'leave_request',
-  'absence',
+  'absence','scheduling_policy',
 ]);
 
 export const WORKFORCE_REPOSITORY_BASE_OPERATIONS = Object.freeze([
@@ -46,6 +46,7 @@ export const WORKFORCE_REPOSITORY_ENTITY_OPERATIONS = Object.freeze({
   utilization: Object.freeze(['create', 'get', 'list', 'update', 'start', 'complete', 'cancel']),
   leave_request: Object.freeze(['create','get','list','update','submit','approve','reject','withdraw','cancel']),
   absence: Object.freeze(['create','get','list','update','void']),
+  scheduling_policy: Object.freeze(['create','get','list','update','activate','deactivate']),
 });
 
 export const WORKFORCE_REPOSITORY_OPERATIONS = Object.freeze([
@@ -76,6 +77,7 @@ export function workforceRepositoryContract() {
     supports_optional_identity_link: true,
     supports_leave_request_approval: true,
     supports_unplanned_absence_recording: true,
+    supports_versioned_scheduling_policies: true,
     pending_leave_blocks_availability: false,
     approved_leave_blocks_availability: true,
     recorded_absence_blocks_availability: true,

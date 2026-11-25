@@ -38,6 +38,8 @@ jobs:
         run: node phase0/workforce-assignment-shift-regression.mjs
       - name: workforce-allocation-utilization-regression
         run: node phase0/workforce-allocation-utilization-regression.mjs
+      - name: workforce-scheduling-constraints-regression
+        run: npm run test:workforce-scheduling-constraints
 
       - name: Repository contract and SQLite persistence
         run: |

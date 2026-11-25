@@ -81,6 +81,22 @@ const invalidRecurrence = validateWorkforceApiPayload('availability', 'create', 
 assert.equal(invalidRecurrence.valid, false);
 assert.ok(invalidRecurrence.errors.some((error) => error.includes('FREQ must be DAILY or WEEKLY')));
 
+const validSchedulingPolicy = validateWorkforceApiPayload('scheduling_policy', 'create', {
+  name: 'Operations scheduling policy', effective_from: '2026-11-25',
+  rules: { max_shift_minutes: 600, max_daily_minutes: 600, minimum_rest_minutes: 660,
+    required_qualifications: ['First Aid'], location_policy: 'ASSIGNED_ONLY',
+    enforcement: { max_daily_minutes: 'WARN' } },
+});
+assert.equal(validSchedulingPolicy.valid, true);
+const invalidSchedulingPolicy = validateWorkforceApiPayload('scheduling_policy', 'create', {
+  name: '', effective_from: '2026-02-31', effective_until: '2026-01-01',
+  rules: { max_shift_minutes: 0, unknown_rule: true, location_policy: 'ANYWHERE' },
+});
+assert.equal(invalidSchedulingPolicy.valid, false);
+assert.ok(invalidSchedulingPolicy.errors.some(error => error.includes('max_shift_minutes')));
+assert.ok(invalidSchedulingPolicy.errors.some(error => error.includes('Unsupported scheduling rule')));
+assert.ok(invalidSchedulingPolicy.errors.some(error => error.includes('effective_from')));
+
 const invalidUtilization = validateWorkforceApiPayload('utilization', 'create', {
   status: 'COMPLETED',
 });
@@ -151,6 +167,7 @@ for (const routeKey of [
   "calendars: 'calendar'", "'calendar-exceptions': 'calendar_exception'",
   "availability: 'availability'", "assignments: 'assignment'", "shifts: 'shift'",
   "allocations: 'allocation'", "utilization: 'utilization'", "'leave-requests': 'leave_request'", "absences: 'absence'",
+  "'scheduling-policies': 'scheduling_policy'",
 ]) assert.ok(server.includes(routeKey), `missing route entity: ${routeKey}`);
 
 console.log('PASS Workforce API validation and route-boundary regression');

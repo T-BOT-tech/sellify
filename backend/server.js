@@ -3883,6 +3883,7 @@ const WORKFORCE_API_ENTITIES = Object.freeze({
   calendars: 'calendar', 'calendar-exceptions': 'calendar_exception',
   availability: 'availability', assignments: 'assignment', shifts: 'shift',
   allocations: 'allocation', utilization: 'utilization', 'leave-requests': 'leave_request', absences: 'absence',
+  'scheduling-policies': 'scheduling_policy',
 });
 const WORKFORCE_API_FIELDS = Object.freeze({
   department: ['code','name','description'],
@@ -3900,6 +3901,7 @@ const WORKFORCE_API_FIELDS = Object.freeze({
   utilization: ['resource_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source'],
   leave_request: ['leave_category','starts_at','ends_at','timezone','all_day','reason'],
   absence: ['absence_type','starts_at','ends_at','timezone','all_day','reason'],
+  scheduling_policy: ['name','rules','effective_from','effective_until'],
 });
 const WORKFORCE_API_CREATE_ONLY_FIELDS = Object.freeze({
   member: ['user_id'],
@@ -3931,6 +3933,7 @@ const WORKFORCE_CREATE_REQUIRED = Object.freeze({
   utilization: ['member_id','planned_starts_at','planned_ends_at','status','evidence_source'],
   leave_request: ['member_id','leave_category','starts_at','ends_at','timezone','reason'],
   absence: ['member_id','absence_type','starts_at','ends_at','timezone','reason'],
+  scheduling_policy: ['name','rules','effective_from'],
 });
 function workforceApiBody(body, entity, operation, action = null) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -4082,7 +4085,7 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     }
     return sendJSON(res, 200, { records, count: records.length, authority: 'workforce' }, req);
   }
-  if (req.method === 'GET' && recordId && action === 'history' && ['shift','leave_request','absence'].includes(entity)) {
+  if (req.method === 'GET' && recordId && action === 'history' && ['shift','leave_request','absence','scheduling_policy'].includes(entity)) {
     let lastError = null;
     for (const context of contexts) {
       try { return sendJSON(res, 200, { records: repository.listEntityHistory(entity, recordId, context), authority: 'workforce' }, req); }
@@ -4187,7 +4190,7 @@ const ROUTES = [
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
-  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/(shifts|leave-requests|absences)\/([^/]+)\/history$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), 'history') },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/(shifts|leave-requests|absences|scheduling-policies)\/([^/]+)\/history$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), 'history') },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)\/(activate|suspend|deactivate|release|cancel|submit|approve|reject|withdraw|void|confirm|start|complete|end|link-account|unlink-account|generate|reassign)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), m[4]) },

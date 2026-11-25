@@ -39,7 +39,7 @@ import { decideLogisticsSchedulingFailure } from '../../app/src/verticals/logist
 import { decideLogisticsSchedulingTerminal } from '../../app/src/verticals/logistics/scheduling-terminal-contract.js';
 
 
-import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration, runWorkforceLeaveAbsenceMigration } from './workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration, runWorkforceLeaveAbsenceMigration, runWorkforceSchedulingPolicyMigration } from './workforce-sqlite-migrations.js';
 import { isEligibleWorkforceMemberForBooking } from './workforce-booking-integration.js';
 import { WorkforceSqliteRepository } from './workforce-sqlite-repository.js';
 import { authorizeWorkforceRepositoryAccess } from './workforce-authorization-adapter.js';
@@ -3621,6 +3621,7 @@ if (!applied.includes(39)) {
   runWorkforceShiftTemplateReferenceGuardMigration(db, nowIso);
   runWorkforceShiftInstanceProvenanceMigration(db, nowIso);
   runWorkforceLeaveAbsenceMigration(db, nowIso);
+  runWorkforceSchedulingPolicyMigration(db, nowIso);
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({

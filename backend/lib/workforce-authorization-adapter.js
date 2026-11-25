@@ -22,6 +22,7 @@ const PERMISSION_BY_ENTITY = Object.freeze({
   utilization: { view: 'workforce:utilization:view', manage: 'workforce:utilization:manage' },
   leave_request: { view: 'workforce:leave:view', manage: 'workforce:leave:manage', request: 'workforce:leave:request', withdraw: 'workforce:leave:withdraw' },
   absence: { view: 'workforce:absence:view', manage: 'workforce:absence:manage' },
+  scheduling_policy: { view: 'workforce:assignment:view', manage: 'workforce:assignment:manage' },
 });
 
 const READ_OPERATIONS = new Set(['get','list']);
@@ -60,7 +61,7 @@ export function authorizeWorkforceRepositoryAccess(request = {}) {
   const providerScoped = contextualRoles.some((entry) => String(entry?.role || '').trim().toLowerCase() === 'service_provider');
   const scopedResourceId = request.resource_id == null ? null : String(request.resource_id);
   if (providerScoped && !scopedResourceId) return false;
-  if (providerScoped && entity === 'shift_template') return false;
+  if (providerScoped && ['shift_template','scheduling_policy'].includes(entity)) return false;
 
   const resourceId = providerScoped
     ? scopedResourceId
