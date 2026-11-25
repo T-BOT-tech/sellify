@@ -403,7 +403,7 @@ try {
   });
 
   await page.goto(baseUrl, { waitUntil: 'commit' });
-  await page.setContent('<!doctype html><html><head></head><body></body></html>');
+  await page.setContent('<!doctype html><html><head></head><body></body></html>', { waitUntil: 'domcontentloaded' });
   await dismissSettingsOverlay();
   await page.evaluate(async () => {
     const state = await import('/src/state.js');
