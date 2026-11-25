@@ -206,7 +206,8 @@ function renderOrganizationAdmin(workspace, departments, positions) {
   fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="department_id"]'), departments);
   fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="position_id"]'), positions);
   fillSelect(workspace.querySelector('#workforcePositionForm [name="department_id"]'), departments);
-  const supervisors = workspaceData.get(workspace)?.members.filter(member => member.status === 'ACTIVE') || [];
+  const supervisors = (workspaceData.get(workspace)?.members || []).filter(member => member.status === 'ACTIVE')
+    .map(member => ({ ...member, display_name: String(member.display_name || member.id) + ' · supervisor' }));
   fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="supervisor_member_id"]'), supervisors, '', 'display_name');
 }
 
