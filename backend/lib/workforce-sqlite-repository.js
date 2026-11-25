@@ -1135,24 +1135,29 @@ export class WorkforceSqliteRepository {
     }
   }
 
-  listShiftHistory(entity, id, context = {}) {
-    if (entity !== 'shift') throw fail('WORKFORCE_ENTITY_INVALID', 'Shift history is supported only for dated shifts');
+  listEntityHistory(entity, id, context = {}) {
+    if (!['shift','leave_request','absence'].includes(entity)) throw fail('WORKFORCE_ENTITY_INVALID', 'History is not supported for this Workforce entity');
     const scope = this.assertContext(context);
-    this.getForMutation('shift', id, scope, context, 'get');
+    this.getForMutation(entity, id, scope, context, 'get');
     const rows = this.db.prepare(`
       SELECT action, entity_type, entity_id, metadata_json, created_at
       FROM audit_events
       WHERE chat_id = ? AND organization_id = ?
-        AND entity_type = 'workforce_shift' AND entity_id = ?
-        AND action LIKE 'workforce.shift.%'
+        AND entity_type = ? AND entity_id = ?
+        AND action LIKE ?
       ORDER BY id ASC LIMIT 100
-    `).all(scope.chat_id, scope.organization_id, String(id));
+    `).all(scope.chat_id, scope.organization_id, `workforce_${entity}`, String(id), `workforce.${entity}.%`);
     return rows.map(row => {
       let metadata = {};
       try { metadata = JSON.parse(row.metadata_json || '{}'); } catch {}
       if (String(metadata.tenant_id || '') !== scope.tenant_id) return null;
       return { action: row.action, created_at: row.created_at, metadata };
     }).filter(Boolean);
+  }
+
+  listShiftHistory(entity, id, context = {}) {
+    if (entity !== 'shift') throw fail('WORKFORCE_ENTITY_INVALID', 'Shift history is supported only for dated shifts');
+    return this.listEntityHistory('shift', id, context);
   }
 
   reassignShift(entity, id, input = {}, context = {}) {
@@ -1260,8 +1265,26 @@ export class WorkforceSqliteRepository {
     }
     if (Number(record.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
     const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+    const decisionReason = typeof input.decision_reason === 'string' ? input.decision_reason.trim() : '';
     if (entity === 'shift' && operation === 'cancel' && (!reason || reason.length > 500)) {
       throw fail('WORKFORCE_SHIFT_CANCELLATION_REASON_REQUIRED', 'A cancellation reason of 1 to 500 characters is required');
+    }
+    if (entity === 'leave_request' && ['approve','reject','withdraw','cancel'].includes(operation)) {
+      const result = validateWorkforceLeaveTransition(operation, input);
+      if (!result.valid) throw fail('WORKFORCE_LEAVE_TRANSITION_INVALID', result.errors.join('; '));
+    }
+    if (entity === 'absence' && operation === 'void') {
+      const result = validateWorkforceLeaveTransition(operation, input);
+      if (!result.valid) throw fail('WORKFORCE_ABSENCE_VOID_REASON_REQUIRED', result.errors.join('; '));
+    }
+    if (entity === 'leave_request' && operation === 'approve'
+      && String(record.requested_by || '') === String(context.actor_id || '')) {
+      throw fail('WORKFORCE_LEAVE_SELF_APPROVAL_FORBIDDEN', 'A leave request cannot be approved by the user who requested it', 403);
+    }
+    if (entity === 'leave_request' && operation === 'withdraw'
+      && String(record.requested_by || '') !== String(context.actor_id || '')
+      && !['owner','manager'].includes(String(context.actor?.role || context.role || '').toLowerCase())) {
+      throw fail('WORKFORCE_LEAVE_WITHDRAWAL_FORBIDDEN', 'Only the requesting employee or an authorized manager can withdraw this request', 403);
     }
     if (entity === 'member' && ['suspend','deactivate'].includes(operation)) {
       const reports = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_members WHERE organization_id=? AND tenant_id=? AND supervisor_member_id=? AND status='ACTIVE'")
@@ -1286,20 +1309,72 @@ export class WorkforceSqliteRepository {
         .get(scope.organization_id, scope.tenant_id, String(id)).count;
       if (Number(templates)) throw fail('WORKFORCE_POSITION_HAS_ACTIVE_SHIFT_TEMPLATES', 'Deactivate or reassign active shift templates before deactivating this position', 409);
     }
+
     const now = this.clock();
+    const extraAssignments = [];
+    const extraValues = [];
+    if (entity === 'leave_request') {
+      if (operation === 'submit') {
+        extraAssignments.push('submitted_by = ?', 'submitted_at = ?');
+        extraValues.push(context.actor_id || null, now);
+      } else if (['approve','reject'].includes(operation)) {
+        extraAssignments.push('decided_by = ?', 'decided_at = ?', 'decision_reason = ?');
+        extraValues.push(context.actor_id || null, now, decisionReason || null);
+      } else if (operation === 'withdraw') {
+        extraAssignments.push('withdrawn_by = ?', 'withdrawn_at = ?', 'withdrawal_reason = ?');
+        extraValues.push(context.actor_id || null, now, reason || null);
+      } else if (operation === 'cancel') {
+        extraAssignments.push('cancelled_by = ?', 'cancelled_at = ?', 'cancellation_reason = ?');
+        extraValues.push(context.actor_id || null, now, reason);
+      }
+    }
+    if (entity === 'absence' && operation === 'void') {
+      extraAssignments.push('voided_by = ?', 'voided_at = ?', 'void_reason = ?');
+      extraValues.push(context.actor_id || null, now, reason);
+    }
+
     this.db.exec('BEGIN IMMEDIATE');
     try {
+      if (entity === 'leave_request' && operation === 'approve') {
+        const activeEngagement = this.db.prepare(`
+          SELECT id FROM workforce_engagements
+          WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
+            AND starts_at <= ? AND (ends_at IS NULL OR ends_at >= ?)
+          LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(record.member_id), record.starts_at, record.ends_at);
+        if (!activeEngagement) throw fail('WORKFORCE_ACTIVE_ENGAGEMENT_REQUIRED', 'Leave approval requires an active engagement covering the full leave period', 409);
+        const approvedLeave = this.db.prepare(`
+          SELECT id FROM workforce_leave_requests
+          WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='APPROVED'
+            AND id<>? AND starts_at < ? AND ends_at > ? LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(record.member_id), String(id), record.ends_at, record.starts_at);
+        const scheduledShift = this.db.prepare(`
+          SELECT id FROM workforce_shifts
+          WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
+            AND status IN ('PLANNED','CONFIRMED','IN_PROGRESS')
+            AND starts_at < ? AND ends_at > ? LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(record.member_id), record.ends_at, record.starts_at);
+        if (approvedLeave || scheduledShift) {
+          throw fail('WORKFORCE_LEAVE_APPROVAL_CONFLICT', 'Leave overlaps an existing approved leave period or scheduled shift; resolve the conflict before approval', 409);
+        }
+      }
+      const assignments = [`${spec.state} = ?`, 'updated_by = ?', 'updated_at = ?', 'version = version + 1', ...extraAssignments];
+      const values = [transition.to, context.actor_id || null, now, ...extraValues,
+        String(id), scope.organization_id, scope.tenant_id, scope.chat_id, expected, record[spec.state]];
       const result = this.db.prepare(`
         UPDATE ${spec.table}
-        SET ${spec.state} = ?, updated_by = ?, updated_at = ?, version = version + 1
+        SET ${assignments.join(', ')}
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ? AND version = ? AND ${spec.state} = ?
-      `).run(transition.to,context.actor_id || null,now,String(id),scope.organization_id,scope.tenant_id,scope.chat_id,expected,record[spec.state]);
+      `).run(...values);
       if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
-      this.writeAudit(scope, entity, String(id), operation, { from: record[spec.state], to: transition.to, version: expected + 1, ...(reason ? { reason } : {}) }, context);
+      const auditMetadata = { from: record[spec.state], to: transition.to, version: expected + 1 };
+      if (reason) auditMetadata.reason = reason;
+      if (decisionReason) auditMetadata.decision_reason = decisionReason;
+      this.writeAudit(scope, entity, String(id), operation, auditMetadata, context);
       const row = this.db.prepare(`
         SELECT * FROM ${spec.table}
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
-      `).get(String(id),scope.organization_id,scope.tenant_id,scope.chat_id);
+      `).get(String(id), scope.organization_id, scope.tenant_id, scope.chat_id);
       this.db.exec('COMMIT');
       return fromDatabaseRow(row, spec.json);
     } catch (error) {
@@ -1323,6 +1398,9 @@ export class WorkforceSqliteRepository {
   deactivate(entity, id, input = {}, context = {}) { return this.transition(entity, 'deactivate', id, input, context); }
   release(entity, id, input = {}, context = {}) { return this.transition(entity, 'release', id, input, context); }
   cancel(entity, id, input = {}, context = {}) { return this.transition(entity, 'cancel', id, input, context); }
+  reject(entity, id, input = {}, context = {}) { return this.transition(entity, 'reject', id, input, context); }
+  withdraw(entity, id, input = {}, context = {}) { return this.transition(entity, 'withdraw', id, input, context); }
+  void(entity, id, input = {}, context = {}) { return this.transition(entity, 'void', id, input, context); }
   submit(entity, id, input = {}, context = {}) { return this.transition(entity, 'submit', id, input, context); }
   approve(entity, id, input = {}, context = {}) { return this.transition(entity, 'approve', id, input, context); }
   confirm(entity, id, input = {}, context = {}) { return this.transition(entity, 'confirm', id, input, context); }
