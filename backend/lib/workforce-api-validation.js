@@ -76,6 +76,17 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
     (typeof input.employee_number !== 'string' || input.employee_number.trim().length > 80)) {
     errors.push('employee_number must be a string of at most 80 characters');
   }
+  for (const field of ['department_id','position_id','supervisor_member_id']) {
+    if (input[field] !== undefined && input[field] !== null &&
+      (typeof input[field] !== 'string' || !input[field].trim())) errors.push(field + ' must be a non-empty string or null');
+  }
+  if (entity === 'department' || entity === 'position') {
+    if (input.code !== undefined && (typeof input.code !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,39}$/.test(input.code.trim()))) errors.push('code must be 1-40 letters, numbers, dots, underscores, slashes or hyphens');
+    if (input.name !== undefined && (typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 120)) errors.push('name must be a non-empty string of at most 120 characters');
+    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > 1000)) errors.push('description must be a string of at most 1000 characters');
+    if (entity === 'position' && input.classification !== undefined && input.classification !== null &&
+      (typeof input.classification !== 'string' || input.classification.trim().length > 80)) errors.push('classification must be a string of at most 80 characters');
+  }
 
   if (input.all_day !== undefined && typeof input.all_day !== 'boolean') {
     errors.push('all_day must be a boolean');
