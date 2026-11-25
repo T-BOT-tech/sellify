@@ -1083,3 +1083,28 @@ export function runWorkforceShiftSchedulingAssessmentMigration(db, now = () => n
     return { applied: true, version };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+
+
+/** M12 / migration 100 — retain authorized scheduling-constraint override evidence. */
+export const WORKFORCE_SHIFT_SCHEDULING_OVERRIDE_MIGRATION_VERSION = 100;
+
+export function runWorkforceShiftSchedulingOverrideMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_SHIFT_SCHEDULING_OVERRIDE_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      ALTER TABLE workforce_shifts ADD COLUMN constraint_override_reason TEXT
+        CHECK (constraint_override_reason IS NULL OR length(trim(constraint_override_reason)) BETWEEN 8 AND 500);
+      ALTER TABLE workforce_shifts ADD COLUMN constraint_override_by TEXT
+        REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE workforce_shifts ADD COLUMN constraint_override_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_workforce_shifts_constraint_override
+        ON workforce_shifts(organization_id,tenant_id,constraint_override_at)
+        WHERE constraint_override_reason IS NOT NULL;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
