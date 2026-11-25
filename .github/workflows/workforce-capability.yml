@@ -41,27 +41,27 @@ jobs:
           node phase0/workforce-availability-assessment-regression.mjs
           node phase0/workforce-assignment-shift-regression.mjs
           node phase0/workforce-allocation-utilization-regression.mjs
-          npm run test:workforce-scheduling-constraints
+          node phase0/workforce-scheduling-constraints-regression.mjs
 
       - name: Repository and SQLite persistence
         run: |
-          npm run test:workforce-repository-contract
-          npm run test:workforce-sqlite-migration
-          npm run test:workforce-sqlite-repository
+          node phase0/workforce-repository-contract-regression.mjs
+          node phase0/workforce-sqlite-migration-regression.mjs
+          node phase0/workforce-sqlite-repository-regression.mjs
 
       - name: Authorization and authenticated API
         run: |
-          npm run test:workforce-authorization-adapter
-          npm run test:workforce-api
-          npm run test:workforce-api-http
+          node phase0/workforce-authorization-adapter-regression.mjs
+          node phase0/workforce-api-regression.mjs
+          node phase0/workforce-api-http-regression.mjs
 
       - name: Operator workspace
         run: |
-          npm run test:workforce-operator-workspace
+          node phase0/workforce-operator-workspace-regression.mjs
           node phase0/workforce-operator-browser-regression.mjs
 
       - name: Service Booking integration and provider isolation
-        run: npm run test:workforce-service-booking
+        run: node phase0/workforce-service-booking-integration-regression.mjs
 
       - name: Backend route inventory
-        run: npm run test:workforce-route-inventory
+        run: node phase0/workforce-route-inventory-regression.mjs
