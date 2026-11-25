@@ -370,6 +370,12 @@ async function refreshWorkspace(root) {
     membersNode.replaceChildren(); summaryNode.replaceChildren();
   }
 }
+async function refreshWorkspaceWithStatus(root, formSelector, message) {
+  await refreshWorkspace(root);
+  const status = root.querySelector(formSelector + ' .workforce-form-status');
+  if (status) status.textContent = message;
+}
+
 async function refreshMember(root, memberId, member = null) {
   const workspace = root.querySelector('#workforceWorkspace');
   const details = workspace?.querySelector('#workforceMemberDetails');
@@ -489,7 +495,7 @@ async function saveMemberProfile(form, root) {
     await request(endpoint('members', '/' + encodeURIComponent(memberId)), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    status.textContent = 'Profile and assignments saved.'; await refreshWorkspace(root);
+    await refreshWorkspaceWithStatus(root, '#workforceMemberProfileForm', 'Profile and assignments saved.');
   } catch (error) { status.textContent = error.message || 'Profile could not be saved.'; }
   finally { submit.disabled = false; }
 }
@@ -505,7 +511,7 @@ async function linkMemberAccount(form, root) {
     await request(endpoint('members', '/' + encodeURIComponent(memberId) + '/link-account'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    status.textContent = 'Existing account linked.'; await refreshWorkspace(root);
+    await refreshWorkspaceWithStatus(root, '#workforceAccountLinkForm', 'Existing account linked.');
   } catch (error) { status.textContent = error.message || 'Account could not be linked.'; }
   finally { submit.disabled = false; }
 }
@@ -572,8 +578,8 @@ async function saveMemberCreate(form, root) {
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
       body: JSON.stringify(payload),
     });
-    form.reset(); status.textContent = 'Professional record created. No Sellify login was created.';
-    await refreshWorkspace(root);
+    form.reset();
+    await refreshWorkspaceWithStatus(root, '#workforceMemberCreateForm', 'Professional record created. No Sellify login was created.');
   } catch (error) { status.textContent = error.message || 'Professional record could not be created.'; }
   finally { submit.disabled = false; }
 }
@@ -590,7 +596,7 @@ async function saveDepartment(form, root) {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
       body: JSON.stringify(payload),
     });
-    form.reset(); status.textContent = 'Department created.'; await refreshWorkspace(root);
+    form.reset(); await refreshWorkspaceWithStatus(root, '#workforceDepartmentForm', 'Department created.');
   } catch (error) { status.textContent = error.message || 'Department could not be created.'; }
   finally { submit.disabled = false; }
 }
@@ -610,7 +616,7 @@ async function savePosition(form, root) {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
       body: JSON.stringify(payload),
     });
-    form.reset(); status.textContent = 'Position created.'; await refreshWorkspace(root);
+    form.reset(); await refreshWorkspaceWithStatus(root, '#workforcePositionForm', 'Position created.');
   } catch (error) { status.textContent = error.message || 'Position could not be created.'; }
   finally { submit.disabled = false; }
 }
@@ -652,8 +658,7 @@ async function saveLocationAssignment(form, root) {
         starts_at: start.toISOString(), ends_at: end.toISOString(),
       }),
     });
-    form.reset(); status.textContent = 'Location assignment created.';
-    await refreshWorkspace(root);
+    form.reset(); await refreshWorkspaceWithStatus(root, '#workforceLocationAssignmentForm', 'Location assignment created.');
   } catch (error) { status.textContent = error.message || 'Location assignment could not be created.'; }
   finally { submit.disabled = false; }
 }
@@ -712,8 +717,7 @@ async function saveProfile(form, root) {
         body: JSON.stringify(payload),
       });
     }
-    status.textContent = 'Profile saved.';
-    await refreshWorkspace(root);
+    await refreshWorkspaceWithStatus(root, '#workforceProfileForm', 'Profile saved.');
   } catch (error) { status.textContent = error.message || 'Professional profile could not be saved.'; }
   finally { submit.disabled = false; }
 }
@@ -744,8 +748,7 @@ async function saveEngagement(form, root) {
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
       body: JSON.stringify(payload),
     });
-    form.reset(); status.textContent = 'Engagement recorded.';
-    await refreshWorkspace(root);
+    form.reset(); await refreshWorkspaceWithStatus(root, '#workforceEngagementForm', 'Engagement recorded.');
   } catch (error) { status.textContent = error.message || 'Engagement could not be created.'; }
   finally { submit.disabled = false; }
 }
