@@ -44,6 +44,19 @@ const ROLE_PERMISSIONS = Object.freeze({
     'service:service_booking:view',
     'service:service_booking:request', 'service:service_booking:manage',
     'service:service_booking:confirm', 'service:service_booking:cancel',
+    'workforce:department:view', 'workforce:department:manage',
+    'workforce:position:view', 'workforce:position:manage',
+    'workforce:shift_template:view', 'workforce:shift_template:manage',
+    'workforce:member:view', 'workforce:member:manage', 'workforce:member:activate', 'workforce:member:suspend',
+    'workforce:profile:view', 'workforce:profile:manage',
+    'workforce:engagement:view', 'workforce:engagement:manage',
+    'workforce:calendar:view', 'workforce:calendar:manage',
+    'workforce:leave:view', 'workforce:leave:manage', 'workforce:leave:request', 'workforce:leave:withdraw',
+    'workforce:absence:view', 'workforce:absence:manage',
+    'workforce:availability:view', 'workforce:availability:manage',
+    'workforce:assignment:view', 'workforce:assignment:manage',
+    'workforce:allocation:view', 'workforce:allocation:manage', 'workforce:allocation:release',
+    'workforce:utilization:view', 'workforce:utilization:manage',
     'logistics:scheduling:view', 'logistics:scheduling:request',
     'logistics:scheduling:manage', 'logistics:scheduling:confirm', 'logistics:scheduling:cancel',
   ]),
@@ -54,7 +67,9 @@ const ROLE_PERMISSIONS = Object.freeze({
     'marketplace_orders:view', 'marketplace_orders:update',
     'inventory:view',
   ]),
-  staff: new Set(['locations:view', 'customers:view', 'inventory:view', 'fulfillment:view']),
+  staff: new Set(['locations:view', 'customers:view', 'inventory:view', 'fulfillment:view',
+    'workforce:member:view', 'workforce:utilization:view', 'workforce:calendar:view',
+    'workforce:leave:view', 'workforce:leave:request', 'workforce:leave:withdraw']),
   buyer: new Set(['orders:create', 'b2b:po:view', 'b2b:po:create', 'supplier-network:trust:view', 'supplier-network:discovery:discover', 'supplier-network:marketplace-integration:view', 'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create']),
   viewer: new Set([]),
   // Service Provider is resource-scoped; authorization also requires an exact
@@ -63,6 +78,11 @@ const ROLE_PERMISSIONS = Object.freeze({
     'service:service_resource:view',
     'service:resource_availability:view', 'service:resource_availability:manage',
     'service:service_booking:view',
+    // Providers receive read-only Workforce access; repository scope must bind
+    // every request to their own member and assigned Service Resource.
+    'workforce:member:view', 'workforce:profile:view',
+    'workforce:calendar:view', 'workforce:availability:view',
+    'workforce:assignment:view',
   ]),
   // FUX-6 Restaurant contextual roles. These are executable only when the
   // Restaurant Pack is active; assignment is handled through membership_roles.
