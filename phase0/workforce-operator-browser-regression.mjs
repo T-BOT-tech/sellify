@@ -269,7 +269,7 @@ try {
   const memberAssignmentForm = page.locator('#workforceMemberProfileForm');
   await memberAssignmentForm.locator('[name="primary_location_id"]').selectOption('location-synthetic-1');
   await memberAssignmentForm.getByRole('button', { name: 'Save profile and assignments' }).click();
-  await page.locator('.workforce-profile-summary').getByText('Addis Ababa Branch', { exact: true }).waitFor({ timeout: 10000 });
+  await page.locator('.workforce-profile-summary strong').filter({ hasText: 'Addis Ababa Branch' }).waitFor({ timeout: 10000 });
   const memberLocationCall = apiCalls.find(call => call.method === 'PATCH' && call.pathname.endsWith('/members/member-synthetic-1'));
   assert.equal(memberLocationCall?.body.expected_version, 1);
   assert.equal(memberLocationCall?.body.primary_location_id, 'location-synthetic-1');
