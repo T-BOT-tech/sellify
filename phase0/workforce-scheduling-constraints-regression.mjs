@@ -58,6 +58,26 @@ assert.equal(pass.policy_id, 'policy-a');
 assert.equal(pass.policy_version, 3);
 assert.deepEqual(pass.findings, []);
 
+const maxShiftConflict = evaluateWorkforceSchedulingConstraints({
+  policy: { ...policy, rules: { max_shift_minutes: 360 } },
+  candidate, existing_shifts: [],
+});
+assert.equal(maxShiftConflict.state, 'BLOCKING_CONFLICT');
+assert.ok(maxShiftConflict.findings.some(item => item.code === 'MAX_SHIFT_DURATION'));
+
+const weeklyConflict = evaluateWorkforceSchedulingConstraints({
+  policy: { ...policy, rules: { max_weekly_minutes: 900 } },
+  candidate,
+  existing_shifts: [{ id: 'shift-weekly', starts_at: '2026-11-25T05:00:00.000Z',
+    ends_at: '2026-11-25T13:00:00.000Z', status: 'COMPLETED' }],
+});
+assert.equal(weeklyConflict.state, 'BLOCKING_CONFLICT');
+assert.ok(weeklyConflict.findings.some(item => item.code === 'MAX_WEEKLY_HOURS'));
+
+const invalidTimezone = evaluateWorkforceSchedulingConstraints({
+  policy, candidate: { ...candidate, timezone: 'Not/A_Real_Zone' }, existing_shifts: [],
+});
+assert.equal(invalidTimezone.state, 'UNKNOWN');
 const overlap = evaluateWorkforceSchedulingConstraints({
   policy, candidate,
   existing_shifts: [{ id: 'shift-overlap', starts_at: '2026-11-26T08:00:00.000Z',

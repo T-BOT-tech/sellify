@@ -87,7 +87,7 @@ function breakMinutes(rules) {
   for (const rule of rules) {
     const start = typeof rule?.start_local_time === 'string' ? rule.start_local_time : '';
     const end = typeof rule?.end_local_time === 'string' ? rule.end_local_time : '';
-    if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return null;
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end)) return null;
     const toMinutes = value => Number(value.slice(0,2)) * 60 + Number(value.slice(3,5));
     const duration = (toMinutes(end) - toMinutes(start) + 1440) % 1440;
     if (!duration) return null;
