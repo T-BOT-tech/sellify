@@ -426,8 +426,8 @@ try {
     expected_version: 3, user_id: 'user-b',
   }, scopeA), error => error.code === 'WORKFORCE_UPDATE_EMPTY');
 
-  const suspendedMember = repository.suspend('member', created.record.id, { expected_version: 3 }, scopeA);
-  const deactivatedMember = repository.deactivate('member', created.record.id, { expected_version: 4 }, scopeA);
+  const suspendedMember = repository.suspend('member', created.record.id, { expected_version: 5 }, scopeA);
+  const deactivatedMember = repository.deactivate('member', created.record.id, { expected_version: 6 }, scopeA);
   assert.equal(suspendedMember.status, 'SUSPENDED');
   assert.equal(deactivatedMember.status, 'INACTIVE');
 
