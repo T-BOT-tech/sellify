@@ -30,6 +30,8 @@ Every Workforce table carries organization_id, tenant_id, and chat_id. Organizat
 - primary_location_id
 - timezone
 - display_name
+- employee_number
+- department_id, position_id, supervisor_member_id
 - idempotency_key, request_hash
 - created_by, updated_by
 - created_at, updated_at, version
@@ -178,6 +180,9 @@ member_id, booking_id, and operational_task_id are immutable after creation. boo
 - status
 - recurrence_source_id
 - assignment_source_id
+- shift_template_id, template_version, generated_local_date
+- constraint_policy_id, constraint_policy_version, constraint_state, constraint_findings_json
+- constraint_override_reason, constraint_override_by, constraint_override_at
 - idempotency_key, request_hash
 - created_by, updated_by
 - created_at, updated_at, version
@@ -225,6 +230,61 @@ Statuses: PLANNED, IN_PROGRESS, COMPLETED, CANCELLED.
 
 member_id, booking_id, and operational_task_id are immutable after creation. Utilization records actual work; it is not declared availability.
 
+### Organization structure and shift templates (migrations 90–96)
+
+#### workforce_departments
+- id, organization_id, tenant_id, chat_id
+- code, name, description, status
+- idempotency_key, request_hash, created_by, updated_by
+- created_at, updated_at, version
+
+#### workforce_positions
+- id, organization_id, tenant_id, chat_id
+- code, name, description, department_id, classification, status
+- idempotency_key, request_hash, created_by, updated_by
+- created_at, updated_at, version
+
+#### workforce_shift_templates
+- id, organization_id, tenant_id, chat_id
+- name, start_local_time, end_local_time, timezone
+- break_rules_json, work_days_json
+- department_id, position_id, location_id
+- effective_from, effective_until, status
+- idempotency_key, request_hash, created_by, updated_by
+- created_at, updated_at, version
+
+Templates generate dated Workforce shifts; they do not become a separate scheduling authority. Generated shifts retain template ID/version and local-date provenance.
+
+### Leave, absence, and scheduling policy (migrations 97–100)
+
+#### workforce_leave_requests
+- id, organization_id, tenant_id, chat_id, member_id
+- leave_category, status, starts_at, ends_at, timezone, all_day, reason
+- requested_by, submitted_by, submitted_at
+- decided_by, decided_at, decision_reason
+- withdrawn_by, withdrawn_at, withdrawal_reason
+- cancelled_by, cancelled_at, cancellation_reason
+- idempotency_key, request_hash, created_at, updated_at, version
+
+Leave lifecycle: DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, WITHDRAWN, CANCELLED. Approval is an audited lifecycle decision and checks active engagement plus existing approved leave and scheduled shifts.
+
+#### workforce_absences
+- id, organization_id, tenant_id, chat_id, member_id
+- absence_type, status, starts_at, ends_at, timezone, all_day, reason
+- recorded_by, voided_by, voided_at, void_reason
+- idempotency_key, request_hash, created_at, updated_at, version
+
+Recorded absences block availability; voiding is an explicit audited action.
+
+#### workforce_scheduling_policies
+- id, organization_id, tenant_id, chat_id
+- name, rules_json, status, effective_from, effective_until
+- idempotency_key, request_hash, created_by, updated_by
+- created_at, updated_at, version
+
+Policy rules are versioned. Shift records retain the evaluated policy version, findings, state, and any authorized override provenance; the policy does not replace the canonical Service Booking or Logistics commitment authorities.
+
+
 A read-only summary projection is available at GET /tenants/:chatId/workforce/utilization/summary. It aggregates the existing utilization events by member and Service Resource without creating or changing records. It reports event counts, planned minutes, measured completed planned minutes, actual minutes, variance, and completed events missing valid actual timestamps. Optional from/to filters are ISO-8601 timestamps and filter by planned_starts_at using an inclusive from and exclusive to boundary. Existing utilization view permission, tenant scope, provider member identity, and assigned resource scope apply.
 
 
@@ -248,9 +308,14 @@ This is an additive link only. Service Booking remains the booking authority; Se
 
 ## Migrations and indexes
 
-- Migration 86: runWorkforceSqliteMigrations creates the ten Workforce tables and their organization/tenant/member/resource/location/booking/operational-task indexes.
-- Migration 87: runWorkforceServiceBookingMigration adds the Service Booking member reference and its lookup index.
-- Both migrations are version-guarded and transactional.
+- Migration 86: creates the ten initial Workforce core tables and their organization/tenant/member/resource/location/booking/operational-task indexes.
+- Migration 87: adds the Service Booking member reference and lookup index.
+- Migrations 88–89: support external professionals and employee numbers.
+- Migrations 90–96: add departments, positions, reporting references, shift templates, template-reference guards, and generated-shift provenance.
+- Migration 97: adds leave and absence records.
+- Migration 98: adds scheduling policies.
+- Migrations 99–100: add shift scheduling-assessment evidence and authorized override provenance.
+- All migrations are additive, version-guarded, and transactional.
 - No canonical table is dropped or rebuilt.
 
 ## Persistence behavior
