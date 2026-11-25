@@ -253,6 +253,13 @@ try {
     member_type: 'PROVIDER',
     display_name: 'Different payload',
   }, scopeA), (error) => error.code === 'WORKFORCE_IDEMPOTENCY_CONFLICT');
+  assert.throws(() => repository.create('member', {
+    idempotency_key: 'member-create-duplicate-user',
+    user_id: 'user-a',
+    member_type: 'PROVIDER',
+    display_name: 'Duplicate provider identity',
+  }, scopeA), error => error.code === 'WORKFORCE_USER_ALREADY_LINKED',
+  'a Sellify account cannot be linked to multiple Workforce members in one organization');
 
   const updated = repository.update('member', created.record.id, {
     expected_version: 1,
@@ -270,6 +277,14 @@ try {
   assert.equal(activated.status, 'ACTIVE');
   assert.equal(activated.version, 3);
   const supervisor = repository.create('member', { idempotency_key: 'member-supervisor', member_type: 'EMPLOYEE', display_name: 'Operations Supervisor' }, scopeA);
+  assert.throws(() => repository.create('shift', {
+    idempotency_key: 'shift-inactive-member',
+    member_id: supervisor.record.id,
+    starts_at: '2026-11-25T09:00:00.000Z',
+    ends_at: '2026-11-25T10:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA), error => error.code === 'WORKFORCE_MEMBER_NOT_ELIGIBLE',
+  'direct shift creation must reject inactive Workforce members');
   const activeSupervisor = repository.activate('member', supervisor.record.id, { expected_version: 1 }, scopeA);
   const reporting = repository.update('member', created.record.id, { expected_version: 3, supervisor_member_id: activeSupervisor.id }, scopeA);
   assert.equal(reporting.supervisor_member_id, activeSupervisor.id);
@@ -983,16 +998,37 @@ try {
   assert.equal(startedShift.status, 'IN_PROGRESS');
   assert.equal(completedShift.status, 'COMPLETED');
 
+  repository.update('availability', availability.record.id, {
+    expected_version: 2, availability: 'AVAILABLE',
+  }, scopeA);
   const allocation = repository.create('allocation', {
     idempotency_key: 'allocation-create-a',
     member_id: created.record.id,
     resource_id: 'resource-a',
     booking_id: 'booking-a',
-    starts_at: '2026-11-25T06:00:00.000Z',
-    ends_at: '2026-11-25T15:00:00.000Z',
+    starts_at: '2026-11-25T08:00:00.000Z',
+    ends_at: '2026-11-25T09:00:00.000Z',
   }, scopeA);
   const submittedAllocation = repository.submit('allocation', allocation.record.id, { expected_version: 1 }, scopeA);
   const approvedAllocation = repository.approve('allocation', allocation.record.id, { expected_version: 2 }, scopeA);
+  assert.throws(() => repository.update('allocation', allocation.record.id, {
+    expected_version: 3, starts_at: '2026-11-25T09:00:00.000Z',
+  }, scopeA), error => error.code === 'WORKFORCE_ALLOCATION_LOCKED',
+  'committed allocations cannot be edited through the generic update path');
+  const overlappingAllocation = repository.create('allocation', {
+    idempotency_key: 'allocation-overlap-a',
+    member_id: created.record.id,
+    resource_id: 'resource-a',
+    booking_id: 'booking-a',
+    starts_at: '2026-11-25T08:00:00.000Z',
+    ends_at: '2026-11-25T09:00:00.000Z',
+  }, scopeA);
+  repository.submit('allocation', overlappingAllocation.record.id, { expected_version: 1 }, scopeA);
+  assert.throws(() => repository.approve('allocation', overlappingAllocation.record.id, {
+    expected_version: 2,
+  }, scopeA), error => error.code === 'WORKFORCE_ALLOCATION_AVAILABILITY_NOT_CONFIRMED',
+  'overlapping committed allocations must block approval');
+  repository.cancel('allocation', overlappingAllocation.record.id, { expected_version: 2 }, scopeA);
   const releasedAllocation = repository.release('allocation', allocation.record.id, { expected_version: 3 }, scopeA);
   assert.equal(submittedAllocation.state, 'PENDING_APPROVAL');
   assert.equal(approvedAllocation.state, 'COMMITTED');
