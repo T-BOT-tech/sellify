@@ -800,6 +800,17 @@ export class WorkforceSqliteRepository {
       WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
         AND state='COMMITTED' AND (starts_at IS NULL OR ends_at IS NULL)
     `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id)).count;
+    const serviceBookings = this.db.prepare(`
+      SELECT id, status, requested_start AS starts_at, requested_end AS ends_at, version, updated_at
+      FROM service_bookings
+      WHERE organization_id=? AND tenant_id=? AND chat_id=? AND workforce_member_id=?
+        AND status IN ('REQUESTED','ACCEPTED','CONFIRMED','IN_PROGRESS')
+        AND requested_start<? AND requested_end>?
+        AND (? IS NULL OR id<>?)
+      ORDER BY requested_start LIMIT 250
+    `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id),
+      end, start, candidate.booking_id ? String(candidate.booking_id) : null,
+      candidate.booking_id ? String(candidate.booking_id) : null);
     const calendar = this.db.prepare(`
       SELECT id, version, updated_at FROM workforce_calendars
       WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
@@ -834,6 +845,15 @@ export class WorkforceSqliteRepository {
     if (allocationsWithoutWindow) findings.push({ code:'COMMITTED_ALLOCATION_WINDOW_MISSING', state:'UNKNOWN', source:'allocations', message:'A committed allocation has no bounded time interval and cannot be safely evaluated' });
     for (const item of shifts) if (item.id !== candidate.exclude_shift_id) findings.push({ code:'SHIFT_OVERLAP', state:'CONFLICT', source:'shifts', message:'An existing active shift overlaps the requested interval', record_id:item.id });
     for (const item of allocations) findings.push({ code:'COMMITTED_ALLOCATION_OVERLAP', state:'CONFLICT', source:'allocations', message:'A committed allocation overlaps the requested interval', record_id:item.id });
+    for (const item of serviceBookings) findings.push({
+      code: item.status === 'REQUESTED' || item.status === 'ACCEPTED' ? 'SERVICE_BOOKING_PENDING' : 'SERVICE_BOOKING_COMMITMENT',
+      state: item.status === 'REQUESTED' || item.status === 'ACCEPTED' ? 'UNKNOWN' : 'CONFLICT',
+      source: 'operational_commitments',
+      message: item.status === 'REQUESTED' || item.status === 'ACCEPTED'
+        ? 'A linked Service Booking is not yet in a confirmed operational state'
+        : 'A confirmed or in-progress Service Booking overlaps the requested interval',
+      record_id: item.id,
+    });
     if (policy.state === 'BLOCKING_CONFLICT') findings.push({ code:'SCHEDULING_POLICY_BLOCK', state:'CONFLICT', source:'scheduling_policy', message:'The active scheduling policy blocks this candidate' });
     if (policy.state === 'UNKNOWN') findings.push({ code:'SCHEDULING_POLICY_UNKNOWN', state:'UNKNOWN', source:'scheduling_policy', message:'Scheduling policy evidence is incomplete' });
     if (exceptions.length) findings.push({ code:'CALENDAR_EXCEPTION_OVERLAP', state:'UNAVAILABLE', source:'calendar_exceptions', message:'An active calendar exception overlaps the requested interval', record_id:exceptions[0].id });
@@ -860,7 +880,11 @@ export class WorkforceSqliteRepository {
       allocations: queryEvidence(allocationsWithoutWindow ? 'A committed allocation has no bounded time interval' : null),
       scheduling_policy: evidence(policy.state === 'UNKNOWN' ? 'MISSING' : 'COMPLETE', policy.policy_id ? { version: policy.policy_version || 1 } : member,
         policy.state === 'UNKNOWN' ? 'Scheduling policy evaluation is unknown' : null),
-      operational_commitments: { status:'MISSING', reason:'Service Booking and Logistics commitments have not yet been aggregated into this assessment' },
+      operational_commitments: {
+        status:'MISSING',
+        reason:'Service Booking overlaps were checked; authoritative Logistics-to-Workforce identity and time-window linkage is not yet verified',
+        evaluated_at: this.clock(),
+      },
     };
     return assessWorkforceAvailability({ candidate, sources, findings, evaluated_at: this.clock() });
   }
