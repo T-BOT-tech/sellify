@@ -6461,6 +6461,26 @@ function assertWorkforceMemberBookingEligibility({
       statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
     });
   }
+  const approvedLeave = db.prepare(`
+    SELECT id FROM workforce_leave_requests
+    WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ? AND status = 'APPROVED'
+      AND starts_at < ? AND ends_at > ? LIMIT 1
+  `).get(String(organizationId), String(tenantId), String(chatId), String(memberId), booking.requested_end, booking.requested_start);
+  if (approvedLeave) {
+    throw Object.assign(new Error('Workforce member is unavailable during an approved leave period'), {
+      statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+    });
+  }
+  const recordedAbsence = db.prepare(`
+    SELECT id FROM workforce_absences
+    WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ? AND status = 'RECORDED'
+      AND starts_at < ? AND ends_at > ? LIMIT 1
+  `).get(String(organizationId), String(tenantId), String(chatId), String(memberId), booking.requested_end, booking.requested_start);
+  if (recordedAbsence) {
+    throw Object.assign(new Error('Workforce member has a recorded absence during the requested booking interval'), {
+      statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+    });
+  }
   const assignments = db.prepare(`
     SELECT * FROM workforce_assignments
     WHERE organization_id = ? AND tenant_id = ? AND chat_id = ?
