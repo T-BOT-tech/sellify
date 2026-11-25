@@ -20,6 +20,8 @@ import {
   WORKFORCE_SHIFT_TEMPLATE_REFERENCE_GUARD_MIGRATION_VERSION,
   runWorkforceShiftInstanceProvenanceMigration,
   WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION,
+  runWorkforceLeaveAbsenceMigration,
+  WORKFORCE_LEAVE_ABSENCE_MIGRATION_VERSION,
   WORKFORCE_MEMBER_ORG_REFERENCES_MIGRATION_VERSION,
   WORKFORCE_DEPARTMENT_MIGRATION_VERSION,
   WORKFORCE_POSITION_MIGRATION_VERSION,
@@ -209,6 +211,25 @@ try {
   const shiftProvenanceReplay = runWorkforceShiftInstanceProvenanceMigration(db);
   assert.deepEqual(shiftProvenanceMigration, { applied: true, version: WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION });
   assert.deepEqual(shiftProvenanceReplay, { applied: false, version: WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION });
+  const leaveAbsenceMigration = runWorkforceLeaveAbsenceMigration(db);
+  const leaveAbsenceReplay = runWorkforceLeaveAbsenceMigration(db);
+  assert.deepEqual(leaveAbsenceMigration, { applied: true, version: WORKFORCE_LEAVE_ABSENCE_MIGRATION_VERSION });
+  assert.deepEqual(leaveAbsenceReplay, { applied: false, version: WORKFORCE_LEAVE_ABSENCE_MIGRATION_VERSION });
+  for (const table of ['workforce_leave_requests','workforce_absences']) {
+    assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table), 'missing table: ' + table);
+  }
+  assert.ok(db.prepare('PRAGMA index_list(workforce_leave_requests)').all().some(index => index.name === 'idx_workforce_leave_approval_inbox'));
+  assert.ok(db.prepare('PRAGMA index_list(workforce_absences)').all().some(index => index.name === 'idx_workforce_absences_member_status_start'));
+  db.prepare(`INSERT INTO workforce_leave_requests
+    (id,organization_id,tenant_id,chat_id,member_id,leave_category,starts_at,ends_at,timezone,reason,requested_by,idempotency_key,request_hash,created_at,updated_at)
+    VALUES ('leave-a','org-a','tenant-a','chat-a','member-a','ANNUAL','2026-04-01T00:00:00.000Z','2026-04-03T00:00:00.000Z','Africa/Addis_Ababa','Annual leave','user-a','leave-key-a','hash-a','2026-01-01','2026-01-01')`).run();
+  db.prepare(`INSERT INTO workforce_absences
+    (id,organization_id,tenant_id,chat_id,member_id,absence_type,starts_at,ends_at,timezone,reason,recorded_by,idempotency_key,request_hash,created_at,updated_at)
+    VALUES ('absence-a','org-a','tenant-a','chat-a','member-a','SICKNESS','2026-04-04T00:00:00.000Z','2026-04-04T08:00:00.000Z','Africa/Addis_Ababa','Unplanned sickness','user-a','absence-key-a','hash-absence-a','2026-01-01','2026-01-01')`).run();
+  assert.throws(() => db.prepare(`INSERT INTO workforce_leave_requests
+    (id,organization_id,tenant_id,chat_id,member_id,leave_category,starts_at,ends_at,timezone,reason,requested_by,idempotency_key,request_hash,created_at,updated_at)
+    VALUES ('leave-cross','org-b','tenant-b','chat-b','member-a','ANNUAL','2026-04-01T00:00:00.000Z','2026-04-03T00:00:00.000Z','Africa/Addis_Ababa','Cross scope','user-b','leave-key-cross','hash-cross','2026-01-01','2026-01-01')`).run());
+  assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   for (const field of ['shift_template_id','template_version','generated_local_date']) {
     assert.ok(db.prepare('PRAGMA table_info(workforce_shifts)').all().some(column => column.name === field));
   }
@@ -295,7 +316,7 @@ try {
     WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION,
   ]) assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?').get(version).count, 1);
 
-  console.log('PASS Workforce SQLite migrations 86-96: external professionals, employee numbers, departments, positions, reporting references, shift templates, rollback, idempotency, and foreign-key integrity');
+  console.log('PASS Workforce SQLite migrations 86-97: external professionals, employee numbers, departments, positions, reporting references, shift templates, rollback, idempotency, and foreign-key integrity');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
