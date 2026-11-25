@@ -97,6 +97,10 @@ try {
   await page.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.hostname === 'telegram.org' && url.pathname === '/js/telegram-web-app.js') {
+      await route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.Telegram = window.Telegram || { WebApp: { initData: "", initDataUnsafe: {}, ready() {}, expand() {} } };' });
+      return;
+    }
     const workforcePath = /^\/tenants\/[^/]+\/workforce\//.test(url.pathname);
     const locationsPath = /^\/tenants\/[^/]+\/locations$/.test(url.pathname);
     if (!workforcePath && !locationsPath) {
