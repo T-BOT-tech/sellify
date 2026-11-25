@@ -515,6 +515,23 @@ try {
   assert.equal(generatedShifts.created_records[0].starts_at, '2026-11-26T05:00:00.000Z');
   assert.equal(generatedShifts.created_records[0].ends_at, '2026-11-26T13:30:00.000Z');
   assert.deepEqual(generatedShifts.created_records[0].break_rules, [{ starts_at: '2026-11-26T09:00:00.000Z', duration_minutes: 30 }]);
+  assert.equal(generatedShifts.created_records[0].constraint_policy_version, 3);
+  assert.equal(generatedShifts.created_records[0].constraint_state, 'PASS');
+  const lateTemplate = repository.create('shift_template', {
+    idempotency_key: 'shift-template-daily-limit', name: 'Late daily-limit template',
+    start_local_time: '18:00', end_local_time: '20:00', timezone: 'Africa/Addis_Ababa',
+    work_days: [4], effective_from: '2026-11-26',
+  }, scopeA);
+  const activeLateTemplate = repository.activate('shift_template', lateTemplate.record.id, { expected_version: 1 }, scopeA);
+  const policyConflictGeneration = repository.generateShiftsFromTemplate(activeLateTemplate.id, {
+    expected_version: activeLateTemplate.version, member_id: created.record.id,
+    from_date: '2026-11-26', to_date: '2026-11-26', idempotency_key: 'daily-limit-generation',
+  }, scopeA);
+  assert.equal(policyConflictGeneration.created_count, 0);
+  assert.equal(policyConflictGeneration.conflict_count, 1);
+  assert.equal(policyConflictGeneration.conflicts[0].reason, 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT');
+  assert.ok(policyConflictGeneration.conflicts[0].assessment.findings.some(item => item.code === 'MAX_DAILY_HOURS'));
+
   const generatedReplay = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
     expected_version: activeTemplate.version, member_id: created.record.id,
     from_date: '2026-11-26', to_date: '2026-11-28', idempotency_key: 'shift-generation-batch-a-replay',
