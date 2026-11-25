@@ -699,6 +699,27 @@ try {
   }, scopeA);
   assert.equal(bookingAssessment.state, 'UNKNOWN',
     'unverified Logistics evidence keeps the aggregate result UNKNOWN');
+  db.prepare(`
+    INSERT INTO workforce_calendar_exceptions
+      (id, organization_id, tenant_id, chat_id, calendar_id, exception_type,
+       starts_at, ends_at, all_day, reason, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'BLACKOUT', ?, NULL, 1, ?, 'ACTIVE', ?, ?)
+  `).run('calendar-exception-open-ended-a', scopeA.organization_id, scopeA.tenant_id,
+    scopeA.chat_id, calendar.record.id, '2026-11-25T06:00:00.000Z',
+    'Open-ended blackout regression', '2026-11-24T12:00:00.000Z', '2026-11-24T12:00:00.000Z');
+  const openEndedExceptionAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.ok(openEndedExceptionAssessment.findings.some(item =>
+    item.code === 'CALENDAR_EXCEPTION_OVERLAP'
+    && item.record_id === 'calendar-exception-open-ended-a'),
+  'an active calendar exception with no end time must not be omitted from assessment');
   assert.ok(bookingAssessment.findings.some(item => item.code === 'SERVICE_BOOKING_COMMITMENT'),
     'confirmed Service Booking overlap must be included as an operational conflict');
   const assessmentEngagement = repository.create('engagement', {
