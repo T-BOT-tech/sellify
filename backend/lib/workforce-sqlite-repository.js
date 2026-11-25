@@ -57,7 +57,7 @@ const TABLES = Object.freeze({
   shift: {
     table: 'workforce_shifts', id: 'id', state: 'status',
     fields: ['resource_id','location_id','starts_at','ends_at','timezone','break_rules'],
-    createOnlyFields: ['member_id','recurrence_source_id','assignment_source_id','shift_template_id','template_version','generated_local_date'],
+    createOnlyFields: ['member_id','recurrence_source_id','assignment_source_id','shift_template_id','template_version','generated_local_date','override_reason'],
     json: ['break_rules_json','constraint_findings_json'],
   },
   allocation: {
@@ -837,19 +837,42 @@ export class WorkforceSqliteRepository {
     });
   }
 
-  assertSchedulingAssessment(assessment) {
-    if (!assessment?.policy_id) return assessment;
-    if (assessment.state === 'BLOCKING_CONFLICT' || assessment.state === 'UNKNOWN') {
-      const code = assessment.state === 'BLOCKING_CONFLICT'
-        ? 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT' : 'WORKFORCE_SCHEDULING_ASSESSMENT_UNKNOWN';
-      const message = assessment.state === 'BLOCKING_CONFLICT'
-        ? 'The proposed shift conflicts with the active scheduling policy'
-        : 'The proposed shift cannot be assessed with the evidence required by the active scheduling policy';
-      const error = fail(code, message, 409);
+  assertSchedulingAssessment(assessment, { overrideReason = '', context = {} } = {}) {
+    if (!assessment?.policy_id) return { ...assessment, override: null };
+    if (!['BLOCKING_CONFLICT','UNKNOWN'].includes(assessment.state)) return { ...assessment, override: null };
+    const reason = typeof overrideReason === 'string' ? overrideReason.trim() : '';
+    const allowed = assessment.state === 'UNKNOWN'
+      ? assessment.allow_unknown_overrides === true
+      : assessment.allow_overrides === true;
+    if (!allowed) {
+      const code = assessment.state === 'UNKNOWN'
+        ? 'WORKFORCE_SCHEDULING_UNKNOWN_OVERRIDE_FORBIDDEN'
+        : 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT';
+      const error = fail(code, assessment.state === 'UNKNOWN'
+        ? 'The active policy does not permit overriding an unknown assessment'
+        : 'The proposed shift conflicts with the active scheduling policy', 409);
       error.details = { assessment };
       throw error;
     }
-    return assessment;
+    const role = String(context.actor?.role || '').toLowerCase();
+    const authorized = ['owner','manager'].includes(role)
+      || context.permissions?.includes('workforce:assignment:manage') === true
+      || context.actor?.permissions?.includes('workforce:assignment:manage') === true;
+    if (!authorized) {
+      const error = fail('WORKFORCE_SCHEDULING_OVERRIDE_UNAUTHORIZED',
+        'Only an authorized Workforce manager can override a scheduling constraint', 403);
+      error.details = { assessment };
+      throw error;
+    }
+    if (reason.length < 8 || reason.length > 500) {
+      const error = fail('WORKFORCE_SCHEDULING_OVERRIDE_REASON_REQUIRED',
+        'An override reason between 8 and 500 characters is required', 422);
+      error.details = { assessment };
+      throw error;
+    }
+    return { ...assessment, override: {
+      reason, actor_id: context.actor_id || null, overridden_at: this.clock(),
+    } };
   }
 
   generateShiftsFromTemplate(templateId, input = {}, context = {}) {
@@ -979,6 +1002,7 @@ export class WorkforceSqliteRepository {
           ends_at: window.ends_at,
           timezone: window.timezone,
           break_rules: window.break_rules,
+          override_reason: input.override_reason,
           shift_template_id: template.id,
           template_version: template.version,
           generated_local_date: localDate,
@@ -1063,15 +1087,20 @@ export class WorkforceSqliteRepository {
     }
 
     if (entity === 'shift') {
+      const overrideReason = data.override_reason || '';
+      delete data.override_reason;
       const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(data.member_id, {
         member_id: data.member_id, starts_at: data.starts_at, ends_at: data.ends_at,
         timezone: data.timezone, location_id: data.location_id,
         break_rules: data.break_rules_json || [],
-      }, scope));
+      }, scope), { overrideReason, context });
       data.constraint_policy_id = assessment.policy_id;
       data.constraint_policy_version = assessment.policy_version;
       data.constraint_state = assessment.state;
       data.constraint_findings_json = assessment.findings;
+      data.constraint_override_reason = assessment.override?.reason || null;
+      data.constraint_override_by = assessment.override?.actor_id || null;
+      data.constraint_override_at = assessment.override?.overridden_at || null;
     }
 
     const id = String(payload.id || this.idFactory());
@@ -1111,7 +1140,14 @@ export class WorkforceSqliteRepository {
       this.db.prepare(`INSERT INTO ${spec.table} (${columns.join(', ')}) VALUES (${placeholders})`).run(...values);
       this.writeAudit(scope, entity, id, 'created', entity === 'scheduling_policy'
         ? { version: 1, policy_version: 1, rules: data.rules_json }
-        : { version: 1 }, context);
+        : entity === 'shift' ? {
+          version: 1, constraint_policy_id: data.constraint_policy_id,
+          constraint_policy_version: data.constraint_policy_version, constraint_state: data.constraint_state,
+          constraint_findings: data.constraint_findings_json,
+          constraint_override_reason: data.constraint_override_reason,
+          constraint_override_by: data.constraint_override_by,
+          constraint_override_at: data.constraint_override_at,
+        } : { version: 1 }, context);
       const row = this.db.prepare(`
         SELECT * FROM ${spec.table}
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
@@ -1414,20 +1450,26 @@ export class WorkforceSqliteRepository {
       const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(memberId, {
         member_id: memberId, starts_at: current.starts_at, ends_at: current.ends_at,
         timezone: current.timezone, location_id: current.location_id, break_rules: current.break_rules || [],
-      }, scope, String(id)));
+      }, scope, String(id)), { overrideReason: input.override_reason || '', context });
       const now = this.clock();
       const result = this.db.prepare(`
         UPDATE workforce_shifts SET member_id = ?, constraint_policy_id = ?, constraint_policy_version = ?,
-          constraint_state = ?, constraint_findings_json = ?, updated_by = ?, updated_at = ?, version = version + 1
+          constraint_state = ?, constraint_findings_json = ?, constraint_override_reason = ?,
+          constraint_override_by = ?, constraint_override_at = ?, updated_by = ?, updated_at = ?, version = version + 1
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ? AND version = ? AND member_id = ?
       `).run(memberId, assessment.policy_id, assessment.policy_version, assessment.state,
-        JSON.stringify(assessment.findings), context.actor_id || null, now, String(id),
+        JSON.stringify(assessment.findings), assessment.override?.reason || null,
+        assessment.override?.actor_id || null, assessment.override?.overridden_at || null,
+        context.actor_id || null, now, String(id),
         scope.organization_id, scope.tenant_id, scope.chat_id, expected, String(current.member_id));
       if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
       this.writeAudit(scope, 'shift', String(id), 'reassigned', {
         from_member_id: current.member_id, to_member_id: memberId, reason, version: expected + 1,
         constraint_policy_id: assessment.policy_id, constraint_policy_version: assessment.policy_version,
         constraint_state: assessment.state, constraint_findings: assessment.findings,
+        constraint_override_reason: assessment.override?.reason || null,
+        constraint_override_by: assessment.override?.actor_id || null,
+        constraint_override_at: assessment.override?.overridden_at || null,
       }, context);
       const row = this.db.prepare(`
         SELECT * FROM workforce_shifts WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
