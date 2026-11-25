@@ -309,6 +309,17 @@ try {
     );
   }
 
+  const engagementPath = '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/workforce/engagements/' + encodeURIComponent(createdEntities.engagements.id);
+  const submittedEngagement = await jsonRequest(baseUrl, engagementPath + '/submit', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 1 },
+  });
+  assert.equal(submittedEngagement.response.status, 200, JSON.stringify(submittedEngagement.payload));
+  const activatedEngagement = await jsonRequest(baseUrl, engagementPath + '/activate', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 2 },
+  });
+  assert.equal(activatedEngagement.response.status, 200, JSON.stringify(activatedEngagement.payload));
+
 
   const assessmentPath = item + '/availability-assessment';
   const unauthenticatedAssessment = await jsonRequest(baseUrl, assessmentPath, {
