@@ -79,6 +79,33 @@ function renderMember(member, lookup = {}) {
     + '<div class="workforce-member-controls"><button type="button" class="btn-secondary workforce-select-member" data-member-id="'
     + escapeAttr(member.id) + '">Open member</button>' + actionButton + deactivateButton + '</div></article>';
 }
+function renderAssignmentRecords(workspace, records) {
+  const locations = workspaceData.get(workspace)?.locations || [];
+  const actionsByStatus = {
+    DRAFT: ['activate','end'],
+    ACTIVE: ['suspend','end'],
+    SUSPENDED: ['activate','end'],
+    ENDED: [],
+  };
+  const rows = records.map(record => {
+    const status = String(record.status || 'UNKNOWN').toUpperCase();
+    const location = locations.find(item => String(item.id) === String(record.location_id));
+    const actions = canManageMembers() ? (actionsByStatus[status] || []) : [];
+    const buttons = actions.map(action => '<button type="button" class="btn-secondary workforce-assignment-action"'
+      + ' data-assignment-id="' + escapeAttr(record.id) + '" data-action="' + action
+      + '" data-version="' + Number(record.version || 1) + '">' + (action === 'activate' ? 'Activate'
+        : action === 'suspend' ? 'Suspend' : 'End') + '</button>').join('');
+    return '<article class="workforce-record-row workforce-assignment-row"><div><strong>'
+      + escapeHtml(String(record.assignment_type || 'Assignment').replaceAll('_',' '))
+      + '</strong><span class="logistics-status">' + escapeHtml(status) + '</span>'
+      + '<div class="logistics-meta">' + escapeHtml(location?.name || record.resource_id || 'No location/resource')
+      + ' · ' + escapeHtml(dateLabel(record.starts_at)) + ' – ' + escapeHtml(dateLabel(record.ends_at)) + '</div></div>'
+      + '<div class="workforce-member-controls">' + buttons + '</div></article>';
+  }).join('');
+  return '<section class="workforce-data-section"><h4>Location and work assignments</h4>'
+    + (rows || '<p class="logistics-meta">No assignments recorded.</p>') + '</section>';
+}
+
 function renderProfileRecords(records) {
   const rows = records.map(record => {
     const list = field => Array.isArray(record[field]) ? record[field].join(', ') : '';
@@ -184,6 +211,10 @@ export function workforceWorkspaceShell() {
     + '<label>Start<input name="starts_at" type="datetime-local" required></label><label>End (optional)<input name="ends_at" type="datetime-local"></label>'
     + '<label>Terms reference (optional)<input name="terms_reference" maxlength="160"></label>'
     + '<button type="submit" class="btn-primary">Create engagement</button><p class="logistics-meta workforce-form-status" role="status"></p></form>'
+    + '<form id="workforceLocationAssignmentForm" class="settings-form workforce-admin-form" hidden>'
+    + '<h4>Assign to a location</h4><label>Location<select name="location_id" required><option value="">Choose a location</option></select></label>'
+    + '<label>Start<input name="starts_at" type="datetime-local" required></label><label>End<input name="ends_at" type="datetime-local" required></label>'
+    + '<button type="submit" class="btn-primary">Create location assignment</button><p class="logistics-meta workforce-form-status" role="status"></p></form>'
     + '<form id="workforceAvailabilityForm" class="settings-form workforce-availability-form">'
     + '<h4>Declare availability</h4><label>Availability<select name="availability" required><option value="AVAILABLE">Available</option>'
     + '<option value="UNAVAILABLE">Unavailable</option><option value="TENTATIVE">Tentative</option><option value="BLACKOUT">Blackout</option></select></label>'
@@ -365,7 +396,8 @@ async function refreshMember(root, memberId, member = null) {
     ? '<section class="workforce-data-section"><h4>' + escapeHtml(result.title) + '</h4><p class="logistics-meta">Not available: '
       + escapeHtml(result.error.message) + '</p></section>'
     : result.title === 'Profiles' ? renderProfileRecords(result.records)
-      : result.title === 'Engagements' ? renderEngagementRecords(result.records) : renderRecords(result.title, result.records)).join('');
+      : result.title === 'Engagements' ? renderEngagementRecords(result.records)
+        : result.title === 'Assignments' ? renderAssignmentRecords(workspace, result.records) : renderRecords(result.title, result.records)).join('');
   const profileForm = workspace.querySelector('#workforceProfileForm');
   const profileRecords = results.find(result => result.title === 'Profiles' && !result.error)?.records || [];
   const selectedProfile = [...profileRecords].sort((a, b) => String(b.effective_from || '').localeCompare(String(a.effective_from || '')))[0] || null;
@@ -383,6 +415,10 @@ async function refreshMember(root, memberId, member = null) {
   const engagementForm = workspace.querySelector('#workforceEngagementForm');
   engagementForm.dataset.memberId = memberId;
   engagementForm.hidden = !canManageMembers();
+  const assignmentForm = workspace.querySelector('#workforceLocationAssignmentForm');
+  assignmentForm.dataset.memberId = memberId;
+  assignmentForm.hidden = !canManageMembers();
+  fillSelect(assignmentForm.elements.location_id, workspaceData.get(workspace)?.locations || [], '', 'name');
   const form = workspace.querySelector('#workforceAvailabilityForm');
   form.dataset.memberId = memberId;
   form.hidden = !canManageMembers();
@@ -595,6 +631,51 @@ async function organizationAction(button, root) {
     button.disabled = false;
   }
 }
+async function saveLocationAssignment(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const memberId = form.dataset.memberId;
+  const locationId = String(values.get('location_id') || '').trim();
+  const start = new Date(String(values.get('starts_at') || ''));
+  const end = new Date(String(values.get('ends_at') || ''));
+  if (!memberId || !locationId || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) {
+    status.textContent = 'Choose a location and a valid start/end time range.'; return;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Creating location assignment…';
+  try {
+    await request(endpoint('assignments'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify({
+        member_id: memberId, assignment_type: 'LOCATION', location_id: locationId,
+        starts_at: start.toISOString(), ends_at: end.toISOString(),
+      }),
+    });
+    form.reset(); status.textContent = 'Location assignment created.';
+    await refreshWorkspace(root);
+  } catch (error) { status.textContent = error.message || 'Location assignment could not be created.'; }
+  finally { submit.disabled = false; }
+}
+
+async function assignmentAction(button, root) {
+  const id = button.dataset.assignmentId, action = button.dataset.action;
+  const version = Number(button.dataset.version);
+  if (!id || !['activate','suspend','end'].includes(action) || !Number.isInteger(version) || version < 1) return;
+  button.disabled = true;
+  try {
+    await request(endpoint('assignments', '/' + encodeURIComponent(id) + '/' + action), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_version: version }),
+    });
+    await refreshWorkspace(root);
+  } catch (error) {
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = error.message || 'Location assignment could not be updated.';
+    button.disabled = false;
+  }
+}
+
 async function saveProfile(form, root) {
   const status = form.querySelector('.workforce-form-status');
   const values = new FormData(form);
@@ -729,6 +810,7 @@ export function mountWorkforceWorkspace(root = document) {
       const action = event.target.closest('.workforce-member-action');
       const structureAction = event.target.closest('.workforce-structure-action');
       const engagementButton = event.target.closest('.workforce-engagement-action');
+      const assignmentButton = event.target.closest('.workforce-assignment-action');
       const page = event.target.closest('[data-member-page]');
       const clear = event.target.closest('#workforceClearMember');
       if (refresh) refreshWorkspace(root);
@@ -736,6 +818,7 @@ export function mountWorkforceWorkspace(root = document) {
       if (action) memberAction(action, root);
       if (structureAction) organizationAction(structureAction, root);
       if (engagementButton) engagementAction(engagementButton, root);
+      if (assignmentButton) assignmentAction(assignmentButton, root);
       if (page) {
         const current = Number(workspace.dataset.memberPage || 0);
         workspace.dataset.memberPage = String(Math.max(0, current + (page.dataset.memberPage === 'next' ? 1 : -1)));
@@ -764,11 +847,12 @@ export function mountWorkforceWorkspace(root = document) {
     });
     root.addEventListener('submit', event => {
       const id = event.target?.id;
-      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm'].includes(id)) return;
+      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm'].includes(id)) return;
       event.preventDefault();
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
       if (id === 'workforceEngagementForm') saveEngagement(event.target, root);
       if (id === 'workforceProfileForm') saveProfile(event.target, root);
+      if (id === 'workforceLocationAssignmentForm') saveLocationAssignment(event.target, root);
       if (id === 'workforceMemberCreateForm') saveMemberCreate(event.target, root);
       if (id === 'workforceDepartmentForm') saveDepartment(event.target, root);
       if (id === 'workforcePositionForm') savePosition(event.target, root);
