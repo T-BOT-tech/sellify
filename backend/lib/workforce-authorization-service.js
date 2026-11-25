@@ -9,7 +9,7 @@
  * authority.
  */
 
-export const WORKFORCE_AUTHORIZATION_SERVICE_VERSION = '1.1';
+export const WORKFORCE_AUTHORIZATION_SERVICE_VERSION = '1.2';
 
 export const WORKFORCE_AUTHORIZATION_PERMISSIONS = Object.freeze({
   departmentView: 'workforce:department:view',
