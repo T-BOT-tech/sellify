@@ -949,8 +949,8 @@ export function runWorkforceLeaveAbsenceMigration(db, now = () => new Date().toI
         FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
         FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE,
         FOREIGN KEY (chat_id) REFERENCES tenants(chat_id) ON DELETE CASCADE,
-        FOREIGN KEY (member_id, organization_id, tenant_id, chat_id)
-          REFERENCES workforce_members(id, organization_id, tenant_id, chat_id) ON DELETE CASCADE
+        FOREIGN KEY (organization_id, tenant_id, member_id)
+          REFERENCES workforce_members(organization_id, tenant_id, id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_workforce_leave_member_status_start
         ON workforce_leave_requests(organization_id, tenant_id, member_id, status, starts_at);
@@ -987,8 +987,8 @@ export function runWorkforceLeaveAbsenceMigration(db, now = () => new Date().toI
         FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
         FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE,
         FOREIGN KEY (chat_id) REFERENCES tenants(chat_id) ON DELETE CASCADE,
-        FOREIGN KEY (member_id, organization_id, tenant_id, chat_id)
-          REFERENCES workforce_members(id, organization_id, tenant_id, chat_id) ON DELETE CASCADE
+        FOREIGN KEY (organization_id, tenant_id, member_id)
+          REFERENCES workforce_members(organization_id, tenant_id, id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_workforce_absences_member_status_start
         ON workforce_absences(organization_id, tenant_id, member_id, status, starts_at);
