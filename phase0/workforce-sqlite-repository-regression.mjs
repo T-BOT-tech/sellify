@@ -523,9 +523,8 @@ try {
     start_local_time: '18:00', end_local_time: '20:00', timezone: 'Africa/Addis_Ababa',
     work_days: [4], effective_from: '2026-11-26',
   }, scopeA);
-  const activeLateTemplate = repository.activate('shift_template', lateTemplate.record.id, { expected_version: 1 }, scopeA);
-  const policyConflictGeneration = repository.generateShiftsFromTemplate(activeLateTemplate.id, {
-    expected_version: activeLateTemplate.version, member_id: created.record.id,
+  const policyConflictGeneration = repository.generateShiftsFromTemplate(lateTemplate.record.id, {
+    expected_version: lateTemplate.record.version, member_id: created.record.id,
     from_date: '2026-11-26', to_date: '2026-11-26', idempotency_key: 'daily-limit-generation',
   }, scopeA);
   assert.equal(policyConflictGeneration.created_count, 0);
