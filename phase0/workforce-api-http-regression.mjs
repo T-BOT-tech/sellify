@@ -374,12 +374,12 @@ try {
     }],
     ['shifts', {
       member_id: memberId,
-      starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T14:00:00.000Z',
+      starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T12:00:00.000Z',
       timezone: 'Africa/Addis_Ababa', break_rules: [],
     }],
     ['allocations', {
       member_id: memberId,
-      starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T07:00:00.000Z',
+      starts_at: '2026-11-26T12:00:00.000Z', ends_at: '2026-11-26T13:00:00.000Z',
     }],
     ['utilization', {
       member_id: memberId,
