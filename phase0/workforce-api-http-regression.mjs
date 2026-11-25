@@ -121,6 +121,22 @@ try {
   const positionsPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/positions';
   const department = await createWorkforceRecord(baseUrl, ownerSession.token, departmentsPath, 'workforce-http-department-' + suffix, { code: 'OPS', name: 'Operations' });
   const position = await createWorkforceRecord(baseUrl, ownerSession.token, positionsPath, 'workforce-http-position-' + suffix, { code: 'LEAD', name: 'Team Lead', department_id: department.id });
+  const departmentRead = await jsonRequest(baseUrl, departmentsPath + '/' + encodeURIComponent(department.id), { token: ownerSession.token });
+  assert.equal(departmentRead.response.status, 200, JSON.stringify(departmentRead.payload));
+  assert.equal(departmentRead.payload.record?.name, 'Operations');
+  const positionList = await jsonRequest(baseUrl, positionsPath, { token: ownerSession.token });
+  assert.equal(positionList.response.status, 200, JSON.stringify(positionList.payload));
+  assert.ok(positionList.payload.records?.some(record => record.id === position.id));
+  const departmentUpdate = await jsonRequest(baseUrl, departmentsPath + '/' + encodeURIComponent(department.id), {
+    token: ownerSession.token, method: 'PATCH', body: { expected_version: 1, description: 'Operations department' },
+  });
+  assert.equal(departmentUpdate.response.status, 200, JSON.stringify(departmentUpdate.payload));
+  assert.equal(departmentUpdate.payload.record?.version, 2);
+  const positionUpdate = await jsonRequest(baseUrl, positionsPath + '/' + encodeURIComponent(position.id), {
+    token: ownerSession.token, method: 'PATCH', body: { expected_version: 1, classification: 'LEAD' },
+  });
+  assert.equal(positionUpdate.response.status, 200, JSON.stringify(positionUpdate.payload));
+  assert.equal(positionUpdate.payload.record?.version, 2);
   const utilizationSummaryPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/utilization/summary';
   const unauthorizedSummary = await jsonRequest(baseUrl, utilizationSummaryPath);
   assert.equal(unauthorizedSummary.response.status, 401,
