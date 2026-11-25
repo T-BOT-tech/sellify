@@ -119,6 +119,16 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
     if (input.effective_from && input.effective_until && input.effective_until < input.effective_from) {
       errors.push('effective_until must not be before effective_from');
     }
+    if (operation === 'generate') {
+      if (typeof input.member_id !== 'string' || !input.member_id.trim()) errors.push('member_id is required');
+      if (!validDate(input.from_date)) errors.push('from_date must be YYYY-MM-DD');
+      if (!validDate(input.to_date)) errors.push('to_date must be YYYY-MM-DD');
+      if (validDate(input.from_date) && validDate(input.to_date)) {
+        if (input.from_date > input.to_date) errors.push('from_date must not be after to_date');
+        const days = Math.floor((Date.parse(input.to_date + 'T00:00:00Z') - Date.parse(input.from_date + 'T00:00:00Z')) / 86400000) + 1;
+        if (days > 31) errors.push('generation range must not exceed 31 calendar days');
+      }
+    }
   }
 
   if (input.all_day !== undefined && typeof input.all_day !== 'boolean') {
