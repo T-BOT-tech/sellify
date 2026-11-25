@@ -158,6 +158,7 @@ export function workforceWorkspaceShell() {
     + '<label>Professional type<select name="member_type" required><option value="EMPLOYEE">Employee</option><option value="CONTRACTOR">Contractor</option><option value="PROVIDER">Service professional</option><option value="VOLUNTEER">Volunteer</option></select></label>'
     + '<label>Display name<input name="display_name" maxlength="120" required></label>'
     + '<label>Employee number (optional)<input name="employee_number" maxlength="80"></label>'
+    + '<label>Primary location<select name="primary_location_id"><option value="">No primary location</option></select></label>'
     + '<label>Department<select name="department_id"><option value="">Unassigned</option></select></label>'
     + '<label>Position<select name="position_id"><option value="">Unassigned</option></select></label>'
     + '<label>Supervisor<select name="supervisor_member_id"><option value="">No supervisor</option></select></label>'
@@ -261,6 +262,7 @@ function renderOrganizationAdmin(workspace, departments, positions) {
   ).join('') : '<p class="logistics-meta">No positions yet.</p>';
   fillSelect(workspace.querySelector('#workforceDepartmentFilter'), departments, '', 'name');
   fillSelect(workspace.querySelector('#workforcePositionFilter'), positions, '', 'name');
+  fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="primary_location_id"]'), workspaceData.get(workspace)?.locations || [], '', 'name');
   fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="department_id"]'), departments);
   fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="position_id"]'), positions);
   fillSelect(workspace.querySelector('#workforcePositionForm [name="department_id"]'), departments);
@@ -268,6 +270,16 @@ function renderOrganizationAdmin(workspace, departments, positions) {
   fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="supervisor_member_id"]'), supervisors, '', 'display_name');
 }
 
+
+async function optionalOrganizationLocations() {
+  try {
+    const data = await request(apiBase() + '/tenants/' + encodeURIComponent(String(config.chatId)) + '/locations?include_inactive=false');
+    return Array.isArray(data.locations) ? data.locations : [];
+  } catch (error) {
+    if ([403,404].includes(error.status)) return [];
+    throw error;
+  }
+}
 
 async function optionalRecords(entity) {
   try {
@@ -295,15 +307,16 @@ async function refreshWorkspace(root) {
   const tenantId = String(config.chatId), token = String(config.sessionToken);
   status.textContent = 'Loading Workforce records…'; status.dataset.state = 'LOADING';
   try {
-    const [membersData, summaryData, departments, positions, engagements] = await Promise.all([
+    const [membersData, summaryData, departments, positions, engagements, locations] = await Promise.all([
       request(endpoint('members') + '?limit=100'),
       request(endpoint('utilization', '/summary')),
       optionalRecords('departments'), optionalRecords('positions'), optionalRecords('engagements'),
+      optionalOrganizationLocations(),
     ]);
     if (!workspace.isConnected || workspace.dataset.refreshSequence !== String(seq)
       || String(config.chatId) !== tenantId || String(config.sessionToken) !== token) return;
     const members = Array.isArray(membersData.records) ? membersData.records : [];
-    workspaceData.set(workspace, { members, departments, positions, engagements });
+    workspaceData.set(workspace, { members, departments, positions, engagements, locations });
     workspace.querySelector('#workforceOverviewMetrics').innerHTML =
       renderOverviewMetrics(members, departments, positions, engagements);
     summaryNode.innerHTML = renderSummary(summaryData.summary || {});
@@ -376,7 +389,7 @@ async function refreshMember(root, memberId, member = null) {
 }
 
 function renderMemberProfile(workspace, member) {
-  const data = workspaceData.get(workspace) || { members: [], departments: [], positions: [] };
+  const data = workspaceData.get(workspace) || { members: [], departments: [], positions: [], locations: [] };
   const supervisors = data.members.filter(item => item.status === 'ACTIVE' && String(item.id) !== String(member.id));
   const department = data.departments.find(item => String(item.id) === String(member.department_id));
   const position = data.positions.find(item => String(item.id) === String(member.position_id));
@@ -396,6 +409,8 @@ function renderMemberProfile(workspace, member) {
       + '" data-version="' + Number(member.version || 1) + '"><h4>Professional profile and assignments</h4>'
       + '<label>Display name<input name="display_name" maxlength="120" required value="' + escapeAttr(member.display_name || '') + '"></label>'
       + '<label>Employee number<input name="employee_number" maxlength="80" value="' + escapeAttr(member.employee_number || '') + '"></label>'
+      + '<label>Primary location<select name="primary_location_id"><option value="">No primary location</option>' + data.locations.map(item => '<option value="' + escapeAttr(item.id) + '"'
+        + (String(item.id) === String(member.primary_location_id || '') ? ' selected' : '') + '>' + escapeHtml(item.name || item.code || item.id) + '</option>').join('') + '</select></label>'
       + '<label>Department<select name="department_id"><option value="">Unassigned</option>' + data.departments.map(item => '<option value="' + escapeAttr(item.id) + '"'
         + (String(item.id) === String(member.department_id || '') ? ' selected' : '') + '>' + escapeHtml(item.name) + '</option>').join('') + '</select></label>'
       + '<label>Position<select name="position_id"><option value="">Unassigned</option>' + data.positions.map(item => '<option value="' + escapeAttr(item.id) + '"'
@@ -411,6 +426,7 @@ function renderMemberProfile(workspace, member) {
     + '<div><span class="logistics-meta">Position</span><strong>' + escapeHtml(position?.name || 'Unassigned') + '</strong></div>'
     + '<div><span class="logistics-meta">Supervisor</span><strong>' + escapeHtml(supervisor?.display_name || 'Unassigned') + '</strong></div>'
     + '<div><span class="logistics-meta">Employee number</span><strong>' + escapeHtml(member.employee_number || 'Not assigned') + '</strong></div>'
+    + '<div><span class="logistics-meta">Primary location</span><strong>' + escapeHtml(data.locations.find(item => String(item.id) === String(member.primary_location_id || ''))?.name || 'Unassigned') + '</strong></div>'
     + '</div>' + editor + account + '</section>';
 }
 
@@ -419,7 +435,7 @@ async function saveMemberProfile(form, root) {
   const values = new FormData(form);
   const memberId = form.dataset.memberId;
   const payload = { expected_version: Number(form.dataset.version), display_name: String(values.get('display_name') || '').trim() };
-  for (const field of ['employee_number','department_id','position_id','supervisor_member_id']) {
+  for (const field of ['employee_number','primary_location_id','department_id','position_id','supervisor_member_id']) {
     const value = String(values.get(field) || '').trim();
     payload[field] = value || null;
   }
@@ -499,7 +515,7 @@ async function saveMemberCreate(form, root) {
     member_type: String(values.get('member_type') || ''),
     display_name: String(values.get('display_name') || '').trim(),
   };
-  for (const field of ['employee_number','department_id','position_id','supervisor_member_id']) {
+  for (const field of ['employee_number','primary_location_id','department_id','position_id','supervisor_member_id']) {
     const value = String(values.get(field) || '').trim();
     if (value) payload[field] = value;
   }
