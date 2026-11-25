@@ -1193,7 +1193,7 @@ export class WorkforceSqliteRepository {
   }
 
   listEntityHistory(entity, id, context = {}) {
-    if (!['shift','leave_request','absence'].includes(entity)) throw fail('WORKFORCE_ENTITY_INVALID', 'History is not supported for this Workforce entity');
+    if (!['shift','leave_request','absence','scheduling_policy'].includes(entity)) throw fail('WORKFORCE_ENTITY_INVALID', 'History is not supported for this Workforce entity');
     const scope = this.assertContext(context);
     this.getForMutation(entity, id, scope, context, 'get');
     const rows = this.db.prepare(`
