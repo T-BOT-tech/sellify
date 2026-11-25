@@ -17,6 +17,7 @@ import {
   validateWorkforceShift,
   workforceShiftPermission,
 } from '../backend/lib/workforce-shift-contract.js';
+import { localDateTimeToUtc, buildShiftWindowFromTemplate, isoWeekday } from '../backend/lib/workforce-shift-time.js';
 
 const assignmentContract = workforceAssignmentContract();
 
@@ -134,5 +135,30 @@ assert.equal(workforceShiftPermission('view'), 'workforce:shift:view');
 assert.equal(workforceShiftPermission('confirm'), 'workforce:shift:confirm');
 assert.equal(workforceShiftPermission('cancel'), 'workforce:shift:cancel');
 assert.equal(workforceShiftPermission('update'), 'workforce:shift:manage');
+
+const addisWindow = buildShiftWindowFromTemplate({
+  start_local_time: '08:00', end_local_time: '16:30', timezone: 'Africa/Addis_Ababa',
+  break_rules: [{ start_local_time: '12:00', end_local_time: '12:30' }],
+}, '2026-11-26');
+assert.equal(addisWindow.starts_at, '2026-11-26T05:00:00.000Z');
+assert.equal(addisWindow.ends_at, '2026-11-26T13:30:00.000Z');
+assert.deepEqual(addisWindow.break_rules, [{ starts_at: '2026-11-26T09:00:00.000Z', duration_minutes: 30 }]);
+assert.equal(isoWeekday('2026-11-26'), 4);
+
+const overnightWindow = buildShiftWindowFromTemplate({
+  start_local_time: '22:00', end_local_time: '06:00', timezone: 'Africa/Addis_Ababa',
+  break_rules: [{ start_local_time: '01:00', end_local_time: '01:30' }],
+}, '2026-11-26');
+assert.equal(overnightWindow.starts_at, '2026-11-26T19:00:00.000Z');
+assert.equal(overnightWindow.ends_at, '2026-11-27T03:00:00.000Z');
+assert.deepEqual(overnightWindow.break_rules, [{ starts_at: '2026-11-26T22:00:00.000Z', duration_minutes: 30 }]);
+
+assert.equal(localDateTimeToUtc('2026-11-01', '03:30', 'America/New_York'), '2026-11-01T08:30:00.000Z');
+assert.throws(() => localDateTimeToUtc('2026-03-08', '02:30', 'America/New_York'),
+  error => error.code === 'WORKFORCE_SHIFT_LOCAL_TIME_NONEXISTENT');
+assert.throws(() => localDateTimeToUtc('2026-11-01', '01:30', 'America/New_York'),
+  error => error.code === 'WORKFORCE_SHIFT_LOCAL_TIME_AMBIGUOUS');
+
+
 
 console.log('Workforce assignment and shift contract regression: PASS');
