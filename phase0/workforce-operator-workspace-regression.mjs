@@ -33,6 +33,14 @@ assert.ok(ui.includes('async function refreshWorkspaceWithStatus')
   'successful form feedback must remain visible after the workspace refreshes and re-renders the member profile');
 assert.ok(ui.includes('workforceEngagementForm') && ui.includes('saveEngagement'),
   'authorized managers must be able to create member-scoped engagements');
+assert.ok(ui.includes('workforceShiftTemplateForm') && ui.includes('saveShiftTemplate')
+  && ui.includes("endpoint('shift-templates')"),
+  'authorized managers must be able to create organization-scoped shift templates');
+assert.ok(ui.includes('workforce-shift-generation-form') && ui.includes('generateTemplateShifts')
+  && ui.includes("'/generate'") && ui.includes('expected_version'),
+  'active templates must generate dated shifts through the versioned canonical API');
+assert.ok(ui.includes('validLocalDate') && ui.includes('work_days') && ui.includes('break_rules'),
+  'template creation and roster generation must validate dates, weekdays and break rules');
 assert.ok(ui.includes('workforceProfileForm') && ui.includes('saveProfile'),
   'authorized managers must be able to create and update structured professional profiles');
 assert.ok(ui.includes('primary_location_id') && ui.includes('optionalOrganizationLocations'),
