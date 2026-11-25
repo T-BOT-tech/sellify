@@ -803,12 +803,12 @@ export class WorkforceSqliteRepository {
     const serviceBookings = this.db.prepare(`
       SELECT id, status, requested_start AS starts_at, requested_end AS ends_at, version, updated_at
       FROM service_bookings
-      WHERE organization_id=? AND tenant_id=? AND chat_id=? AND workforce_member_id=?
+      WHERE organization_id=? AND chat_id=? AND workforce_member_id=?
         AND status IN ('REQUESTED','ACCEPTED','CONFIRMED','IN_PROGRESS')
         AND requested_start<? AND requested_end>?
         AND (? IS NULL OR id<>?)
       ORDER BY requested_start LIMIT 250
-    `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id),
+    `).all(scope.organization_id, scope.chat_id, String(candidate.member_id),
       end, start, candidate.booking_id ? String(candidate.booking_id) : null,
       candidate.booking_id ? String(candidate.booking_id) : null);
     const calendar = this.db.prepare(`
