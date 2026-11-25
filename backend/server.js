@@ -3932,11 +3932,15 @@ function workforceApiBody(body, entity, operation, action = null) {
   }
   const allowed = new Set(operation === 'generate'
     ? ['expected_version','member_id','from_date','to_date','location_id']
-    : operation === 'create'
-    ? [...WORKFORCE_API_FIELDS[entity], ...(WORKFORCE_API_CREATE_ONLY_FIELDS[entity] || []), ...(entity === 'utilization' ? ['status'] : []), 'id', 'idempotency_key']
-    : operation === 'update'
-      ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
-      : ['expected_version', ...(action === 'link-account' ? ['user_id'] : [])]);
+    : action === 'reassign'
+      ? ['expected_version','member_id','reason']
+      : entity === 'shift' && action === 'cancel'
+        ? ['expected_version','reason']
+        : operation === 'create'
+          ? [...WORKFORCE_API_FIELDS[entity], ...(WORKFORCE_API_CREATE_ONLY_FIELDS[entity] || []), ...(entity === 'utilization' ? ['status'] : []), 'id', 'idempotency_key']
+          : operation === 'update'
+            ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
+            : ['expected_version', ...(action === 'link-account' ? ['user_id'] : [])]);
   const unknown = Object.keys(body).filter(key => !allowed.has(key));
   if (unknown.length) throw Object.assign(new Error(`Unsupported Workforce fields: ${unknown.join(', ')}`), { statusCode: 400, code: 'WORKFORCE_FIELDS_INVALID' });
   if (operation === 'generate') {
@@ -3951,7 +3955,8 @@ function workforceApiBody(body, entity, operation, action = null) {
   } else if (!Number.isInteger(Number(body.expected_version)) || Number(body.expected_version) < 1) {
     throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'WORKFORCE_EXPECTED_VERSION_REQUIRED' });
   }
-  const validation = validateWorkforceApiPayload(entity, operation, body);
+  const validationOperation = action === 'reassign' || (entity === 'shift' && action === 'cancel') ? action : operation;
+  const validation = validateWorkforceApiPayload(entity, validationOperation, body);
   if (!validation.valid) throw Object.assign(new Error(validation.errors.join('; ')), {
     statusCode: 400, code: 'WORKFORCE_VALIDATION_FAILED',
   });
@@ -4062,6 +4067,10 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     }
     return sendJSON(res, 200, { records, count: records.length, authority: 'workforce' }, req);
   }
+  if (req.method === 'GET' && recordId && action === 'history' && entity === 'shift') {
+    const records = repository.listShiftHistory('shift', recordId, contexts[0]);
+    return sendJSON(res, 200, { records, authority: 'workforce' }, req);
+  }
   if (req.method === 'GET' && recordId && !action) {
     let lastError = null;
     for (const context of contexts) {
@@ -4087,6 +4096,11 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     }
     throw lastError;
   }
+  if (req.method === 'POST' && recordId && action === 'reassign' && entity === 'shift') {
+    const body = workforceApiBody(await readBody(req), entity, 'lifecycle', action);
+    const record = repository.reassignShift('shift', recordId, body, contexts[0]);
+    return sendJSON(res, 200, { record, authority: 'workforce' }, req);
+  }
   if (req.method === 'POST' && recordId && action === 'generate' && entity === 'shift_template') {
     const body = workforceApiBody(await readBody(req), entity, 'generate', action);
     const key = String(req.headers['idempotency-key'] || '').trim();
@@ -4096,7 +4110,7 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
   }
   if (req.method === 'POST' && recordId && action) {
     const body = workforceApiBody(await readBody(req), entity, 'lifecycle', action);
-    if (!['activate','suspend','deactivate','release','cancel','submit','approve','confirm','start','complete','end','link-account','unlink-account','generate'].includes(action)) {
+    if (!['activate','suspend','deactivate','release','cancel','submit','approve','confirm','start','complete','end','link-account','unlink-account','generate','reassign'].includes(action)) {
       throw Object.assign(new Error('Unsupported Workforce lifecycle action'), { statusCode: 400, code: 'WORKFORCE_LIFECYCLE_OPERATION_INVALID' });
     }
     let lastError = null;
@@ -4154,9 +4168,10 @@ const ROUTES = [
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/shifts\/([^/]+)\/history$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), 'shifts', decodeURIComponent(m[2]), 'history') },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
-  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)\/(activate|suspend|deactivate|release|cancel|submit|approve|confirm|start|complete|end|link-account|unlink-account|generate)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), m[4]) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)\/(activate|suspend|deactivate|release|cancel|submit|approve|confirm|start|complete|end|link-account|unlink-account|generate|reassign)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), m[4]) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-delivery-assessment$/, handler: (req, res, m) => handleServiceDeliveryAssessment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
