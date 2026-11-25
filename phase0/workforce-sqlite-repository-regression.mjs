@@ -67,6 +67,12 @@ try {
   assert.equal(department.record.code, 'OPS');
   const position = repository.create('position', { idempotency_key: 'position-lead', code: 'lead', name: 'Team Lead', department_id: department.record.id }, scopeA);
   assert.equal(position.record.department_id, department.record.id);
+  assert.equal(repository.get('department', department.record.id, scopeA).name, 'Operations');
+  assert.equal(repository.list('department', scopeA).length, 1);
+  const updatedDepartment = repository.update('department', department.record.id, { expected_version: 1, description: 'Operations team' }, scopeA);
+  assert.equal(updatedDepartment.version, 2);
+  const updatedPosition = repository.update('position', position.record.id, { expected_version: 1, classification: 'LEAD' }, scopeA);
+  assert.equal(updatedPosition.version, 2);
   assert.throws(() => repository.create('position', { idempotency_key: 'position-cross', code: 'cross', name: 'Cross', department_id: department.record.id }, scopeB), error => error.code === 'WORKFORCE_DEPARTMENT_SCOPE_INVALID');
   assert.throws(() => repository.create('department', { idempotency_key: 'department-duplicate', code: 'OPS', name: 'Duplicate' }, scopeA), error => error.code === 'WORKFORCE_CONSTRAINT_CONFLICT');
 
@@ -191,8 +197,8 @@ try {
   assert.equal(inactiveOldSupervisor.status, 'INACTIVE', 'a supervisor can be deactivated after active reports are reassigned');
   assert.throws(() => repository.deactivate('member', activeReplacementSupervisor.id, { expected_version: 2 }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_HAS_ACTIVE_REPORTS');
   assert.equal(Number(db.prepare('SELECT COUNT(*) AS count FROM audit_events WHERE entity_id = ? AND action = ?').get(created.record.id, 'workforce.member.reporting_relationship_changed').count), 2);
-  assert.throws(() => repository.deactivate('department', department.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS');
-  assert.throws(() => repository.deactivate('position', position.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS');
+  assert.throws(() => repository.deactivate('department', department.record.id, { expected_version: 2 }, scopeA), error => error.code === 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS');
+  assert.throws(() => repository.deactivate('position', position.record.id, { expected_version: 2 }, scopeA), error => error.code === 'WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS');
 
   assert.throws(() => repository.get('member', created.record.id, scopeB),
     (error) => error.code === 'WORKFORCE_SCOPE_NOT_FOUND');
