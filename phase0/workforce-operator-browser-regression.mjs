@@ -509,7 +509,7 @@ try {
   await assessmentForm.locator('[name="starts_at"]').fill('2026-11-26T09:00');
   await assessmentForm.locator('[name="ends_at"]').fill('2026-11-26T10:00');
   await assessmentForm.getByRole('button', { name: 'Assess availability' }).click();
-  await page.locator('#workforceAvailabilityAssessmentResult').getByText('UNKNOWN', { exact: false }).waitFor({ timeout: 10000 });
+  await page.locator('#workforceAvailabilityAssessmentResult').getByRole('strong').filter({ hasText: /^UNKNOWN$/ }).waitFor({ timeout: 10000 });
   await page.getByText('Logistics-to-Workforce identity and time-window linkage is not verified').waitFor();
   const availabilityAssessmentCall = apiCalls.find(call =>
     call.method === 'POST' && call.pathname.endsWith('/members/member-synthetic-1/availability-assessment'));
