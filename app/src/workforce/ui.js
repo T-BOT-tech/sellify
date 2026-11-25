@@ -258,6 +258,8 @@ export function workforceWorkspaceShell() {
     + '<label>Required qualifications (comma-separated)<textarea name="required_qualifications" rows="2" maxlength="1000"></textarea></label>'
     + '<label>Location policy<select name="location_policy"><option value="ANY">Any location</option><option value="ASSIGNED_ONLY">Assigned locations only</option></select></label>'
     + '<label>Daily limit enforcement<select name="max_daily_enforcement"><option value="BLOCK">Block scheduling</option><option value="WARN">Warn only</option></select></label>'
+    + '<label><input name="allow_overrides" type="checkbox"> Allow manager overrides for blocking conflicts</label>'
+    + '<label><input name="allow_unknown_overrides" type="checkbox"> Allow manager overrides when assessment evidence is unknown</label>'
     + '<div class="workforce-form-actions"><button type="submit" class="btn-primary">Save scheduling policy</button><button type="button" class="btn-secondary" id="workforceSchedulingPolicyClear">Clear form</button></div>'
     + '<p class="logistics-meta workforce-form-status" role="status"></p></form></section>'
     + '<section id="workforceMemberDetails" hidden><div class="workforce-heading"><h3 id="workforceSelectedMemberTitle">Member workspace</h3>'
@@ -361,6 +363,7 @@ function renderShiftTemplateAdmin(workspace, templates, departments, positions, 
         + '" data-template-version="' + Number(template.version || 1) + '"><label>Professional<select name="member_id" required><option value="">Choose an active member</option>'
         + eligibleMembers.map(member => '<option value="' + escapeAttr(member.id) + '">' + escapeHtml(member.display_name || member.id) + '</option>').join('')
         + '</select></label><label>From<input type="date" name="from_date" required></label><label>To<input type="date" name="to_date" required></label>'
+        + '<label>Override reason (only if policy permits)<input name="override_reason" maxlength="500"></label>'
         + '<button type="submit" class="btn-secondary">Generate dated shifts</button><p class="logistics-meta workforce-form-status" role="status"></p></form>'
       : '<p class="logistics-meta">Activate this template before generating dated shifts.</p>';
     return '<article class="workforce-record-row workforce-shift-template-row"><div><strong>' + escapeHtml(template.name || 'Shift template')
@@ -400,6 +403,7 @@ function renderDatedShiftAdmin(workspace, shifts, members) {
         + activeMembers.filter(item => String(item.id) !== String(shift.member_id)).map(item =>
           '<option value="' + escapeAttr(item.id) + '">' + escapeHtml(item.display_name || item.id) + '</option>').join('')
         + '</select></label><label>Reason<input name="reason" maxlength="500" required></label>'
+        + '<label>Override reason (only if policy permits)<input name="override_reason" maxlength="500"></label>'
         + '<button type="submit" class="btn-secondary">Reassign shift</button><p class="logistics-meta workforce-form-status" role="status"></p></form>' : '';
     const cancelForm = ['PLANNED','CONFIRMED','IN_PROGRESS'].includes(state)
       ? '<form class="settings-form workforce-shift-cancel-form" data-shift-id="' + escapeAttr(shift.id)
@@ -412,7 +416,8 @@ function renderDatedShiftAdmin(workspace, shifts, members) {
       + '<div class="logistics-meta">' + (shift.generated_local_date ? 'Generated for ' + escapeHtml(shift.generated_local_date) : 'Manual dated shift')
       + ' · v' + Number(shift.version || 1) + '</div>'
       + '<div class="logistics-meta">Scheduling assessment: ' + escapeHtml(assessmentState.replaceAll('_',' ')) + escapeHtml(assessmentPolicy) + '</div>'
-      + (assessmentFindings ? '<div class="logistics-meta">' + escapeHtml(assessmentFindings) + '</div>' : '') + '</div>'
+      + (assessmentFindings ? '<div class="logistics-meta">' + escapeHtml(assessmentFindings) + '</div>' : '')
+      + (shift.constraint_override_reason ? '<div class="logistics-meta">Manager override: ' + escapeHtml(shift.constraint_override_reason) + '</div>' : '') + '</div>'
       + '<div class="workforce-member-controls">' + transitionButton
       + '<button type="button" class="btn-secondary workforce-shift-history-button" data-shift-id="' + escapeAttr(shift.id) + '">View history</button></div>'
       + reassignForm + cancelForm + '<div class="workforce-shift-history" hidden></div></article>';
@@ -701,6 +706,8 @@ function editSchedulingPolicy(button, root) {
   form.elements.required_qualifications.value = Array.isArray(rules.required_qualifications) ? rules.required_qualifications.join(', ') : '';
   form.elements.location_policy.value = rules.location_policy || 'ANY';
   form.elements.max_daily_enforcement.value = rules.enforcement?.max_daily_minutes || 'BLOCK';
+  form.elements.allow_overrides.checked = rules.allow_overrides === true;
+  form.elements.allow_unknown_overrides.checked = rules.allow_unknown_overrides === true;
   form.querySelector('#workforceSchedulingPolicyFormTitle').textContent = 'Edit ' + policy.name + ' · version ' + policy.version;
   form.querySelector('.workforce-form-status').textContent = 'Editing the selected policy. Saving creates the next policy version.';
   form.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
@@ -720,6 +727,8 @@ async function saveSchedulingPolicy(form, root) {
   const locationPolicy = String(values.get('location_policy') || 'ANY');
   if (locationPolicy !== 'ANY') rules.location_policy = locationPolicy;
   if (rules.max_daily_minutes !== undefined) rules.enforcement = { max_daily_minutes: String(values.get('max_daily_enforcement') || 'BLOCK') };
+  rules.allow_overrides = values.get('allow_overrides') === 'on';
+  rules.allow_unknown_overrides = values.get('allow_unknown_overrides') === 'on';
   const body = {
     name: String(values.get('name') || '').trim(),
     effective_from: String(values.get('effective_from') || ''),
@@ -1246,7 +1255,8 @@ async function generateTemplateShifts(form, root) {
     const result = await request(endpoint('shift-templates', '/' + encodeURIComponent(templateId) + '/generate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
-      body: JSON.stringify({ expected_version: expectedVersion, member_id: memberId, from_date: fromDate, to_date: toDate }),
+      body: JSON.stringify({ expected_version: expectedVersion, member_id: memberId, from_date: fromDate, to_date: toDate,
+        override_reason: String(values.get('override_reason') || '').trim() || undefined }),
     });
     const message = 'Created ' + Number(result.created_count || 0) + ', already existed ' + Number(result.existing_count || 0)
       + ', conflicts ' + (Array.isArray(result.conflicts) ? result.conflicts.length : 0)
@@ -1284,7 +1294,8 @@ async function reassignDatedShift(form, root) {
   const shiftId = form.dataset.shiftId, version = Number(form.dataset.version);
   const memberId = String(values.get('member_id') || '').trim();
   const reason = String(values.get('reason') || '').trim();
-  if (!shiftId || !memberId || !reason || reason.length > 500 || !Number.isInteger(version) || version < 1) {
+  const overrideReason = String(values.get('override_reason') || '').trim();
+  if (!shiftId || !memberId || !reason || reason.length > 500 || overrideReason.length > 500 || !Number.isInteger(version) || version < 1) {
     status.textContent = 'Choose an active professional and provide a reassignment reason.'; return;
   }
   const submit = form.querySelector('[type="submit"]');
@@ -1292,7 +1303,8 @@ async function reassignDatedShift(form, root) {
   try {
     await request(endpoint('shifts', '/' + encodeURIComponent(shiftId) + '/reassign'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expected_version: version, member_id: memberId, reason }),
+      body: JSON.stringify({ expected_version: version, member_id: memberId, reason,
+        override_reason: overrideReason || undefined }),
     });
     await refreshWorkspace(root);
     const workspaceStatus = root.querySelector('#workforceStatus');
