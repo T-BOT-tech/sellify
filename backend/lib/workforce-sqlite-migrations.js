@@ -537,21 +537,39 @@ export function runWorkforceEmployeeNumberMigration(db, now = () => new Date().t
 }
 
 
-/**
- * Workforce migration 90 — organization structure and reporting references.
- * Departments and positions are Workforce-owned; Identity/Membership remain
- * authoritative for authentication and organization authorization.
- */
-export const WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION = 90;
 
-export function runWorkforceOrganizationStructureMigration(db, now = () => new Date().toISOString()) {
-  if (!db || typeof db.prepare !== 'function' || typeof db.exec !== 'function') throw new TypeError('A live SQLite DatabaseSync connection is required');
-  const version = WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION;
-  const applied = db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version);
-  if (applied) return { applied: false, version };
+/**
+ * M2 / migration 90 — member organizational references.
+ * Department, position and supervisor records are created by the following
+ * migrations; nullable references preserve all existing members.
+ */
+export const WORKFORCE_MEMBER_ORG_REFERENCES_MIGRATION_VERSION = 90;
+
+export function runWorkforceMemberOrgReferencesMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_MEMBER_ORG_REFERENCES_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.exec(`
+    const columns = new Set(db.prepare('PRAGMA table_info(workforce_members)').all().map(c => String(c.name)));
+    if (!columns.has('department_id')) db.exec('ALTER TABLE workforce_members ADD COLUMN department_id TEXT REFERENCES workforce_departments(id) ON DELETE RESTRICT');
+    if (!columns.has('position_id')) db.exec('ALTER TABLE workforce_members ADD COLUMN position_id TEXT REFERENCES workforce_positions(id) ON DELETE RESTRICT');
+    if (!columns.has('supervisor_member_id')) db.exec('ALTER TABLE workforce_members ADD COLUMN supervisor_member_id TEXT REFERENCES workforce_members(id) ON DELETE RESTRICT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_workforce_members_department ON workforce_members(organization_id, tenant_id, department_id, status); CREATE INDEX IF NOT EXISTS idx_workforce_members_position ON workforce_members(organization_id, tenant_id, position_id, status); CREATE INDEX IF NOT EXISTS idx_workforce_members_supervisor ON workforce_members(organization_id, tenant_id, supervisor_member_id);');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
+/** M3 / migration 91 — departments. */
+export const WORKFORCE_DEPARTMENT_MIGRATION_VERSION = 91;
+
+export function runWorkforceDepartmentMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_DEPARTMENT_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(\`
       CREATE TABLE IF NOT EXISTS workforce_departments (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -570,6 +588,37 @@ export function runWorkforceOrganizationStructureMigration(db, now = () => new D
         UNIQUE (organization_id, tenant_id, id),
         UNIQUE (organization_id, tenant_id, idempotency_key)
       );
+      CREATE INDEX IF NOT EXISTS idx_workforce_departments_org_status ON workforce_departments(organization_id, status, name);
+      CREATE TRIGGER IF NOT EXISTS workforce_members_department_scope_insert
+      BEFORE INSERT ON workforce_members WHEN NEW.department_id IS NOT NULL BEGIN
+        SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id AND d.chat_id=NEW.chat_id AND d.status='ACTIVE') THEN RAISE(ABORT, 'WORKFORCE_DEPARTMENT_SCOPE_INVALID') END;
+      END;
+      CREATE TRIGGER IF NOT EXISTS workforce_members_department_scope_update
+      BEFORE UPDATE OF department_id, organization_id, tenant_id, chat_id ON workforce_members WHEN NEW.department_id IS NOT NULL BEGIN
+        SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id AND d.chat_id=NEW.chat_id AND d.status='ACTIVE') THEN RAISE(ABORT, 'WORKFORCE_DEPARTMENT_SCOPE_INVALID') END;
+      END;
+      CREATE TRIGGER IF NOT EXISTS workforce_departments_deactivation_guard
+      BEFORE UPDATE OF status ON workforce_departments
+      WHEN OLD.status='ACTIVE' AND NEW.status='INACTIVE' AND (
+        EXISTS (SELECT 1 FROM workforce_members m WHERE m.department_id=OLD.id AND m.status='ACTIVE')
+        OR EXISTS (SELECT 1 FROM workforce_positions p WHERE p.department_id=OLD.id AND p.status='ACTIVE')
+      ) BEGIN SELECT RAISE(ABORT, 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS'); END;
+    \`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
+/** M4 / migration 92 — positions. */
+export const WORKFORCE_POSITION_MIGRATION_VERSION = 92;
+
+export function runWorkforcePositionMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_POSITION_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(\`
       CREATE TABLE IF NOT EXISTS workforce_positions (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -590,17 +639,7 @@ export function runWorkforceOrganizationStructureMigration(db, now = () => new D
         UNIQUE (organization_id, tenant_id, id),
         UNIQUE (organization_id, tenant_id, idempotency_key)
       );
-    `);
-    const columns = new Set(db.prepare('PRAGMA table_info(workforce_members)').all().map(c => String(c.name)));
-    if (!columns.has('department_id')) db.exec('ALTER TABLE workforce_members ADD COLUMN department_id TEXT REFERENCES workforce_departments(id) ON DELETE RESTRICT');
-    if (!columns.has('position_id')) db.exec('ALTER TABLE workforce_members ADD COLUMN position_id TEXT REFERENCES workforce_positions(id) ON DELETE RESTRICT');
-    if (!columns.has('supervisor_member_id')) db.exec('ALTER TABLE workforce_members ADD COLUMN supervisor_member_id TEXT REFERENCES workforce_members(id) ON DELETE RESTRICT');
-    db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_workforce_departments_org_status ON workforce_departments(organization_id, status, name);
       CREATE INDEX IF NOT EXISTS idx_workforce_positions_org_department ON workforce_positions(organization_id, tenant_id, department_id, status);
-      CREATE INDEX IF NOT EXISTS idx_workforce_members_department ON workforce_members(organization_id, tenant_id, department_id, status);
-      CREATE INDEX IF NOT EXISTS idx_workforce_members_position ON workforce_members(organization_id, tenant_id, position_id, status);
-      CREATE INDEX IF NOT EXISTS idx_workforce_members_supervisor ON workforce_members(organization_id, tenant_id, supervisor_member_id);
       CREATE TRIGGER IF NOT EXISTS workforce_positions_department_scope_insert
       BEFORE INSERT ON workforce_positions WHEN NEW.department_id IS NOT NULL BEGIN
         SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id AND d.chat_id=NEW.chat_id AND d.status='ACTIVE') THEN RAISE(ABORT, 'WORKFORCE_DEPARTMENT_SCOPE_INVALID') END;
@@ -609,25 +648,77 @@ export function runWorkforceOrganizationStructureMigration(db, now = () => new D
       BEFORE UPDATE OF department_id, organization_id, tenant_id, chat_id ON workforce_positions WHEN NEW.department_id IS NOT NULL BEGIN
         SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id AND d.chat_id=NEW.chat_id AND d.status='ACTIVE') THEN RAISE(ABORT, 'WORKFORCE_DEPARTMENT_SCOPE_INVALID') END;
       END;
-      CREATE TRIGGER IF NOT EXISTS workforce_members_org_refs_insert BEFORE INSERT ON workforce_members BEGIN
-        SELECT CASE WHEN NEW.department_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id AND d.chat_id=NEW.chat_id AND d.status='ACTIVE') THEN RAISE(ABORT, 'WORKFORCE_DEPARTMENT_SCOPE_INVALID') END;
-        SELECT CASE WHEN NEW.position_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM workforce_positions p WHERE p.id=NEW.position_id AND p.organization_id=NEW.organization_id AND p.tenant_id=NEW.tenant_id AND p.chat_id=NEW.chat_id AND p.status='ACTIVE' AND (p.department_id IS NULL OR p.department_id=NEW.department_id)) THEN RAISE(ABORT, 'WORKFORCE_POSITION_SCOPE_INVALID') END;
-        SELECT CASE WHEN NEW.supervisor_member_id IS NOT NULL AND (NEW.supervisor_member_id=NEW.id OR NOT EXISTS (SELECT 1 FROM workforce_members s WHERE s.id=NEW.supervisor_member_id AND s.organization_id=NEW.organization_id AND s.tenant_id=NEW.tenant_id AND s.chat_id=NEW.chat_id AND s.status='ACTIVE')) THEN RAISE(ABORT, 'WORKFORCE_SUPERVISOR_SCOPE_INVALID') END;
+      CREATE TRIGGER IF NOT EXISTS workforce_members_position_scope_insert
+      BEFORE INSERT ON workforce_members WHEN NEW.position_id IS NOT NULL BEGIN
+        SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM workforce_positions p WHERE p.id=NEW.position_id AND p.organization_id=NEW.organization_id AND p.tenant_id=NEW.tenant_id AND p.chat_id=NEW.chat_id AND p.status='ACTIVE' AND (p.department_id IS NULL OR p.department_id=NEW.department_id)) THEN RAISE(ABORT, 'WORKFORCE_POSITION_SCOPE_INVALID') END;
       END;
-      CREATE TRIGGER IF NOT EXISTS workforce_members_org_refs_update BEFORE UPDATE OF department_id, position_id, supervisor_member_id, organization_id, tenant_id, chat_id ON workforce_members BEGIN
-        SELECT CASE WHEN NEW.department_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id AND d.chat_id=NEW.chat_id AND d.status='ACTIVE') THEN RAISE(ABORT, 'WORKFORCE_DEPARTMENT_SCOPE_INVALID') END;
-        SELECT CASE WHEN NEW.position_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM workforce_positions p WHERE p.id=NEW.position_id AND p.organization_id=NEW.organization_id AND p.tenant_id=NEW.tenant_id AND p.chat_id=NEW.chat_id AND p.status='ACTIVE' AND (p.department_id IS NULL OR p.department_id=NEW.department_id)) THEN RAISE(ABORT, 'WORKFORCE_POSITION_SCOPE_INVALID') END;
-        SELECT CASE WHEN NEW.supervisor_member_id IS NOT NULL AND (NEW.supervisor_member_id=NEW.id OR NOT EXISTS (SELECT 1 FROM workforce_members s WHERE s.id=NEW.supervisor_member_id AND s.organization_id=NEW.organization_id AND s.tenant_id=NEW.tenant_id AND s.chat_id=NEW.chat_id AND s.status='ACTIVE')) THEN RAISE(ABORT, 'WORKFORCE_SUPERVISOR_SCOPE_INVALID') END;
+      CREATE TRIGGER IF NOT EXISTS workforce_members_position_scope_update
+      BEFORE UPDATE OF position_id, department_id, organization_id, tenant_id, chat_id ON workforce_members WHEN NEW.position_id IS NOT NULL BEGIN
+        SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM workforce_positions p WHERE p.id=NEW.position_id AND p.organization_id=NEW.organization_id AND p.tenant_id=NEW.tenant_id AND p.chat_id=NEW.chat_id AND p.status='ACTIVE' AND (p.department_id IS NULL OR p.department_id=NEW.department_id)) THEN RAISE(ABORT, 'WORKFORCE_POSITION_SCOPE_INVALID') END;
       END;
-      CREATE TRIGGER IF NOT EXISTS workforce_departments_deactivation_guard BEFORE UPDATE OF status ON workforce_departments
-      WHEN OLD.status='ACTIVE' AND NEW.status='INACTIVE' AND (EXISTS (SELECT 1 FROM workforce_members m WHERE m.department_id=OLD.id AND m.status='ACTIVE') OR EXISTS (SELECT 1 FROM workforce_positions p WHERE p.department_id=OLD.id AND p.status='ACTIVE'))
-      BEGIN SELECT RAISE(ABORT, 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS'); END;
-      CREATE TRIGGER IF NOT EXISTS workforce_positions_deactivation_guard BEFORE UPDATE OF status ON workforce_positions
-      WHEN OLD.status='ACTIVE' AND NEW.status='INACTIVE' AND EXISTS (SELECT 1 FROM workforce_members m WHERE m.position_id=OLD.id AND m.status='ACTIVE')
+      CREATE TRIGGER IF NOT EXISTS workforce_positions_deactivation_guard
+      BEFORE UPDATE OF status ON workforce_positions
+      WHEN OLD.status='ACTIVE' AND NEW.status='INACTIVE'
+      AND EXISTS (SELECT 1 FROM workforce_members m WHERE m.position_id=OLD.id AND m.status='ACTIVE')
       BEGIN SELECT RAISE(ABORT, 'WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS'); END;
-    `);
+    \`);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
     db.exec('COMMIT');
     return { applied: true, version };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
+/** M5 / migration 93 — supervisor references and reporting-cycle integrity. */
+export const WORKFORCE_REPORTING_RELATIONSHIP_MIGRATION_VERSION = 93;
+
+export function runWorkforceReportingRelationshipMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_REPORTING_RELATIONSHIP_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(\`
+      CREATE TRIGGER IF NOT EXISTS workforce_members_supervisor_scope_insert
+      BEFORE INSERT ON workforce_members WHEN NEW.supervisor_member_id IS NOT NULL BEGIN
+        SELECT CASE WHEN NEW.supervisor_member_id=NEW.id OR NOT EXISTS (
+          SELECT 1 FROM workforce_members s WHERE s.id=NEW.supervisor_member_id
+          AND s.organization_id=NEW.organization_id AND s.tenant_id=NEW.tenant_id
+          AND s.chat_id=NEW.chat_id AND s.status='ACTIVE'
+        ) THEN RAISE(ABORT, 'WORKFORCE_SUPERVISOR_SCOPE_INVALID') END;
+      END;
+      CREATE TRIGGER IF NOT EXISTS workforce_members_supervisor_scope_update
+      BEFORE UPDATE OF supervisor_member_id, organization_id, tenant_id, chat_id ON workforce_members
+      WHEN NEW.supervisor_member_id IS NOT NULL BEGIN
+        SELECT CASE WHEN NEW.supervisor_member_id=NEW.id OR NOT EXISTS (
+          SELECT 1 FROM workforce_members s WHERE s.id=NEW.supervisor_member_id
+          AND s.organization_id=NEW.organization_id AND s.tenant_id=NEW.tenant_id
+          AND s.chat_id=NEW.chat_id AND s.status='ACTIVE'
+        ) THEN RAISE(ABORT, 'WORKFORCE_SUPERVISOR_SCOPE_INVALID') END;
+        SELECT CASE WHEN EXISTS (
+          WITH RECURSIVE supervisor_chain(id, supervisor_member_id) AS (
+            SELECT id, supervisor_member_id FROM workforce_members WHERE id=NEW.supervisor_member_id
+            UNION ALL
+            SELECT m.id, m.supervisor_member_id FROM workforce_members m
+            JOIN supervisor_chain c ON m.id=c.supervisor_member_id
+            WHERE c.supervisor_member_id IS NOT NULL
+          )
+          SELECT 1 FROM supervisor_chain WHERE id=NEW.id
+        ) THEN RAISE(ABORT, 'WORKFORCE_REPORTING_CYCLE_INVALID') END;
+      END;
+    \`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
+export const WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION = WORKFORCE_REPORTING_RELATIONSHIP_MIGRATION_VERSION;
+
+export function runWorkforceOrganizationStructureMigration(db, now = () => new Date().toISOString()) {
+  const results = [
+    runWorkforceMemberOrgReferencesMigration(db, now),
+    runWorkforceDepartmentMigration(db, now),
+    runWorkforcePositionMigration(db, now),
+    runWorkforceReportingRelationshipMigration(db, now),
+  ];
+  return { applied: results.some(result => result.applied), version: WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION };
 }
