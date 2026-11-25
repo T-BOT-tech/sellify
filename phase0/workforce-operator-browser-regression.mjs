@@ -46,12 +46,25 @@ try {
   // Keep browser requests under Playwright routing; the app's service worker can otherwise bypass page.route().
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const page = await context.newPage();
+  await page.addInitScript(() => {
+    // The app shell may open Settings asynchronously after boot; this isolated Workforce journey does not test that modal.
+    const hide = () => {
+      const modal = document.getElementById('settingsModal');
+      if (!modal) return;
+      modal.classList.remove('open');
+      modal.style.setProperty('display', 'none', 'important');
+      modal.setAttribute('aria-hidden', 'true');
+    };
+    new MutationObserver(hide).observe(document.documentElement, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['class'],
+    });
+    hide();
+  });
   const dismissSettingsOverlay = async () => {
-    // Keep the app-shell modal DOM intact for its existing handlers, but hide it from this Workforce-only journey.
     const modal = page.locator('#settingsModal');
     if (await modal.count()) await modal.evaluate(element => {
       element.classList.remove('open');
-      element.style.display = 'none';
+      element.style.setProperty('display', 'none', 'important');
       element.setAttribute('aria-hidden', 'true');
     });
   };
