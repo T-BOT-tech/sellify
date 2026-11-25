@@ -110,6 +110,11 @@ assert.ok(ui.includes("'Idempotency-Key': 'workforce-ui-'"),
   'availability creation must use an idempotency key');
 assert.ok(ui.includes("effective_from: start.toISOString()"),
   'availability writes must satisfy the canonical effective-date contract');
+assert.ok(ui.includes('workforceAvailabilityAssessmentForm')
+  && ui.includes("'/availability-assessment'")
+  && ui.includes('renderAvailabilityAssessment')
+  && ui.includes('assessment.source_versions'),
+  'member workspace must render server-returned four-state availability evidence without creating a commitment');
 assert.ok(ui.includes("String(config.chatId) !== tenantId")
   && ui.includes("String(config.sessionToken) !== token"),
   'late responses must not cross active tenant or session changes');
