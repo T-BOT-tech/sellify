@@ -93,7 +93,7 @@ const TRANSITIONS = Object.freeze({
   },
   engagement: {
     submit: { from: ['DRAFT'], to: 'PENDING_APPROVAL' },
-    activate: { from: ['PENDING_APPROVAL'], to: 'ACTIVE' },
+    activate: { from: ['PENDING_APPROVAL','SUSPENDED'], to: 'ACTIVE' },
     suspend: { from: ['ACTIVE'], to: 'SUSPENDED' },
     end: { from: ['DRAFT','PENDING_APPROVAL','ACTIVE','SUSPENDED'], to: 'ENDED' },
   },
