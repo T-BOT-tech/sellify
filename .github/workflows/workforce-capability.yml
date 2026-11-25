@@ -64,4 +64,6 @@ jobs:
         run: node phase0/workforce-service-booking-integration-regression.mjs
 
       - name: Backend route inventory
-        run: node phase0/workforce-route-inventory-regression.mjs
+        run: |
+          node scripts/perplexity-server-route-inventory.mjs
+          node phase0/workforce-route-inventory-regression.mjs
