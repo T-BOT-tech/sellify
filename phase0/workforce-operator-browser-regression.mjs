@@ -70,12 +70,15 @@ try {
   };
   let engagement = null;
   let profile = null;
+  let locationAssignment = null;
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
   await page.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
-    if (!/^\/tenants\/[^/]+\/workforce\//.test(url.pathname)) {
+    const workforcePath = /^\/tenants\/[^/]+\/workforce\//.test(url.pathname);
+    const locationsPath = /^\/tenants\/[^/]+\/locations$/.test(url.pathname);
+    if (!workforcePath && !locationsPath) {
       await route.continue();
       return;
     }
@@ -94,6 +97,12 @@ try {
           variance_minutes: -30, completed_events: 2, open_events: 1, cancelled_events: 0,
           completed_missing_actual_events: 0 },
       }) });
+      return;
+    }
+    if (pathname.endsWith('/locations') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ locations: [
+        { id: 'location-synthetic-1', name: 'Addis Ababa Branch', status: 'ACTIVE' },
+      ] }) });
       return;
     }
     if (pathname.endsWith('/members') && method === 'GET') {
@@ -121,6 +130,34 @@ try {
       assert.equal(body.expected_version, profile.version, 'profile update must use optimistic concurrency');
       profile = { ...profile, ...body, version: profile.version + 1 };
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: profile }) });
+      return;
+    }
+    if (pathname.endsWith('/assignments') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: locationAssignment ? [locationAssignment] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/members/member-synthetic-1') && method === 'PATCH') {
+      assert.equal(body.expected_version, member.version, 'member assignment update must use the current version');
+      assert.equal(body.primary_location_id, 'location-synthetic-1');
+      member = { ...member, ...body, version: member.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: member }) });
+      return;
+    }
+    if (pathname.endsWith('/assignments') && method === 'POST') {
+      assert.equal(body.member_id, member.id);
+      assert.equal(body.assignment_type, 'LOCATION');
+      assert.equal(body.location_id, 'location-synthetic-1');
+      assert.ok(Number.isFinite(Date.parse(body.starts_at)) && Number.isFinite(Date.parse(body.ends_at)));
+      assert.ok(Date.parse(body.starts_at) < Date.parse(body.ends_at));
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      locationAssignment = { id: 'assignment-synthetic-1', ...body, status: 'DRAFT', version: 1 };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: locationAssignment }) });
+      return;
+    }
+    if (pathname.endsWith('/assignments/assignment-synthetic-1/activate') && method === 'POST') {
+      assert.equal(body.expected_version, locationAssignment.version);
+      locationAssignment = { ...locationAssignment, status: 'ACTIVE', version: locationAssignment.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: locationAssignment }) });
       return;
     }
     if (pathname.endsWith('/engagements') && method === 'GET') {
@@ -216,6 +253,27 @@ try {
   await page.locator('.workforce-member-card').getByRole('button', { name: 'Open member' }).click();
   await page.locator('#workforceMemberDetails').waitFor({ state: 'visible' });
   await page.locator('#workforceAvailabilityForm').waitFor({ state: 'visible' });
+  const memberAssignmentForm = page.locator('#workforceMemberProfileForm');
+  await memberAssignmentForm.locator('[name="primary_location_id"]').selectOption('location-synthetic-1');
+  await memberAssignmentForm.getByRole('button', { name: 'Save profile and assignments' }).click();
+  await page.getByText('Profile and assignments saved.').waitFor({ timeout: 10000 });
+  const memberLocationCall = apiCalls.find(call => call.method === 'PATCH' && call.pathname.endsWith('/members/member-synthetic-1'));
+  assert.equal(memberLocationCall?.body.expected_version, 1);
+  assert.equal(memberLocationCall?.body.primary_location_id, 'location-synthetic-1');
+  const locationAssignmentForm = page.locator('#workforceLocationAssignmentForm');
+  await locationAssignmentForm.waitFor({ state: 'visible' });
+  await locationAssignmentForm.locator('[name="location_id"]').selectOption('location-synthetic-1');
+  await locationAssignmentForm.locator('[name="starts_at"]').fill('2026-11-26T08:00');
+  await locationAssignmentForm.locator('[name="ends_at"]').fill('2026-11-26T17:00');
+  await locationAssignmentForm.getByRole('button', { name: 'Create location assignment' }).click();
+  await page.getByText('Location assignment created.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-assignment-row .logistics-status').filter({ hasText: 'DRAFT' }).waitFor();
+  await page.locator('.workforce-assignment-row').getByRole('button', { name: 'Activate', exact: true }).click();
+  await page.locator('.workforce-assignment-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
+  const locationAssignmentCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/assignments'));
+  assert.ok(locationAssignmentCall, 'location assignment form must submit through the canonical API');
+  assert.equal(locationAssignmentCall.body.location_id, 'location-synthetic-1');
+  assert.match(locationAssignmentCall.idempotencyKey, /^workforce-ui-/);
   await page.locator('#workforceProfileForm').waitFor({ state: 'visible' });
   await page.locator('#workforceEngagementForm').waitFor({ state: 'visible' });
 
@@ -288,7 +346,7 @@ try {
   }, null, { timeout: 10000 });
   const suspendCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/suspend'));
   assert.ok(suspendCall, 'member lifecycle action must reach the API');
-  assert.equal(suspendCall.body.expected_version, 1);
+  assert.equal(suspendCall.body.expected_version, 2);
   assert.equal(suspendCall.authorization, 'Bearer synthetic-session-token');
 
   const card = await page.locator('#workforceWorkspace').boundingBox();
@@ -296,7 +354,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, authenticated API requests, structured profile create/update, engagement creation/approval/activation, availability creation, idempotency, and optimistic lifecycle: VERIFIED');
+  console.log('Mobile workspace, authenticated API requests, primary location editing, location assignment lifecycle, structured profile create/update, engagement lifecycle, availability, idempotency, and optimistic concurrency: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));
