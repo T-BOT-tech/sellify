@@ -717,6 +717,55 @@ try {
   }, scopeA);
   assert.equal(bookingAssessment.state, 'UNKNOWN',
     'unverified Logistics evidence keeps the aggregate result UNKNOWN');
+  const recurringBlackout = repository.create('availability', {
+    idempotency_key: 'availability-recurring-blackout-a',
+    member_id: created.record.id,
+    availability: 'BLACKOUT',
+    starts_at: '2026-11-18T06:00:00.000Z',
+    ends_at: '2026-11-18T15:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+    recurrence_rule: 'FREQ=WEEKLY;BYDAY=WE;COUNT=3',
+    effective_from: '2026-11-18',
+  }, scopeA);
+  assert.equal(recurringBlackout.record.availability, 'BLACKOUT');
+  const recurringBlackoutAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-12-02T06:00:00.000Z',
+    ends_at: '2026-12-02T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.equal(recurringBlackoutAssessment.source_versions.find(item => item.source === 'availability_windows')?.status, 'COMPLETE',
+    'valid recurring windows must be evaluated instead of automatically marking the source missing');
+  assert.ok(recurringBlackoutAssessment.findings.some(item =>
+    item.code === 'AVAILABILITY_WINDOW_BLOCK' && item.record_id === recurringBlackout.record.id),
+  'a matching recurring blackout occurrence must block the requested interval');
+  const recurringBlackoutPartialOverlap = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-12-02T05:30:00.000Z',
+    ends_at: '2026-12-02T06:30:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.ok(recurringBlackoutPartialOverlap.findings.some(item =>
+    item.code === 'AVAILABILITY_WINDOW_BLOCK' && item.record_id === recurringBlackout.record.id),
+  'a partial overlap with a recurring blackout must not be missed');
+  const nonMatchingRecurringDay = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-12-03T06:00:00.000Z',
+    ends_at: '2026-12-03T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.ok(!nonMatchingRecurringDay.findings.some(item =>
+    item.code === 'AVAILABILITY_WINDOW_BLOCK' && item.record_id === recurringBlackout.record.id),
+  'a recurring blackout must not be projected onto a non-matching weekday');
   db.prepare(`
     INSERT INTO workforce_calendar_exceptions
       (id, organization_id, tenant_id, chat_id, calendar_id, exception_type,
