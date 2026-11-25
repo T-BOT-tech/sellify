@@ -6456,11 +6456,29 @@ function assertWorkforceMemberBookingEligibility({
       statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
     });
   }
-  const activeMembership = db.prepare(
-    "SELECT 1 FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active' LIMIT 1"
-  ).get(String(member.user_id), String(chatId));
-  if (!activeMembership) {
-    throw Object.assign(new Error('Workforce member must retain an active canonical tenant membership'), {
+  // External professionals intentionally have no Identity account. When a
+  // Workforce member is linked to a user, however, that user's canonical
+  // tenant membership must still be active before the booking can be assigned.
+  if (member.user_id) {
+    const activeMembership = db.prepare(
+      "SELECT 1 FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active' LIMIT 1"
+    ).get(String(member.user_id), String(chatId));
+    if (!activeMembership) {
+      throw Object.assign(new Error('Linked Workforce member must retain an active canonical tenant membership'), {
+        statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+      });
+    }
+  }
+  const activeEngagement = db.prepare(`
+    SELECT id FROM workforce_engagements
+    WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+      AND status = 'ACTIVE' AND starts_at <= ?
+      AND (ends_at IS NULL OR ends_at >= ?)
+    ORDER BY starts_at DESC LIMIT 1
+  `).get(String(organizationId), String(tenantId), String(chatId), String(memberId),
+    booking.requested_start, booking.requested_end);
+  if (!activeEngagement) {
+    throw Object.assign(new Error('Workforce member requires an active engagement covering the complete booking interval'), {
       statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
     });
   }
