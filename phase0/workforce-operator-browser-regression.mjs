@@ -610,7 +610,7 @@ try {
   const reassignCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/generated-shift-synthetic-1/reassign'));
   assert.equal(reassignCall?.body.expected_version, 1);
   assert.equal(reassignCall?.body.member_id, replacementMember.id);
-  await page.getByRole('button', { name: 'View history' }).click();
+  await page.locator('.workforce-dated-shift-row').getByRole('button', { name: 'View history' }).click();
   await page.getByText('reassigned', { exact: true }).waitFor({ timeout: 10000 });
   await page.getByRole('button', { name: 'Confirm shift' }).click();
   await page.getByRole('button', { name: 'Start shift' }).waitFor({ timeout: 10000 });
