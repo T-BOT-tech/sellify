@@ -843,6 +843,18 @@ try {
   assert.ok(dstAssessment.findings.some(item => item.code === 'CALENDAR_SCHEDULE_EVALUATION_UNKNOWN'
     && item.state === 'UNKNOWN'),
   'DST gaps must fail closed rather than being shifted silently');
+  const historicalCalendarAfterFutureCalendar = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.equal(historicalCalendarAfterFutureCalendar.source_versions
+    .find(item => item.source === 'calendar')?.status, 'COMPLETE',
+  'a future-dated active calendar must not shadow the effective calendar for an earlier interval');
 
   assert.ok(assessment.findings.some(item => item.code === 'EVIDENCE_INCOMPLETE'
     || item.code === 'EVIDENCE_SOURCE_MISSING'));
