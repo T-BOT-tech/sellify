@@ -812,3 +812,38 @@ export function runWorkforceShiftTemplateMigration(db, now = () => new Date().to
     return { applied: true, version };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+
+
+/** M7 / migration 95 — prevent deactivation of structure used by active templates. */
+export const WORKFORCE_SHIFT_TEMPLATE_REFERENCE_GUARD_MIGRATION_VERSION = 95;
+
+export function runWorkforceShiftTemplateReferenceGuardMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_SHIFT_TEMPLATE_REFERENCE_GUARD_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS workforce_departments_shift_template_deactivation_guard
+      BEFORE UPDATE OF status ON workforce_departments
+      WHEN OLD.status='ACTIVE' AND NEW.status='INACTIVE'
+      AND EXISTS (
+        SELECT 1 FROM workforce_shift_templates t
+        WHERE t.department_id=OLD.id AND t.organization_id=OLD.organization_id
+        AND t.tenant_id=OLD.tenant_id AND t.status='ACTIVE'
+      )
+      BEGIN SELECT RAISE(ABORT, 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_SHIFT_TEMPLATES'); END;
+      CREATE TRIGGER IF NOT EXISTS workforce_positions_shift_template_deactivation_guard
+      BEFORE UPDATE OF status ON workforce_positions
+      WHEN OLD.status='ACTIVE' AND NEW.status='INACTIVE'
+      AND EXISTS (
+        SELECT 1 FROM workforce_shift_templates t
+        WHERE t.position_id=OLD.id AND t.organization_id=OLD.organization_id
+        AND t.tenant_id=OLD.tenant_id AND t.status='ACTIVE'
+      )
+      BEGIN SELECT RAISE(ABORT, 'WORKFORCE_POSITION_HAS_ACTIVE_SHIFT_TEMPLATES'); END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
