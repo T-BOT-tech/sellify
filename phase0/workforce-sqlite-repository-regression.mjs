@@ -41,6 +41,11 @@ try {
       chat_id TEXT NOT NULL REFERENCES tenants(chat_id), status TEXT NOT NULL DEFAULT 'REQUESTED',
       requested_start TEXT, requested_end TEXT
     );
+    CREATE TABLE delivery_assignments (
+      id TEXT PRIMARY KEY, fulfillment_id TEXT NOT NULL, organization_id TEXT NOT NULL,
+      courier_user_id TEXT NOT NULL, status TEXT NOT NULL, assigned_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE audit_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT, action TEXT NOT NULL,
       entity_type TEXT NOT NULL, entity_id TEXT, metadata_json TEXT,
@@ -706,6 +711,40 @@ try {
     VALUES (?, ?, ?, 'CONFIRMED', ?, ?, ?)
   `).run('booking-assessment-a', scopeA.organization_id, scopeA.chat_id,
     '2026-11-25T06:00:00.000Z', '2026-11-25T07:00:00.000Z', created.record.id);
+  db.prepare(`
+    INSERT INTO delivery_assignments
+      (id, fulfillment_id, organization_id, courier_user_id, status, assigned_at, updated_at)
+    VALUES (?, ?, ?, ?, 'ACCEPTED', ?, ?)
+  `).run('delivery-assignment-assessment-a', 'fulfillment-assessment-a', scopeA.organization_id,
+    'user-a', '2026-11-25T05:00:00.000Z', '2026-11-25T05:00:00.000Z');
+  const logisticsAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.ok(logisticsAssessment.findings.some(item =>
+    item.code === 'LOGISTICS_DELIVERY_WINDOW_UNKNOWN'
+      && item.state === 'UNKNOWN'
+      && item.record_id === 'delivery-assignment-assessment-a'),
+  'an active Logistics delivery assignment without a bounded time window must fail closed');
+  assert.equal(logisticsAssessment.source_versions
+    .find(item => item.source === 'operational_commitments')?.status, 'MISSING');
+  const externalMemberAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: externalMember.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.equal(externalMemberAssessment.source_versions
+    .find(item => item.source === 'operational_commitments')?.status, 'NOT_APPLICABLE',
+  'an unlinked external professional cannot be a Logistics courier in the current user-linked assignment schema');
   const bookingAssessment = repository.assessAvailability({
     organization_id: scopeA.organization_id,
     tenant_id: scopeA.tenant_id,
