@@ -1065,11 +1065,11 @@ export class WorkforceSqliteRepository {
       scheduling_policy: evidence(policy.state === 'UNKNOWN' ? 'MISSING' : 'COMPLETE', policy.policy_id ? { version: policy.policy_version || 1 } : member,
         policy.state === 'UNKNOWN' ? 'Scheduling policy evaluation is unknown' : null),
       operational_commitments: {
-        status: !member.user_id ? 'NOT_APPLICABLE'
+        status: !member.user_id ? 'COMPLETE'
           : !logisticsAssignmentTable ? 'MISSING'
             : logisticsAssignments.length ? 'MISSING' : 'COMPLETE',
         ...(!member.user_id
-          ? { reason: 'This Workforce member has no linked Identity user; the current Logistics delivery-assignment schema requires courier_user_id referencing users' }
+          ? { reason: 'Logistics courier assignment is not applicable because this Workforce member has no linked Identity user; Service Booking commitments were still checked by workforce_member_id' }
           : !logisticsAssignmentTable
             ? { reason: 'The canonical Logistics delivery-assignment table is not available to this repository connection' }
             : logisticsAssignments.length
