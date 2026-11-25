@@ -3911,7 +3911,7 @@ const WORKFORCE_API_CREATE_ONLY_FIELDS = Object.freeze({
   calendar_exception: ['calendar_id'],
   availability: ['member_id'],
   assignment: ['member_id','booking_id','operational_task_id'],
-  shift: ['member_id','recurrence_source_id','assignment_source_id'],
+  shift: ['member_id','recurrence_source_id','assignment_source_id','override_reason'],
   allocation: ['member_id','booking_id','operational_task_id'],
   utilization: ['member_id','booking_id','operational_task_id'],
   leave_request: ['member_id'],
@@ -3940,9 +3940,9 @@ function workforceApiBody(body, entity, operation, action = null) {
     throw Object.assign(new Error('Workforce request body must be a JSON object'), { statusCode: 400, code: 'WORKFORCE_BODY_INVALID' });
   }
   const allowed = new Set(operation === 'generate'
-    ? ['expected_version','member_id','from_date','to_date','location_id']
+    ? ['expected_version','member_id','from_date','to_date','location_id','override_reason']
     : action === 'reassign'
-      ? ['expected_version','member_id','reason']
+      ? ['expected_version','member_id','reason','override_reason']
       : entity === 'shift' && action === 'cancel'
         ? ['expected_version','reason']
         : entity === 'leave_request' && ['approve','reject'].includes(action)
@@ -3956,6 +3956,10 @@ function workforceApiBody(body, entity, operation, action = null) {
           : operation === 'update'
             ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
             : ['expected_version', ...(action === 'link-account' ? ['user_id'] : [])]);
+  if (body.override_reason !== undefined && (typeof body.override_reason !== 'string'
+    || body.override_reason.trim().length < 8 || body.override_reason.trim().length > 500)) {
+    throw Object.assign(new Error('override_reason must contain between 8 and 500 characters'), { statusCode: 400, code: 'WORKFORCE_OVERRIDE_REASON_INVALID' });
+  }
   const unknown = Object.keys(body).filter(key => !allowed.has(key));
   if (unknown.length) throw Object.assign(new Error(`Unsupported Workforce fields: ${unknown.join(', ')}`), { statusCode: 400, code: 'WORKFORCE_FIELDS_INVALID' });
   if (operation === 'generate') {
