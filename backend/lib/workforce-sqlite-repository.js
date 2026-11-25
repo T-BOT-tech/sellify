@@ -167,15 +167,6 @@ function normalizeRepositoryValue(field, value) {
     }
     return [...value].sort((a,b) => a-b);
   }
-  if (field === 'break_rules_json') {
-    if (!Array.isArray(value) || value.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule)
-      || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(rule.start_local_time || ''))
-      || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(rule.end_local_time || ''))
-      || rule.start_local_time === rule.end_local_time)) {
-      throw fail('WORKFORCE_BREAK_RULES_INVALID', 'break_rules must be intervals with valid start_local_time and end_local_time');
-    }
-    return value.map(rule => ({ start_local_time: rule.start_local_time, end_local_time: rule.end_local_time }));
-  }
   if (field === 'classification') {
     if (value == null) return null;
     if (typeof value !== 'string' || value.trim().length > 80) throw fail('WORKFORCE_CLASSIFICATION_INVALID', 'classification must be a string of at most 80 characters');
@@ -326,6 +317,12 @@ export class WorkforceSqliteRepository {
       const duration = (endMinute - startMinute + 1440) % 1440;
       if (!duration) throw fail('WORKFORCE_TEMPLATE_DURATION_INVALID', 'A shift template must have a non-zero local-time duration');
       const breaks = data.break_rules_json ?? data.break_rules ?? [];
+      if (!Array.isArray(breaks) || breaks.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule)
+        || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.start_local_time || ''))
+        || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.end_local_time || ''))
+        || rule.start_local_time === rule.end_local_time)) {
+        throw fail('WORKFORCE_BREAK_RULES_INVALID', 'Template break_rules must be local-time intervals');
+      }
       const normalizedBreaks = breaks.map(rule => {
         const offset = (minute(rule.start_local_time) - startMinute + 1440) % 1440;
         const breakDuration = (minute(rule.end_local_time) - minute(rule.start_local_time) + 1440) % 1440;
