@@ -745,8 +745,8 @@ try {
     timezone: 'Africa/Addis_Ababa',
   }, scopeA);
   assert.equal(externalMemberAssessment.source_versions
-    .find(item => item.source === 'operational_commitments')?.status, 'NOT_APPLICABLE',
-  'an unlinked external professional cannot be a Logistics courier in the current user-linked assignment schema');
+    .find(item => item.source === 'operational_commitments')?.status, 'COMPLETE',
+  'Logistics is not applicable to an unlinked external professional, while Service Booking evidence is still checked');
   const bookingAssessment = repository.assessAvailability({
     organization_id: scopeA.organization_id,
     tenant_id: scopeA.tenant_id,
