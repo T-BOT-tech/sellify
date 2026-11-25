@@ -69,6 +69,7 @@ try {
     member_type: 'PROVIDER', status: 'ACTIVE', version: 1,
   };
   let engagement = null;
+  let profile = null;
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
   await page.route('**/*', async route => {
@@ -97,6 +98,29 @@ try {
     }
     if (pathname.endsWith('/members') && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: [member] }) });
+      return;
+    }
+    if (pathname.endsWith('/profiles') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: profile ? [profile] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/profiles') && method === 'POST') {
+      assert.equal(body.member_id, member.id, 'professional profile must belong to the selected member');
+      assert.deepEqual(body.skills, ['Consultation','Customer care']);
+      assert.deepEqual(body.qualifications, ['Certificate in Retail Operations']);
+      assert.deepEqual(body.languages, ['Amharic','English']);
+      assert.deepEqual(body.service_capabilities, ['Sales','Returns']);
+      assert.equal(body.visibility, 'ORGANIZATION');
+      assert.ok(body.effective_from);
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      profile = { id: 'profile-synthetic-1', member_id: member.id, ...body, version: 1 };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: profile }) });
+      return;
+    }
+    if (pathname.endsWith('/profiles/profile-synthetic-1') && method === 'PATCH') {
+      assert.equal(body.expected_version, profile.version, 'profile update must use optimistic concurrency');
+      profile = { ...profile, ...body, version: profile.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: profile }) });
       return;
     }
     if (pathname.endsWith('/engagements') && method === 'GET') {
@@ -192,7 +216,29 @@ try {
   await page.locator('.workforce-member-card').getByRole('button', { name: 'Open member' }).click();
   await page.locator('#workforceMemberDetails').waitFor({ state: 'visible' });
   await page.locator('#workforceAvailabilityForm').waitFor({ state: 'visible' });
+  await page.locator('#workforceProfileForm').waitFor({ state: 'visible' });
   await page.locator('#workforceEngagementForm').waitFor({ state: 'visible' });
+
+  const profileForm = page.locator('#workforceProfileForm');
+  await profileForm.locator('[name="skills"]').fill('Consultation, Customer care');
+  await profileForm.locator('[name="qualifications"]').fill('Certificate in Retail Operations');
+  await profileForm.locator('[name="languages"]').fill('Amharic, English');
+  await profileForm.locator('[name="service_capabilities"]').fill('Sales, Returns');
+  await profileForm.locator('[name="visibility"]').selectOption('ORGANIZATION');
+  await profileForm.locator('[name="effective_from"]').fill('2026-11-25');
+  await profileForm.locator('[name="notes"]').fill('Synthetic profile for browser regression');
+  await profileForm.getByRole('button', { name: 'Save professional profile' }).click();
+  await page.getByText('Profile saved.').waitFor({ timeout: 10000 });
+  const profileCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/profiles'));
+  assert.ok(profileCreateCall, 'professional profile form must create through the canonical API');
+  assert.equal(profileCreateCall.authorization, 'Bearer synthetic-session-token');
+  assert.match(profileCreateCall.idempotencyKey, /^workforce-ui-/);
+  await profileForm.locator('[name="notes"]').fill('Verified synthetic professional profile');
+  await profileForm.getByRole('button', { name: 'Save professional profile' }).click();
+  await page.getByText('Profile saved.').waitFor({ timeout: 10000 });
+  const profileUpdateCall = apiCalls.find(call => call.method === 'PATCH' && call.pathname.endsWith('/profiles/profile-synthetic-1'));
+  assert.equal(profileUpdateCall?.body.expected_version, 1);
+  assert.equal(profileUpdateCall?.body.notes, 'Verified synthetic professional profile');
 
   const engagementForm = page.locator('#workforceEngagementForm');
   await engagementForm.locator('[name="engagement_type"]').selectOption('EMPLOYMENT');
@@ -250,7 +296,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, authenticated API requests, member detail, engagement creation/approval/activation, availability creation, idempotency, and optimistic lifecycle: VERIFIED');
+  console.log('Mobile workspace, authenticated API requests, structured profile create/update, engagement creation/approval/activation, availability creation, idempotency, and optimistic lifecycle: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));
