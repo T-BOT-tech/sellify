@@ -96,6 +96,26 @@ try {
   assert.equal(inactiveTemplate.status, 'INACTIVE');
   const activeTemplate = repository.activate('shift_template', shiftTemplate.record.id, { expected_version: 3 }, scopeA);
   assert.equal(activeTemplate.status, 'ACTIVE');
+  const templateDepartment = repository.create('department', {
+    idempotency_key: 'department-template-only', code: 'SCHED', name: 'Scheduling',
+  }, scopeA);
+  repository.create('shift_template', {
+    idempotency_key: 'shift-template-department-guard', name: 'Scheduling Team',
+    start_local_time: '08:00', end_local_time: '16:00', timezone: 'Africa/Addis_Ababa',
+    effective_from: '2026-01-01', department_id: templateDepartment.record.id,
+  }, scopeA);
+  assert.throws(() => repository.deactivate('department', templateDepartment.record.id, { expected_version: 1 }, scopeA),
+    error => error.code === 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_SHIFT_TEMPLATES');
+  const templatePosition = repository.create('position', {
+    idempotency_key: 'position-template-only', code: 'SCHED-LEAD', name: 'Scheduling Lead',
+  }, scopeA);
+  repository.create('shift_template', {
+    idempotency_key: 'shift-template-position-guard', name: 'Scheduling Lead Shift',
+    start_local_time: '08:00', end_local_time: '16:00', timezone: 'Africa/Addis_Ababa',
+    effective_from: '2026-01-01', position_id: templatePosition.record.id,
+  }, scopeA);
+  assert.throws(() => repository.deactivate('position', templatePosition.record.id, { expected_version: 1 }, scopeA),
+    error => error.code === 'WORKFORCE_POSITION_HAS_ACTIVE_SHIFT_TEMPLATES');
   assert.throws(() => repository.create('shift_template', {
     idempotency_key: 'shift-template-cross-department', name: 'Cross Department',
     start_local_time: '08:00', end_local_time: '16:00', timezone: 'Africa/Addis_Ababa',
