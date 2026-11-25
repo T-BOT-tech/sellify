@@ -575,7 +575,7 @@ export class WorkforceSqliteRepository {
       return { record: fromDatabaseRow(row, spec.json), duplicate: false };
     } catch (error) {
       if (this.db.isTransaction) this.db.exec('ROLLBACK');
-      if (String(error?.code || '').startsWith('SQLITE_CONSTRAINT')) {
+      if (String(error?.code || '').startsWith('SQLITE_CONSTRAINT') || (Number.isInteger(Number(error?.errcode)) && (Number(error.errcode) & 0xff) === 19)) {
         throw fail('WORKFORCE_CONSTRAINT_CONFLICT', 'Workforce data conflicts with an existing scoped record or canonical reference', 409);
       }
       throw error;
@@ -688,7 +688,7 @@ export class WorkforceSqliteRepository {
       return fromDatabaseRow(row, TABLES.member.json);
     } catch (error) {
       if (this.db.isTransaction) this.db.exec('ROLLBACK');
-      if (String(error?.code || '').startsWith('SQLITE_CONSTRAINT')) {
+      if (String(error?.code || '').startsWith('SQLITE_CONSTRAINT') || (Number.isInteger(Number(error?.errcode)) && (Number(error.errcode) & 0xff) === 19)) {
         throw fail('WORKFORCE_CONSTRAINT_CONFLICT', 'Workforce account link conflicts with an existing scoped record or canonical reference', 409);
       }
       throw error;
