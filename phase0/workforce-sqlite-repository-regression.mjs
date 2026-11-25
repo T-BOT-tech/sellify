@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration } from '../backend/lib/workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration, runWorkforceLeaveAbsenceMigration } from '../backend/lib/workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from '../backend/lib/workforce-sqlite-repository.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-repository-'));
@@ -48,9 +48,9 @@ try {
     INSERT INTO organizations(id) VALUES ('org-a'), ('org-b');
     INSERT INTO tenants(chat_id, tenant_id, organization_id)
       VALUES ('chat-a','tenant-a','org-a'), ('chat-b','tenant-b','org-b');
-    INSERT INTO users(id) VALUES ('user-a'), ('user-b'), ('user-c'), ('user-d');
+    INSERT INTO users(id) VALUES ('user-a'), ('user-b'), ('user-c'), ('user-d'), ('user-e');
     INSERT INTO memberships(id,user_id,chat_id,status)
-      VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active'), ('membership-c','user-c','chat-a','active'), ('membership-d','user-d','chat-a','inactive');
+      VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active'), ('membership-c','user-c','chat-a','active'), ('membership-d','user-d','chat-a','inactive'), ('membership-e','user-e','chat-a','active');
     INSERT INTO locations(id,organization_id) VALUES ('location-a','org-a'), ('location-b','org-b');
     INSERT INTO service_resources(id,organization_id,chat_id)
       VALUES ('resource-a','org-a','chat-a'), ('resource-b','org-b','chat-b');
@@ -65,6 +65,7 @@ try {
   runWorkforceShiftTemplateMigration(db);
   runWorkforceShiftTemplateReferenceGuardMigration(db);
   runWorkforceShiftInstanceProvenanceMigration(db);
+  runWorkforceLeaveAbsenceMigration(db);
 
   const department = repository.create('department', { idempotency_key: 'department-ops', code: 'ops', name: 'Operations' }, scopeA);
   assert.equal(department.record.code, 'OPS');
@@ -343,6 +344,85 @@ try {
   }, scopeA);
   const submittedEngagement = repository.submit('engagement', engagement.record.id, { expected_version: 1 }, scopeA);
   const activeEngagement = repository.activate('engagement', engagement.record.id, { expected_version: 2 }, scopeA);
+  const employeeScopeA = { ...scopeA, actor: { role: 'staff' }, member_user_id: 'user-a' };
+  const employeeLeave = repository.create('leave_request', {
+    idempotency_key: 'leave-self-service-a', member_id: created.record.id,
+    leave_category: 'PERSONAL', starts_at: '2026-12-10T00:00:00.000Z',
+    ends_at: '2026-12-11T00:00:00.000Z', timezone: 'Africa/Addis_Ababa',
+    reason: 'Personal appointment', all_day: true,
+  }, employeeScopeA);
+  assert.equal(employeeLeave.record.status, 'DRAFT');
+  assert.equal(employeeLeave.record.requested_by, 'user-a');
+  const employeeLeaveUpdated = repository.update('leave_request', employeeLeave.record.id, {
+    expected_version: 1, reason: 'Personal appointment updated',
+  }, employeeScopeA);
+  assert.equal(employeeLeaveUpdated.version, 2);
+  const employeeLeaveSubmitted = repository.submit('leave_request', employeeLeave.record.id, { expected_version: 2 }, employeeScopeA);
+  assert.equal(employeeLeaveSubmitted.status, 'PENDING_APPROVAL');
+  assert.equal(employeeLeaveSubmitted.submitted_by, 'user-a');
+  const employeeLeaveWithdrawn = repository.withdraw('leave_request', employeeLeave.record.id, {
+    expected_version: 3, reason: 'Plans changed',
+  }, employeeScopeA);
+  assert.equal(employeeLeaveWithdrawn.status, 'WITHDRAWN');
+  assert.equal(repository.list('leave_request', employeeScopeA).length, 1,
+    'employee self-service reads must remain scoped to the linked Workforce member');
+
+  const managerScopeA = { ...scopeA, actor_id: 'user-c', actor: { role: 'manager' } };
+  const approverScopeA = { ...scopeA, actor_id: 'user-e', actor: { role: 'manager' } };
+  const approvedLeaveRequest = repository.create('leave_request', {
+    idempotency_key: 'leave-manager-created-a', member_id: created.record.id,
+    leave_category: 'ANNUAL', starts_at: '2026-12-01T00:00:00.000Z',
+    ends_at: '2026-12-03T00:00:00.000Z', timezone: 'Africa/Addis_Ababa',
+    reason: 'Planned annual leave', all_day: true,
+  }, managerScopeA);
+  const approvedLeaveSubmitted = repository.submit('leave_request', approvedLeaveRequest.record.id, { expected_version: 1 }, managerScopeA);
+  assert.throws(() => repository.approve('leave_request', approvedLeaveRequest.record.id, {
+    expected_version: 2,
+  }, managerScopeA), error => error.code === 'WORKFORCE_LEAVE_SELF_APPROVAL_FORBIDDEN');
+  const approvedLeave = repository.approve('leave_request', approvedLeaveRequest.record.id, {
+    expected_version: approvedLeaveSubmitted.version, decision_reason: 'Coverage confirmed',
+  }, approverScopeA);
+  assert.equal(approvedLeave.status, 'APPROVED');
+  assert.equal(approvedLeave.decided_by, 'user-e');
+  assert.throws(() => repository.create('shift', {
+    idempotency_key: 'shift-during-approved-leave', member_id: created.record.id,
+    starts_at: '2026-12-02T06:00:00.000Z', ends_at: '2026-12-02T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, managerScopeA), error => error.code === 'WORKFORCE_LEAVE_AVAILABILITY_CONFLICT');
+  const cancelledLeave = repository.cancel('leave_request', approvedLeave.id, {
+    expected_version: approvedLeave.version, reason: 'Business coverage changed',
+  }, approverScopeA);
+  assert.equal(cancelledLeave.status, 'CANCELLED');
+  assert.ok(repository.listEntityHistory('leave_request', cancelledLeave.id, approverScopeA)
+    .some(event => event.action === 'workforce.leave_request.cancel'
+      && event.metadata.reason === 'Business coverage changed'));
+
+  const absence = repository.create('absence', {
+    idempotency_key: 'absence-sickness-a', member_id: created.record.id,
+    absence_type: 'SICKNESS', starts_at: '2026-11-29T06:00:00.000Z',
+    ends_at: '2026-11-29T14:00:00.000Z', timezone: 'Africa/Addis_Ababa',
+    reason: 'Unplanned sickness',
+  }, managerScopeA);
+  assert.equal(absence.record.status, 'RECORDED');
+  assert.throws(() => repository.create('shift', {
+    idempotency_key: 'shift-during-recorded-absence', member_id: created.record.id,
+    starts_at: '2026-11-29T07:00:00.000Z', ends_at: '2026-11-29T08:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, managerScopeA), error => error.code === 'WORKFORCE_ABSENCE_AVAILABILITY_CONFLICT');
+  const voidedAbsence = repository.void('absence', absence.record.id, {
+    expected_version: 1, reason: 'Absence was recorded against the wrong member',
+  }, approverScopeA);
+  assert.equal(voidedAbsence.status, 'VOIDED');
+  assert.ok(repository.listEntityHistory('absence', voidedAbsence.id, approverScopeA)
+    .some(event => event.action === 'workforce.absence.void'
+      && event.metadata.reason === 'Absence was recorded against the wrong member'));
+  const shiftAfterAbsenceCorrection = repository.create('shift', {
+    idempotency_key: 'shift-after-absence-correction', member_id: created.record.id,
+    starts_at: '2026-11-29T07:00:00.000Z', ends_at: '2026-11-29T08:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, managerScopeA);
+  assert.equal(shiftAfterAbsenceCorrection.record.status, 'PLANNED');
+
   const replacementProfessional = repository.create('member', {
     idempotency_key: 'member-shift-reassignment', member_type: 'EMPLOYEE',
     display_name: 'Replacement Professional', primary_location_id: 'location-a',
