@@ -4149,7 +4149,7 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
   }
   if (req.method === 'POST' && recordId && action) {
     const body = workforceApiBody(await readBody(req), entity, 'lifecycle', action);
-    if (!['activate','suspend','deactivate','release','cancel','submit','approve','reject','withdraw','void','confirm','start','complete','end','link-account','unlink-account','generate','reassign'].includes(action)) {
+    if (!['activate','suspend','deactivate','release','cancel','submit','approve','reject','withdraw','void','confirm','start','complete','end','link-account','unlink-account','generate','reassign','availability-assessment'].includes(action)) {
       throw Object.assign(new Error('Unsupported Workforce lifecycle action'), { statusCode: 400, code: 'WORKFORCE_LIFECYCLE_OPERATION_INVALID' });
     }
     let lastError = null;
