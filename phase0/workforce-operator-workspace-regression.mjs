@@ -40,8 +40,15 @@ assert.ok(ui.includes("String(config.chatId) !== tenantId")
   'late responses must not cross active tenant or session changes');
 assert.ok(!/localStorage|saveJSON|setStaffList|staffList/.test(ui),
   'Workforce UI must not create a parallel local workforce authority');
-assert.ok(!ui.includes('createMember') && !ui.includes('user_id:'),
-  'the UI must not create duplicate user identities or bypass tenant membership linking');
+const memberCreateStart = ui.indexOf('async function saveMemberCreate(');
+const memberCreateEnd = ui.indexOf('\nasync function ', memberCreateStart + 1);
+assert.ok(memberCreateStart >= 0 && memberCreateEnd > memberCreateStart,
+  'the professional-record creation handler must remain explicit');
+assert.ok(!ui.slice(memberCreateStart, memberCreateEnd).includes('user_id'),
+  'professional-record creation must not create or attach an authentication identity');
+assert.ok(ui.includes("async function linkMemberAccount")
+  && ui.includes("'/link-account'") && ui.includes("'/unlink-account'"),
+  'existing user accounts may only be linked through the canonical membership-validated account-link routes');
 
 for (const token of ["'workforce'", "'navWorkforce'", 'renderWorkforce']) {
   assert.ok(tabs.includes(token), 'tab controller missing Workforce integration: ' + token);
