@@ -14,6 +14,20 @@ assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'department',
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'position', operation: 'create' }), true);
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'shift_template', operation: 'create' }), true);
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'shift_template', operation: 'generate' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'leave_request', operation: 'approve' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'leave_request', operation: 'reject' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'absence', operation: 'create' }), true);
+
+const employee = { userId: 'employee-a', chatId: 'chat-a', organizationId: 'org-a', role: 'staff', contextualRoles: [] };
+const employeeBase = { organization_id: 'org-a', tenant_id: 'tenant-a', chat_id: 'chat-a', actor: employee };
+assert.equal(authorizeWorkforceRepositoryAccess({ ...employeeBase, entity: 'member', operation: 'list' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...employeeBase, entity: 'leave_request', operation: 'create' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...employeeBase, entity: 'leave_request', operation: 'update' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...employeeBase, entity: 'leave_request', operation: 'submit' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...employeeBase, entity: 'leave_request', operation: 'withdraw' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...employeeBase, entity: 'leave_request', operation: 'approve' }), false);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...employeeBase, entity: 'absence', operation: 'create' }), false);
+
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'department', operation: 'list', actor: { ...manager, role: 'viewer' } }), false);
 
 const viewer = { ...manager, role: 'viewer' };
