@@ -81,6 +81,12 @@ try {
     currency: 'ETB',
     timezone: 'Africa/Addis_Ababa',
   });
+  const primaryLocation = await store.createOrganizationLocation(tenant.chatId, {
+    code: 'WF-HTTP-PRIMARY-' + suffix, name: 'Workforce HTTP Primary Branch', timezone: 'Africa/Addis_Ababa',
+  });
+  const secondaryLocation = await store.createOrganizationLocation(tenant.chatId, {
+    code: 'WF-HTTP-SECONDARY-' + suffix, name: 'Workforce HTTP Secondary Branch', timezone: 'Africa/Addis_Ababa',
+  });
   const otherTenant = await store.createTenantForUser({
     userId: otherOwner.id,
     sellerName: 'Other Workforce Tenant',
@@ -168,13 +174,14 @@ try {
     token: ownerSession.token,
     method: 'POST',
     headers: { 'Idempotency-Key': 'workforce-http-member-' + suffix },
-    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider', employee_number: 'EMP-HTTP-001', department_id: department.id, position_id: position.id },
+    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider', employee_number: 'EMP-HTTP-001', primary_location_id: primaryLocation.id, department_id: department.id, position_id: position.id },
   });
   assert.equal(created.response.status, 201, JSON.stringify(created.payload));
   assert.equal(created.payload.record?.status, 'DRAFT');
   const memberId = created.payload.record?.id;
   assert.ok(memberId, 'create response must return the canonical Workforce member id');
   assert.equal(created.payload.record?.employee_number, 'EMP-HTTP-001');
+  assert.equal(created.payload.record?.primary_location_id, primaryLocation.id);
   assert.equal(created.payload.record?.department_id, department.id);
   assert.equal(created.payload.record?.position_id, position.id);
 
@@ -206,7 +213,7 @@ try {
     token: ownerSession.token,
     method: 'POST',
     headers: { 'Idempotency-Key': 'workforce-http-member-' + suffix },
-    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider', employee_number: 'EMP-HTTP-001', department_id: department.id, position_id: position.id },
+    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider', employee_number: 'EMP-HTTP-001', primary_location_id: primaryLocation.id, department_id: department.id, position_id: position.id },
   });
   assert.equal(replay.response.status, 200);
   assert.equal(replay.payload.duplicate, true);
@@ -243,6 +250,13 @@ try {
   assert.equal(updated.response.status, 200, JSON.stringify(updated.payload));
   assert.equal(updated.payload.record?.display_name, 'Updated HTTP Provider');
   assert.equal(updated.payload.record?.version, 3);
+  const locationUpdated = await jsonRequest(baseUrl, item, {
+    token: ownerSession.token, method: 'PATCH',
+    body: { expected_version: 3, primary_location_id: secondaryLocation.id },
+  });
+  assert.equal(locationUpdated.response.status, 200, JSON.stringify(locationUpdated.payload));
+  assert.equal(locationUpdated.payload.record?.primary_location_id, secondaryLocation.id);
+  assert.equal(locationUpdated.payload.record?.version, 4);
 
   const invalidLifecycle = await jsonRequest(baseUrl, item + '/complete', {
     token: ownerSession.token, method: 'POST', body: { expected_version: 3 },
@@ -315,6 +329,13 @@ try {
     );
   }
 
+  const locationAssignment = await createWorkforceRecord(
+    baseUrl, ownerSession.token,
+    '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/assignments',
+    'workforce-http-location-assignment-' + suffix,
+    { member_id: memberId, assignment_type: 'LOCATION', location_id: primaryLocation.id,
+      starts_at: '2026-11-27T06:00:00.000Z', ends_at: '2026-11-27T14:00:00.000Z' },
+  );
   for (const [plural, record] of Object.entries(createdEntities)) {
     const collectionPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/' + plural;
     const read = await jsonRequest(baseUrl, collectionPath + '/' + encodeURIComponent(record.id), {
@@ -356,6 +377,8 @@ try {
   await lifecycle('engagements', engagement, 'end', 5, 'ENDED');
   await lifecycle('calendar-exceptions', createdEntities['calendar-exceptions'], 'cancel', 1, 'CANCELLED');
   await lifecycle('assignments', createdEntities.assignments, 'activate', 1, 'ACTIVE');
+  const activeLocationAssignment = await lifecycle('assignments', locationAssignment, 'activate', 1, 'ACTIVE');
+  await lifecycle('assignments', activeLocationAssignment, 'suspend', 2, 'SUSPENDED');
   let shift = await lifecycle('shifts', createdEntities.shifts, 'confirm', 1, 'CONFIRMED');
   shift = await lifecycle('shifts', shift, 'start', 2, 'IN_PROGRESS');
   await lifecycle('shifts', shift, 'complete', 3, 'COMPLETED');
