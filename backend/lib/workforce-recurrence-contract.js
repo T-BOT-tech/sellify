@@ -204,60 +204,111 @@ function recurrenceOccurrenceIndex(parsed, anchor, candidate) {
  * in a concrete occurrence. Invalid rules, invalid local times, unsupported
  * features, and timezone gaps all fail closed.
  */
-export function workforceAvailabilityCoversBooking(availability, booking) {
-  if (!availability || !booking) return false;
-  const startMs = Date.parse(booking.requested_start);
-  const endMs = Date.parse(booking.requested_end);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs >= endMs) return false;
-
+/**
+ * Enumerates concrete occurrences intersecting a requested interval using the
+ * existing bounded RRULE parser and timezone conversion rules. Invalid rules,
+ * invalid windows, and nonexistent local times return valid:false.
+ */
+export function workforceAvailabilityOccurrencesInRange(availability, startsAt, endsAt) {
+  if (!availability) return { valid: false, reason: 'Availability window is required', occurrences: [] };
+  const startMs = Date.parse(startsAt);
+  const endMs = Date.parse(endsAt);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs >= endMs) {
+    return { valid: false, reason: 'A valid requested interval is required', occurrences: [] };
+  }
   const ruleResult = validateWorkforceRecurrenceRule(availability.recurrence_rule);
-  if (!ruleResult.valid) return false;
+  if (!ruleResult.valid) return { valid: false, reason: ruleResult.errors.join('; '), occurrences: [] };
   if (!ruleResult.parsed) {
-    const availabilityStartMs = Date.parse(availability.starts_at);
-    const availabilityEndMs = Date.parse(availability.ends_at);
-    return Number.isFinite(availabilityStartMs) && Number.isFinite(availabilityEndMs)
-      && availabilityStartMs <= startMs && availabilityEndMs >= endMs;
+    const windowStart = Date.parse(availability.starts_at);
+    const windowEnd = Date.parse(availability.ends_at);
+    if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd) || windowStart >= windowEnd) {
+      return { valid: false, reason: 'One-time availability window must have a valid bounded interval', occurrences: [] };
+    }
+    return { valid: true, occurrences: windowStart < endMs && windowEnd > startMs
+      ? [{ starts_at: new Date(windowStart).toISOString(), ends_at: new Date(windowEnd).toISOString() }] : [] };
   }
 
   const timeZone = String(availability.timezone || '').trim();
   const anchor = localParts(availability.starts_at, timeZone);
   const availabilityEnd = localParts(availability.ends_at, timeZone);
-  const requestedStart = localParts(booking.requested_start, timeZone);
-  const requestedEnd = localParts(booking.requested_end, timeZone);
-  if (!anchor || !availabilityEnd || !requestedStart || !requestedEnd) return false;
-
-  if (requestedStart.date !== requestedEnd.date) return false;
-  if (anchor.date !== availabilityEnd.date) return false;
+  const requestedStart = localParts(new Date(startMs).toISOString(), timeZone);
+  const requestedEnd = localParts(new Date(endMs - 1).toISOString(), timeZone);
+  if (!anchor || !availabilityEnd || !requestedStart || !requestedEnd) {
+    return { valid: false, reason: 'Availability or requested timestamps could not be resolved in the IANA timezone', occurrences: [] };
+  }
+  if (anchor.date !== availabilityEnd.date) {
+    return { valid: false, reason: 'Recurring availability windows must begin and end on the same local date', occurrences: [] };
+  }
   const anchorEndMinutes = availabilityEnd.hour * 60 + availabilityEnd.minute;
   const anchorStartMinutes = anchor.hour * 60 + anchor.minute;
   if (anchorEndMinutes < anchorStartMinutes
-    || (anchorEndMinutes === anchorStartMinutes && availabilityEnd.second <= anchor.second)) return false;
-  if (requestedStart.date < anchor.date) return false;
-
+    || (anchorEndMinutes === anchorStartMinutes
+      && (availabilityEnd.second < anchor.second
+        || (availabilityEnd.second === anchor.second && availabilityEnd.millisecond <= anchor.millisecond)))) {
+    return { valid: false, reason: 'Recurring availability window end must be after its local start', occurrences: [] };
+  }
   const from = effectiveDate(availability.effective_from);
   const through = effectiveDate(availability.effective_until);
-  if (availability.effective_from && !from) return false;
-  if (availability.effective_until && !through) return false;
-  if (from && requestedStart.date < from) return false;
-  if (through && requestedStart.date > through) return false;
-
-  const parsed = ruleResult.parsed;
-  const occurrenceIndex = recurrenceOccurrenceIndex(parsed, anchor, requestedStart);
-  if (occurrenceIndex === null || (parsed.count !== null && occurrenceIndex > parsed.count)) return false;
-
-  const occurrenceStart = localDateTimeToUtc({
-    ...requestedStart, hour: anchor.hour, minute: anchor.minute,
-    second: anchor.second, millisecond: anchor.millisecond,
-  }, timeZone);
-  const occurrenceEnd = localDateTimeToUtc({
-    ...requestedStart, hour: availabilityEnd.hour, minute: availabilityEnd.minute,
-    second: availabilityEnd.second, millisecond: availabilityEnd.millisecond,
-  }, timeZone);
-  if (occurrenceStart === null || occurrenceEnd === null || occurrenceStart >= occurrenceEnd) return false;
-
-  if (parsed.until) {
-    if (parsed.until.kind === 'date' && requestedStart.date > parsed.until.value) return false;
-    if (parsed.until.kind === 'instant' && occurrenceStart > parsed.until.value) return false;
+  if ((availability.effective_from && !from) || (availability.effective_until && !through)) {
+    return { valid: false, reason: 'Availability effective dates are invalid', occurrences: [] };
   }
-  return occurrenceStart <= startMs && occurrenceEnd >= endMs;
+  const dayCount = dayNumber(requestedEnd.date) - dayNumber(requestedStart.date) + 1;
+  if (dayCount < 1 || dayCount > 366) {
+    return { valid: false, reason: 'Requested interval exceeds the bounded recurrence evaluation window', occurrences: [] };
+  }
+  const occurrences = [];
+  let date = requestedStart.date;
+  while (date <= requestedEnd.date) {
+    const [year, month, day] = date.split('-').map(Number);
+    const candidate = {
+      year, month, day, date, weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
+      hour: 0, minute: 0, second: 0, millisecond: 0,
+    };
+    if (date >= anchor.date && (!from || date >= from) && (!through || date <= through)) {
+      const occurrenceIndex = recurrenceOccurrenceIndex(ruleResult.parsed, anchor, candidate);
+      if (occurrenceIndex !== null && (ruleResult.parsed.count === null || occurrenceIndex <= ruleResult.parsed.count)) {
+        const occurrenceStart = localDateTimeToUtc({
+          ...candidate, hour: anchor.hour, minute: anchor.minute,
+          second: anchor.second, millisecond: anchor.millisecond,
+        }, timeZone);
+        const occurrenceEnd = localDateTimeToUtc({
+          ...candidate, hour: availabilityEnd.hour, minute: availabilityEnd.minute,
+          second: availabilityEnd.second, millisecond: availabilityEnd.millisecond,
+        }, timeZone);
+        if (occurrenceStart === null || occurrenceEnd === null || occurrenceStart >= occurrenceEnd) {
+          return { valid: false, reason: 'A recurring local-time boundary is nonexistent or invalid in the IANA timezone', occurrences: [] };
+        }
+        if (ruleResult.parsed.until && (ruleResult.parsed.until.kind === 'date'
+          ? date > ruleResult.parsed.until.value : occurrenceStart > ruleResult.parsed.until.value)) {
+          date = addDays(date, 1);
+          continue;
+        }
+        if (occurrenceStart < endMs && occurrenceEnd > startMs) {
+          occurrences.push({ starts_at: new Date(occurrenceStart).toISOString(), ends_at: new Date(occurrenceEnd).toISOString() });
+        }
+      }
+    }
+    date = addDays(date, 1);
+  }
+  return { valid: true, occurrences };
+}
+
+function addDays(date, count) {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + count)).toISOString().slice(0, 10);
+}
+
+/**
+ * Returns true only when one concrete availability occurrence contains the
+ * complete requested interval. The occurrence enumeration is shared with
+ * Workforce's four-state availability assessment.
+ */
+export function workforceAvailabilityCoversBooking(availability, booking) {
+  if (!booking) return false;
+  const startMs = Date.parse(booking.requested_start);
+  const endMs = Date.parse(booking.requested_end);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs >= endMs) return false;
+  const result = workforceAvailabilityOccurrencesInRange(availability, booking.requested_start, booking.requested_end);
+  return result.valid && result.occurrences.some(item =>
+    Date.parse(item.starts_at) <= startMs && Date.parse(item.ends_at) >= endMs);
 }
