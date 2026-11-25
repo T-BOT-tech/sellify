@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { validateWorkforceRecurrenceRule } from './workforce-recurrence-contract.js';
+import { WORKFORCE_LEAVE_TRANSITIONS, WORKFORCE_ABSENCE_TRANSITIONS, validateWorkforceLeaveRequest, validateWorkforceAbsence, validateWorkforceLeaveTransition, isValidWorkforceLeaveCategory, isValidWorkforceAbsenceType } from './workforce-leave-contract.js';
 import { buildShiftWindowFromTemplate, isoWeekday } from './workforce-shift-time.js';
 import {
   WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
@@ -70,6 +71,8 @@ const TABLES = Object.freeze({
     createOnlyFields: ['member_id','booking_id','operational_task_id'],
     json: [],
   },
+  leave_request: { table: 'workforce_leave_requests', id: 'id', state: 'status', fields: ['leave_category','starts_at','ends_at','timezone','all_day','reason'], createOnlyFields: ['member_id'], json: [] },
+  absence: { table: 'workforce_absences', id: 'id', state: 'status', fields: ['absence_type','starts_at','ends_at','timezone','all_day','reason'], createOnlyFields: ['member_id'], json: [] },
 });
 
 const INITIAL_STATES = Object.freeze({
@@ -83,6 +86,8 @@ const INITIAL_STATES = Object.freeze({
   shift: 'PLANNED',
   allocation: 'DRAFT',
   utilization: 'PLANNED',
+  leave_request: 'DRAFT',
+  absence: 'RECORDED',
 });
 
 const TRANSITIONS = Object.freeze({
@@ -125,6 +130,8 @@ const TRANSITIONS = Object.freeze({
     complete: { from: ['IN_PROGRESS'], to: 'COMPLETED' },
     cancel: { from: ['PLANNED','IN_PROGRESS'], to: 'CANCELLED' },
   },
+  leave_request: WORKFORCE_LEAVE_TRANSITIONS,
+  absence: WORKFORCE_ABSENCE_TRANSITIONS,
 });
 
 const RESOURCE_SCOPED_ENTITIES = new Set(['availability','assignment','shift','allocation','utilization']);
@@ -153,6 +160,24 @@ function normalizeRepositoryValue(field, value) {
       throw fail('WORKFORCE_LOCAL_TIME_INVALID', field + ' must use HH:MM in local time');
     }
     return value;
+  }
+  if (field === 'all_day') {
+    if (typeof value !== 'boolean') throw fail('WORKFORCE_ALL_DAY_INVALID', 'all_day must be a boolean');
+    return value;
+  }
+  if (field === 'leave_category') {
+    const normalized = typeof value === 'string' ? value.trim().toUpperCase() : '';
+    if (!isValidWorkforceLeaveCategory(normalized)) throw fail('WORKFORCE_LEAVE_CATEGORY_INVALID', 'leave_category is not supported');
+    return normalized;
+  }
+  if (field === 'absence_type') {
+    const normalized = typeof value === 'string' ? value.trim().toUpperCase() : '';
+    if (!isValidWorkforceAbsenceType(normalized)) throw fail('WORKFORCE_ABSENCE_TYPE_INVALID', 'absence_type is not supported');
+    return normalized;
+  }
+  if (field === 'reason') {
+    if (typeof value !== 'string' || !value.trim() || value.trim().length > 1000) throw fail('WORKFORCE_REASON_INVALID', 'reason must be a non-empty string of at most 1000 characters');
+    return value.trim();
   }
   if (field === 'timezone') {
     try {
@@ -218,7 +243,7 @@ function normalizeRepositoryValue(field, value) {
 
 const FILTER_COLUMNS = new Set([
   'member_id','resource_id','location_id','booking_id','operational_task_id',
-  'calendar_id','status','state','availability','exception_type','assignment_type','employee_number','department_id','position_id','supervisor_member_id','code',
+  'calendar_id','status','state','availability','exception_type','assignment_type','employee_number','department_id','position_id','supervisor_member_id','code','leave_category','absence_type',
 ]);
 
 function fail(code, message, statusCode = 400) {
@@ -317,10 +342,20 @@ export class WorkforceSqliteRepository {
     }
     if (data.member_id) {
       const member = this.db.prepare(`
-        SELECT id FROM workforce_members
+        SELECT id, status FROM workforce_members
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
       `).get(String(data.member_id), scope.organization_id, scope.tenant_id, scope.chat_id);
       if (!member) throw fail('WORKFORCE_MEMBER_SCOPE_INVALID', 'Member does not belong to the active organization and tenant', 422);
+      if (entity === 'leave_request') {
+        if (String(member.status) !== 'ACTIVE') throw fail('WORKFORCE_MEMBER_NOT_ELIGIBLE', 'Only active Workforce members can request planned leave', 409);
+        const engagement = this.db.prepare(`
+          SELECT id FROM workforce_engagements
+          WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
+            AND starts_at <= ? AND (ends_at IS NULL OR ends_at >= ?)
+          ORDER BY starts_at DESC LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(data.member_id), data.starts_at, data.ends_at);
+        if (!engagement) throw fail('WORKFORCE_ACTIVE_ENGAGEMENT_REQUIRED', 'Leave request dates must be covered by an active engagement', 409);
+      }
     }
     if (data.calendar_id) {
       const calendar = this.db.prepare(`
@@ -450,6 +485,19 @@ export class WorkforceSqliteRepository {
       && String(row.resource_id || '') !== String(context.resource_id)) throw scopedError();
     if (context.member_id && row.member_id
       && String(row.member_id) !== String(context.member_id)) throw scopedError();
+    if (context.member_user_id) {
+      if (entity === 'member' && String(row.user_id || '') !== String(context.member_user_id)) throw scopedError();
+      if (row.member_id) {
+        const owner = this.db.prepare('SELECT user_id FROM workforce_members WHERE id=? AND organization_id=? AND tenant_id=?')
+          .get(String(row.member_id), String(context.organization_id), String(context.tenant_id));
+        if (!owner || String(owner.user_id || '') !== String(context.member_user_id)) throw scopedError();
+      }
+      if (entity === 'calendar_exception') {
+        const owner = this.db.prepare('SELECT m.user_id FROM workforce_calendars c JOIN workforce_members m ON m.id=c.member_id WHERE c.id=? AND c.organization_id=? AND c.tenant_id=?')
+          .get(String(row.calendar_id), String(context.organization_id), String(context.tenant_id));
+        if (!owner || String(owner.user_id || '') !== String(context.member_user_id)) throw scopedError();
+      }
+    }
     if (context.member_id && entity === 'calendar_exception') {
       const calendar = this.db.prepare('SELECT member_id FROM workforce_calendars WHERE id = ? AND organization_id = ? AND tenant_id = ?')
         .get(String(row.calendar_id), String(context.organization_id), String(context.tenant_id));
@@ -501,13 +549,25 @@ export class WorkforceSqliteRepository {
       clauses.push('resource_id = ?');
       values.push(String(context.resource_id));
     }
-    if (context.member_id && ['profile','engagement','calendar','availability','assignment','shift','allocation','utilization'].includes(entity)) {
+    if (context.member_id && ['profile','engagement','calendar','availability','assignment','shift','allocation','utilization','leave_request','absence'].includes(entity)) {
       clauses.push('member_id = ?');
       values.push(String(context.member_id));
     }
     if (context.member_id && entity === 'calendar_exception') {
       clauses.push('calendar_id IN (SELECT id FROM workforce_calendars WHERE organization_id = ? AND tenant_id = ? AND member_id = ?)');
       values.push(scope.organization_id, scope.tenant_id, String(context.member_id));
+    }
+    if (context.member_user_id) {
+      if (entity === 'member') {
+        clauses.push('user_id = ?');
+        values.push(String(context.member_user_id));
+      } else if (spec.fields.includes('member_id') || (spec.createOnlyFields || []).includes('member_id')) {
+        clauses.push('member_id IN (SELECT id FROM workforce_members WHERE organization_id = ? AND tenant_id = ? AND user_id = ?)');
+        values.push(scope.organization_id, scope.tenant_id, String(context.member_user_id));
+      } else if (entity === 'calendar_exception') {
+        clauses.push('calendar_id IN (SELECT c.id FROM workforce_calendars c JOIN workforce_members m ON m.id = c.member_id WHERE c.organization_id = ? AND c.tenant_id = ? AND m.user_id = ?)');
+        values.push(scope.organization_id, scope.tenant_id, String(context.member_user_id));
+      }
     }
     if (context.provider_user_id) {
       if (entity === 'member') {
@@ -579,6 +639,10 @@ export class WorkforceSqliteRepository {
     if (context.member_id) {
       clauses.push('member_id = ?');
       values.push(String(context.member_id));
+    }
+    if (context.member_user_id) {
+      clauses.push('member_id IN (SELECT id FROM workforce_members WHERE organization_id = ? AND tenant_id = ? AND user_id = ?)');
+      values.push(scope.organization_id, scope.tenant_id, String(context.member_user_id));
     }
     if (context.provider_user_id) {
       clauses.push('member_id IN (SELECT id FROM workforce_members WHERE organization_id = ? AND tenant_id = ? AND user_id = ?)');
@@ -821,6 +885,16 @@ export class WorkforceSqliteRepository {
     if (!validation.valid) throw fail('WORKFORCE_CREATE_INVALID', validation.errors.join('; '));
     const data = {};
     for (const field of [...(spec.createOnlyFields || []), ...spec.fields]) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), payload[field]);
+    if (entity === 'leave_request') {
+      const result = validateWorkforceLeaveRequest(data);
+      if (!result.valid) throw fail('WORKFORCE_LEAVE_REQUEST_INVALID', result.errors.join('; '));
+      data.requested_by = context.actor_id || null;
+    }
+    if (entity === 'absence') {
+      const result = validateWorkforceAbsence(data);
+      if (!result.valid) throw fail('WORKFORCE_ABSENCE_INVALID', result.errors.join('; '));
+      data.recorded_by = context.actor_id || null;
+    }
     this.assertReferences(entity, data, scope, payload.id || null);
     const requestHash = fingerprint({ entity, data });
     const existing = this.db.prepare(`
@@ -897,11 +971,21 @@ export class WorkforceSqliteRepository {
     if (!validation.valid) throw fail('WORKFORCE_UPDATE_INVALID', validation.errors.join('; '));
     const existing = this.getForMutation(entity, id, scope, context, 'update');
     if (Number(existing.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+    if (entity === 'leave_request' && existing.status !== 'DRAFT') throw fail('WORKFORCE_LEAVE_REQUEST_LOCKED', 'Only draft leave requests can be edited', 409);
+    if (entity === 'absence' && existing.status !== 'RECORDED') throw fail('WORKFORCE_ABSENCE_LOCKED', 'Only recorded absences can be edited', 409);
     const data = {};
     for (const field of spec.fields) if (Object.hasOwn(input, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), input[field]);
     if (Object.keys(data).length === 0) throw fail('WORKFORCE_UPDATE_EMPTY', 'At least one mutable Workforce field is required');
     const referenceData = { ...existing, ...data };
     if (entity === 'member' && !Object.hasOwn(data, 'user_id')) delete referenceData.user_id;
+    if (entity === 'leave_request') {
+      const result = validateWorkforceLeaveRequest(referenceData);
+      if (!result.valid) throw fail('WORKFORCE_LEAVE_REQUEST_INVALID', result.errors.join('; '));
+    }
+    if (entity === 'absence') {
+      const result = validateWorkforceAbsence(referenceData);
+      if (!result.valid) throw fail('WORKFORCE_ABSENCE_INVALID', result.errors.join('; '));
+    }
     this.assertReferences(entity, referenceData, scope, String(id));
     const now = this.clock();
     const assignments = Object.keys(data).map((key) => `${key} = ?`);
