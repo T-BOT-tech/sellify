@@ -801,7 +801,7 @@ export class WorkforceSqliteRepository {
         AND state='COMMITTED' AND (starts_at IS NULL OR ends_at IS NULL)
     `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id)).count;
     const serviceBookings = this.db.prepare(`
-      SELECT id, status, requested_start AS starts_at, requested_end AS ends_at, updated_at
+      SELECT id, status, requested_start AS starts_at, requested_end AS ends_at
       FROM service_bookings
       WHERE organization_id=? AND chat_id=? AND workforce_member_id=?
         AND status IN ('REQUESTED','ACCEPTED','CONFIRMED','IN_PROGRESS')
@@ -822,7 +822,7 @@ export class WorkforceSqliteRepository {
       SELECT id, version, updated_at, exception_type, starts_at, ends_at
       FROM workforce_calendar_exceptions
       WHERE organization_id=? AND tenant_id=? AND chat_id=? AND calendar_id=?
-        AND status='ACTIVE' AND starts_at<? AND ends_at>?
+        AND status='ACTIVE' AND starts_at<? AND (ends_at IS NULL OR ends_at>?)
     `).all(scope.organization_id, scope.tenant_id, scope.chat_id, calendar.id, end, start) : [];
     const windows = this.db.prepare(`
       SELECT id, version, updated_at, availability, starts_at, ends_at, recurrence_rule
