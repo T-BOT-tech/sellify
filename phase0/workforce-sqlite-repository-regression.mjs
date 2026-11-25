@@ -681,6 +681,15 @@ try {
   assert.equal(assessment.state, 'UNKNOWN',
     'assessment must fail closed while calendar and operational commitment evidence are incomplete');
   assert.equal(assessment.is_booking, false);
+  const assessmentEngagement = repository.create('engagement', {
+    idempotency_key: 'assessment-engagement-a',
+    member_id: created.record.id,
+    engagement_type: 'CONTRACT',
+    starts_at: '2026-11-25T00:00:00.000Z',
+    ends_at: '2026-12-01T00:00:00.000Z',
+  }, scopeA);
+  repository.submit('engagement', assessmentEngagement.record.id, { expected_version: 1 }, scopeA);
+  repository.activate('engagement', assessmentEngagement.record.id, { expected_version: 2 }, scopeA);
   const pendingAssessmentLeave = repository.create('leave_request', {
     idempotency_key: 'assessment-pending-leave-a',
     member_id: created.record.id,
