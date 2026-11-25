@@ -341,7 +341,10 @@ try {
   }
 
   let engagement = await lifecycle('engagements', createdEntities.engagements, 'submit', 1, 'PENDING_APPROVAL');
-  await lifecycle('engagements', engagement, 'activate', 2, 'ACTIVE');
+  engagement = await lifecycle('engagements', engagement, 'activate', 2, 'ACTIVE');
+  engagement = await lifecycle('engagements', engagement, 'suspend', 3, 'SUSPENDED');
+  engagement = await lifecycle('engagements', engagement, 'activate', 4, 'ACTIVE');
+  await lifecycle('engagements', engagement, 'end', 5, 'ENDED');
   await lifecycle('calendar-exceptions', createdEntities['calendar-exceptions'], 'cancel', 1, 'CANCELLED');
   await lifecycle('assignments', createdEntities.assignments, 'activate', 1, 'ACTIVE');
   let shift = await lifecycle('shifts', createdEntities.shifts, 'confirm', 1, 'CONFIRMED');
