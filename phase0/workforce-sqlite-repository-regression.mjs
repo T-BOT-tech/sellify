@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration } from '../backend/lib/workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration } from '../backend/lib/workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from '../backend/lib/workforce-sqlite-repository.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-repository-'));
@@ -64,6 +64,7 @@ try {
   runWorkforceOrganizationStructureMigration(db);
   runWorkforceShiftTemplateMigration(db);
   runWorkforceShiftTemplateReferenceGuardMigration(db);
+  runWorkforceShiftInstanceProvenanceMigration(db);
 
   const department = repository.create('department', { idempotency_key: 'department-ops', code: 'ops', name: 'Operations' }, scopeA);
   assert.equal(department.record.code, 'OPS');
@@ -145,6 +146,7 @@ try {
     user_id: 'user-a',
     member_type: 'PROVIDER',
     display_name: 'Provider A',
+    primary_location_id: 'location-a',
     employee_number: ' EMP-001 ',
     department_id: department.record.id,
     position_id: position.record.id,
@@ -335,11 +337,50 @@ try {
     idempotency_key: 'engagement-create-a',
     member_id: created.record.id,
     engagement_type: 'CONTRACT',
-    starts_at: '2026-11-25T06:00:00.000Z',
+    starts_at: '2026-11-25T00:00:00.000Z',
     ends_at: '2026-12-25T15:00:00.000Z',
   }, scopeA);
   const submittedEngagement = repository.submit('engagement', engagement.record.id, { expected_version: 1 }, scopeA);
   const activeEngagement = repository.activate('engagement', engagement.record.id, { expected_version: 2 }, scopeA);
+  const generatedShifts = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
+    expected_version: activeTemplate.version,
+    member_id: created.record.id,
+    from_date: '2026-11-26',
+    to_date: '2026-11-28',
+    idempotency_key: 'shift-generation-batch-a',
+  }, scopeA);
+  assert.equal(generatedShifts.created_count, 2);
+  assert.equal(generatedShifts.existing_count, 0);
+  assert.equal(generatedShifts.conflict_count, 0);
+  assert.equal(generatedShifts.skipped_count, 1, 'Saturday is excluded by the Monday-Friday template');
+  assert.equal(generatedShifts.created_records[0].generated_local_date, '2026-11-26');
+  assert.equal(generatedShifts.created_records[0].template_version, activeTemplate.version);
+  assert.equal(generatedShifts.created_records[0].starts_at, '2026-11-26T05:00:00.000Z');
+  assert.equal(generatedShifts.created_records[0].ends_at, '2026-11-26T13:30:00.000Z');
+  assert.deepEqual(generatedShifts.created_records[0].break_rules, [{ starts_at: '2026-11-26T09:00:00.000Z', duration_minutes: 30 }]);
+  const generatedReplay = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
+    expected_version: activeTemplate.version, member_id: created.record.id,
+    from_date: '2026-11-26', to_date: '2026-11-28', idempotency_key: 'shift-generation-batch-a-replay',
+  }, scopeA);
+  assert.equal(generatedReplay.created_count, 0);
+  assert.equal(generatedReplay.existing_count, 2, 'repeated generation must not duplicate dated shifts');
+  const templateAfterGeneration = repository.update('shift_template', shiftTemplate.record.id, {
+    expected_version: activeTemplate.version, start_local_time: '09:00',
+  }, scopeA);
+  assert.equal(templateAfterGeneration.version, activeTemplate.version + 1);
+  assert.equal(repository.get('shift', generatedShifts.created_records[0].id, scopeA).starts_at, '2026-11-26T05:00:00.000Z',
+    'template edits must not rewrite already generated dated shifts');
+  repository.create('shift', {
+    idempotency_key: 'manual-overlap-shift', member_id: created.record.id, location_id: 'location-a',
+    starts_at: '2026-11-30T05:00:00.000Z', ends_at: '2026-11-30T13:30:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, scopeA);
+  const conflictedGeneration = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
+    expected_version: templateAfterGeneration.version, member_id: created.record.id,
+    from_date: '2026-11-30', to_date: '2026-11-30', idempotency_key: 'shift-generation-conflict',
+  }, scopeA);
+  assert.equal(conflictedGeneration.created_count, 0);
+  assert.equal(conflictedGeneration.conflict_count, 1, 'overlapping dated shifts must be reported rather than duplicated');
   const suspendedEngagement = repository.suspend('engagement', engagement.record.id, { expected_version: 3 }, scopeA);
   const reactivatedEngagement = repository.activate('engagement', engagement.record.id, { expected_version: 4 }, scopeA);
   const endedEngagement = repository.end('engagement', engagement.record.id, { expected_version: 5 }, scopeA);
