@@ -24,6 +24,8 @@ assert.equal(contract.reuses_existing_user_identity, true);
 assert.equal(contract.reuses_existing_organization_authority, true);
 assert.equal(contract.creates_duplicate_user_identity, false);
 assert.deepEqual(contract.permissions, WORKFORCE_AUTHORIZATION_PERMISSIONS);
+assert.equal(WORKFORCE_AUTHORIZATION_PERMISSIONS.departmentView, 'workforce:department:view');
+assert.equal(WORKFORCE_AUTHORIZATION_PERMISSIONS.positionManage, 'workforce:position:manage');
 
 const context = {
   organization_id: 'org-1',
