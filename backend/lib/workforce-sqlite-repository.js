@@ -841,16 +841,26 @@ export class WorkforceSqliteRepository {
     if (!assessment?.policy_id) return { ...assessment, override: null };
     if (!['BLOCKING_CONFLICT','UNKNOWN'].includes(assessment.state)) return { ...assessment, override: null };
     const reason = typeof overrideReason === 'string' ? overrideReason.trim() : '';
+    if (!reason) {
+      const code = assessment.state === 'UNKNOWN'
+        ? 'WORKFORCE_SCHEDULING_ASSESSMENT_UNKNOWN' : 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT';
+      const message = assessment.state === 'UNKNOWN'
+        ? 'The proposed shift cannot be assessed with the evidence required by the active scheduling policy'
+        : 'The proposed shift conflicts with the active scheduling policy';
+      const error = fail(code, message, 409);
+      error.details = { assessment };
+      throw error;
+    }
     const allowed = assessment.state === 'UNKNOWN'
       ? assessment.allow_unknown_overrides === true
       : assessment.allow_overrides === true;
     if (!allowed) {
       const code = assessment.state === 'UNKNOWN'
         ? 'WORKFORCE_SCHEDULING_UNKNOWN_OVERRIDE_FORBIDDEN'
-        : 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT';
+        : 'WORKFORCE_SCHEDULING_OVERRIDE_FORBIDDEN';
       const error = fail(code, assessment.state === 'UNKNOWN'
         ? 'The active policy does not permit overriding an unknown assessment'
-        : 'The proposed shift conflicts with the active scheduling policy', 409);
+        : 'The active policy does not permit overriding this scheduling conflict', 409);
       error.details = { assessment };
       throw error;
     }
