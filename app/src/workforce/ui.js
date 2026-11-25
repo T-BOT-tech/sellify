@@ -38,6 +38,11 @@ function dateLabel(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
+function validLocalDate(value) {
+  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + 'T00:00:00.000Z');
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
 function hours(minutes) {
   const value = Number(minutes || 0) / 60;
   return Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' h' : '—';
@@ -794,7 +799,7 @@ async function saveShiftTemplate(form, root) {
   const breakStart = String(values.get('break_start_local_time') || '');
   const breakEnd = String(values.get('break_end_local_time') || '');
   if (!name || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(start) || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(end)
-    || start === end || !timezone || !/^\\d{4}-\\d{2}-\\d{2}$/.test(effectiveFrom)
+    || start === end || !timezone || !validLocalDate(effectiveFrom)
     || (effectiveUntil && effectiveUntil < effectiveFrom) || !workDays.length
     || ((breakStart || breakEnd) && (!breakStart || !breakEnd || breakStart === breakEnd))) {
     status.textContent = 'Complete the template name, valid local times, timezone, working days and effective dates. Provide both break times or neither.'; return;
@@ -837,7 +842,7 @@ async function generateTemplateShifts(form, root) {
   const to = Date.parse(toDate + 'T00:00:00Z');
   const dayCount = (to - from) / 86400000 + 1;
   if (!templateId || !memberId || !Number.isInteger(expectedVersion) || expectedVersion < 1
-    || !/^\\d{4}-\\d{2}-\\d{2}$/.test(fromDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(toDate)
+    || !validLocalDate(fromDate) || !validLocalDate(toDate)
     || !Number.isFinite(from) || !Number.isFinite(to) || dayCount < 1 || dayCount > 31) {
     status.textContent = 'Choose an active member and a valid ascending date range of no more than 31 days.'; return;
   }
