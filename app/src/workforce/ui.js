@@ -384,6 +384,12 @@ async function refreshMember(root, memberId, member = null) {
   if (!workspace || !details || !recordsNode || !profileNode) return;
   member = member || workspaceData.get(workspace)?.members.find(item => String(item.id) === String(memberId)) || null;
   profileNode.innerHTML = member ? renderMemberProfile(workspace, member) : '';
+  const memberProfileForm = profileNode.querySelector('#workforceMemberProfileForm');
+  memberProfileForm?.addEventListener('submit', event => { event.preventDefault(); saveMemberProfile(memberProfileForm, root); });
+  const accountLinkForm = profileNode.querySelector('#workforceAccountLinkForm');
+  accountLinkForm?.addEventListener('submit', event => { event.preventDefault(); linkMemberAccount(accountLinkForm, root); });
+  const unlinkAccountButton = profileNode.querySelector('#workforceUnlinkAccount');
+  unlinkAccountButton?.addEventListener('click', () => unlinkMemberAccount(unlinkAccountButton, root));
   const seq = Number(workspace.dataset.detailSequence || 0) + 1;
   workspace.dataset.detailSequence = String(seq);
   const tenantId = String(config.chatId), token = String(config.sessionToken);
@@ -814,7 +820,6 @@ export function mountWorkforceWorkspace(root = document) {
       const structureAction = event.target.closest('.workforce-structure-action');
       const engagementButton = event.target.closest('.workforce-engagement-action');
       const assignmentButton = event.target.closest('.workforce-assignment-action');
-      const unlinkAccountButton = event.target.closest('#workforceUnlinkAccount');
       const page = event.target.closest('[data-member-page]');
       const clear = event.target.closest('#workforceClearMember');
       if (refresh) refreshWorkspace(root);
@@ -823,7 +828,6 @@ export function mountWorkforceWorkspace(root = document) {
       if (structureAction) organizationAction(structureAction, root);
       if (engagementButton) engagementAction(engagementButton, root);
       if (assignmentButton) assignmentAction(assignmentButton, root);
-      if (unlinkAccountButton) unlinkMemberAccount(unlinkAccountButton, root);
       if (page) {
         const current = Number(workspace.dataset.memberPage || 0);
         workspace.dataset.memberPage = String(Math.max(0, current + (page.dataset.memberPage === 'next' ? 1 : -1)));
@@ -852,14 +856,12 @@ export function mountWorkforceWorkspace(root = document) {
     });
     root.addEventListener('submit', event => {
       const id = event.target?.id;
-      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceMemberProfileForm','workforceAccountLinkForm'].includes(id)) return;
+      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm'].includes(id)) return;
       event.preventDefault();
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
       if (id === 'workforceEngagementForm') saveEngagement(event.target, root);
       if (id === 'workforceProfileForm') saveProfile(event.target, root);
       if (id === 'workforceLocationAssignmentForm') saveLocationAssignment(event.target, root);
-      if (id === 'workforceMemberProfileForm') saveMemberProfile(event.target, root);
-      if (id === 'workforceAccountLinkForm') linkMemberAccount(event.target, root);
       if (id === 'workforceMemberCreateForm') saveMemberCreate(event.target, root);
       if (id === 'workforceDepartmentForm') saveDepartment(event.target, root);
       if (id === 'workforcePositionForm') savePosition(event.target, root);
