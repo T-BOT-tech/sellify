@@ -17,6 +17,8 @@ try {
   });
   const providerB = await store.getOrCreateUserByTelegram('workforce-booking-provider-b-' + suffix, 'Provider B');
   await store.ensureMembership(providerB.id, seller.chatId, 'staff');
+  const manager = await store.getOrCreateUserByTelegram('workforce-booking-manager-' + suffix, 'Workforce Manager');
+  await store.ensureMembership(manager.id, seller.chatId, 'manager');
 
   await store.saveCatalog(seller.chatId, [{
     id: 'workforce-consultation', name: 'Workforce Consultation', price: 25000,
@@ -61,6 +63,11 @@ try {
     actor: ownerActor,
     actor_id: owner.id,
   };
+  const managerActor = {
+    userId: manager.id, chatId: seller.chatId, organizationId: canonicalTenant.organizationId,
+    role: 'manager', contextualRoles: [],
+  };
+  const managerContext = { ...repositoryContext, actor: managerActor, actor_id: manager.id };
 
   async function createActiveMember(userId, label, key, recurrenceRule = null) {
     const memberResult = repository.create('member', {
@@ -98,6 +105,12 @@ try {
       effective_from: recurrenceRule ? '2026-11-19' : '2026-11-26',
       ...(recurrenceRule ? { recurrence_rule: recurrenceRule } : {}),
     }, repositoryContext);
+    const engagementResult = repository.create('engagement', {
+      idempotency_key: `workforce-engagement-${key}-${suffix}`, member_id: member.id,
+      engagement_type: 'EMPLOYMENT', starts_at: '2026-11-19T00:00:00.000Z', ends_at: '2026-12-31T15:00:00.000Z',
+    }, repositoryContext);
+    const submittedEngagement = repository.submit('engagement', engagementResult.record.id, { expected_version: 1 }, repositoryContext);
+    repository.activate('engagement', engagementResult.record.id, { expected_version: submittedEngagement.version }, repositoryContext);
     return member;
   }
 
@@ -120,17 +133,27 @@ try {
   }
 
   const bookingA = await createAcceptedBooking('a', '2026-11-26T10:00:00+03:00', '2026-11-26T11:00:00+03:00');
+  const leaveRequest = repository.create('leave_request', {
+    idempotency_key: 'workforce-booking-approved-leave-' + suffix, member_id: memberA.id,
+    leave_category: 'ANNUAL', starts_at: '2026-11-26T07:00:00.000Z', ends_at: '2026-11-26T08:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', reason: 'Planned leave for booking guard',
+  }, repositoryContext);
+  const submittedLeave = repository.submit('leave_request', leaveRequest.record.id, { expected_version: 1 }, repositoryContext);
+  const approvedLeave = repository.approve('leave_request', leaveRequest.record.id, {
+    expected_version: submittedLeave.version, decision_reason: 'Approved by a separate manager',
+  }, managerContext);
+  assert.equal(approvedLeave.status, 'APPROVED');
   await assert.rejects(
-    store.createServiceBooking(seller.chatId, order.server_order_id, {
-      service_item_id: 'workforce-consultation',
-      requested_start: '2026-11-26T10:00:00+03:00',
-      requested_end: '2026-11-26T11:00:00+03:00',
-      workforce_member_id: memberA.id,
-      idempotency_key: `workforce-member-create-forbidden-${suffix}`,
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, bookingA.id, {
+      status: 'CONFIRMED', expected_version: bookingA.version, service_resource_id: resource.id,
+      workforce_member_id: memberA.id, idempotency_key: 'workforce-booking-leave-block-' + suffix,
     }, ownerActor),
-    error => error?.code === 'SERVICE_BOOKING_WORKFORCE_MEMBER_CONFIRM_ONLY',
+    error => error?.code === 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
   );
-
+  const cancelledLeave = repository.cancel('leave_request', approvedLeave.id, {
+    expected_version: approvedLeave.version, reason: 'Leave dates changed',
+  }, managerContext);
+  assert.equal(cancelledLeave.status, 'CANCELLED');
   const confirmedA = await store.transitionServiceBooking(seller.chatId, order.server_order_id, bookingA.id, {
     status: 'CONFIRMED',
     expected_version: bookingA.version,
@@ -145,6 +168,22 @@ try {
   assert.equal(commitmentA.resource_id, resource.id);
 
   const bookingB = await createAcceptedBooking('b', '2026-11-26T12:00:00+03:00', '2026-11-26T13:00:00+03:00');
+  const absence = repository.create('absence', {
+    idempotency_key: 'workforce-booking-absence-' + suffix, member_id: memberB.id,
+    absence_type: 'SICKNESS', starts_at: '2026-11-26T09:00:00.000Z', ends_at: '2026-11-26T10:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', reason: 'Unplanned absence during requested booking',
+  }, managerContext);
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, bookingB.id, {
+      status: 'CONFIRMED', expected_version: bookingB.version, service_resource_id: resource.id,
+      workforce_member_id: memberB.id, idempotency_key: 'workforce-booking-absence-block-' + suffix,
+    }, ownerActor),
+    error => error?.code === 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+  );
+  const voidedAbsence = repository.void('absence', absence.record.id, {
+    expected_version: 1, reason: 'Absence record corrected',
+  }, managerContext);
+  assert.equal(voidedAbsence.status, 'VOIDED');
   const confirmedB = await store.transitionServiceBooking(seller.chatId, order.server_order_id, bookingB.id, {
     status: 'CONFIRMED',
     expected_version: bookingB.version,
@@ -153,6 +192,18 @@ try {
     idempotency_key: `workforce-booking-confirm-b-${suffix}`,
   }, ownerActor);
   assert.equal(confirmedB.booking.workforce_member_id, memberB.id);
+
+  const wrongWeekdayBooking = await createAcceptedBooking('recurrence-wrong-weekday', '2026-11-27T12:00:00+03:00', '2026-11-27T13:00:00+03:00');
+  await assert.rejects(
+    store.createServiceBooking(seller.chatId, order.server_order_id, {
+      service_item_id: 'workforce-consultation',
+      requested_start: '2026-11-26T10:00:00+03:00',
+      requested_end: '2026-11-26T11:00:00+03:00',
+      workforce_member_id: memberA.id,
+      idempotency_key: `workforce-member-create-forbidden-${suffix}`,
+    }, ownerActor),
+    error => error?.code === 'SERVICE_BOOKING_WORKFORCE_MEMBER_CONFIRM_ONLY',
+  );
 
   const wrongWeekdayBooking = await createAcceptedBooking('recurrence-wrong-weekday', '2026-11-27T12:00:00+03:00', '2026-11-27T13:00:00+03:00');
   await assert.rejects(
