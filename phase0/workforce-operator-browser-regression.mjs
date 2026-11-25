@@ -312,6 +312,7 @@ try {
   assert.equal(engagementCreateCall.body.member_id, member.id);
   assert.equal(engagementCreateCall.authorization, 'Bearer synthetic-session-token');
   assert.match(engagementCreateCall.idempotencyKey, /^workforce-ui-/);
+  await dismissSettingsOverlay();
   await page.getByRole('button', { name: 'Submit for approval' }).click();
   await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'PENDING APPROVAL' }).waitFor();
   await dismissSettingsOverlay();
