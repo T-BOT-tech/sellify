@@ -40,7 +40,7 @@ Member types: EMPLOYEE, CONTRACTOR, PROVIDER, VOLUNTEER.
 
 Statuses: DRAFT, ACTIVE, SUSPENDED, INACTIVE.
 
-user_id references the existing users table and is immutable after creation. The user must have an active membership in the tenant when the member is created.
+user_id references the existing users table. Initial linking is accepted during member creation; later link/unlink uses explicit authorized and audited actions. A linked user must have active membership in the tenant, and one Sellify user cannot be linked to multiple Workforce members in the same organization.
 
 ### workforce_profiles
 
@@ -189,7 +189,7 @@ member_id, booking_id, and operational_task_id are immutable after creation. boo
 
 Repository/API field break_rules is stored as JSON. Statuses: PLANNED, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED.
 
-member_id, recurrence_source_id, and assignment_source_id are immutable after creation.
+recurrence_source_id, assignment_source_id, and shift_template_id are immutable after creation. A member change is permitted only through the explicit audited reassign action, which rechecks active engagement, location eligibility, leave/absence, and scheduling constraints; generic updates cannot change member_id.
 
 ### workforce_allocations
 
