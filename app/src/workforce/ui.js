@@ -470,7 +470,9 @@ function renderLeaveAbsenceAdmin(workspace, leaveRequests, absences, members) {
     const state = String(record.status || 'UNKNOWN').toUpperCase();
     const member = members.find(item => String(item.id) === String(record.member_id));
     const actions = [];
-    if (manager && state === 'PENDING_APPROVAL') {
+    if (state === 'DRAFT') {
+      actions.push('<form class="workforce-leave-action-form" data-record-id="' + escapeAttr(record.id) + '" data-action="submit" data-version="' + Number(record.version || 1) + '"><button type="submit" class="btn-secondary">Submit request</button></form>');
+    } else if (manager && state === 'PENDING_APPROVAL') {
       actions.push('<form class="workforce-leave-action-form" data-record-id="' + escapeAttr(record.id) + '" data-action="approve" data-version="' + Number(record.version || 1) + '"><label>Decision note (optional)<input name="decision_reason" maxlength="500"></label><button type="submit" class="btn-secondary">Approve</button></form>');
       actions.push('<form class="workforce-leave-action-form" data-record-id="' + escapeAttr(record.id) + '" data-action="reject" data-version="' + Number(record.version || 1) + '"><label>Rejection reason<input name="decision_reason" maxlength="500" required></label><button type="submit" class="btn-secondary">Reject</button></form>');
     } else if (manager && state === 'APPROVED') {
@@ -564,7 +566,7 @@ async function saveAbsence(form, root) {
 
 async function submitLeaveAction(form, root) {
   const action = form.dataset.action, recordId = form.dataset.recordId, version = Number(form.dataset.version);
-  if (!recordId || !['approve','reject','withdraw','cancel'].includes(action) || !Number.isInteger(version) || version < 1) return;
+  if (!recordId || !['submit','approve','reject','withdraw','cancel'].includes(action) || !Number.isInteger(version) || version < 1) return;
   const values = new FormData(form);
   const payload = { expected_version: version };
   const reason = String(values.get('reason') || '').trim();
@@ -581,7 +583,7 @@ async function submitLeaveAction(form, root) {
     await request(endpoint('leave-requests', '/' + encodeURIComponent(recordId) + '/' + action), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    const actionLabel = ({ approve: 'approved', reject: 'rejected', withdraw: 'withdrawn', cancel: 'cancelled' })[action];
+    const actionLabel = ({ submit: 'submitted', approve: 'approved', reject: 'rejected', withdraw: 'withdrawn', cancel: 'cancelled' })[action];
     await refreshWorkspaceWithStatus(root, '#workforceLeaveAbsenceAdmin', 'Leave request ' + actionLabel + '.');
   } catch (error) {
     const status = root.querySelector('#workforceStatus');

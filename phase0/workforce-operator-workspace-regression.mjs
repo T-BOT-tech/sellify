@@ -53,6 +53,8 @@ assert.ok(ui.includes('workforceLeaveRequestForm') && ui.includes('saveLeaveRequ
 assert.ok(ui.includes('workforceAbsenceForm') && ui.includes('saveAbsence')
   && ui.includes("endpoint('absences')"),
   'authorized managers must be able to record unplanned absences');
+assert.ok(ui.includes('data-action="submit"') && ui.includes("'submit','approve','reject','withdraw','cancel'"),
+  'draft leave requests must remain submittable after an interrupted create/submit sequence');
 assert.ok(ui.includes('submitLeaveAction') && ui.includes('voidAbsence')
   && ['approve','reject','withdraw','cancel'].every(action => ui.includes("'" + action + "'")) && ui.includes("'/void'"),
   'leave decisions, withdrawal, cancellation and absence correction must use backend lifecycle actions');
