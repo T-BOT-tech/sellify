@@ -122,6 +122,12 @@ try {
   child.stderr.on('data', chunk => { output += chunk.toString(); });
   await waitForHealth(baseUrl);
 
+  const locationList = await jsonRequest(baseUrl, '/tenants/' + encodeURIComponent(tenant.chatId) + '/locations', {
+    token: ownerSession.token,
+  });
+  assert.equal(locationList.response.status, 200, JSON.stringify(locationList.payload));
+  assert.ok(locationList.payload.locations?.some(item => item.id === primaryLocation.id));
+
   const collection = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/members';
   const departmentsPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/departments';
   const positionsPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/positions';
