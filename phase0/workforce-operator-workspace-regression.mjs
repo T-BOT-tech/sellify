@@ -28,6 +28,12 @@ assert.ok(ui.includes('saveMemberCreate') && ui.includes('saveDepartment') && ui
   'authorized operators must be able to create member, department and position records');
 assert.ok(ui.includes('workforceEngagementForm') && ui.includes('saveEngagement'),
   'authorized managers must be able to create member-scoped engagements');
+assert.ok(ui.includes('workforceProfileForm') && ui.includes('saveProfile'),
+  'authorized managers must be able to create and update structured professional profiles');
+assert.ok(['skills','qualifications','languages','service_capabilities'].every(field => ui.includes("name=\"" + field + "\"")),
+  'professional profile UI must expose the canonical structured profile fields');
+assert.ok(ui.includes('expected_version = Number(form.dataset.version)'),
+  'profile updates must use optimistic concurrency');
 assert.ok(ui.includes('renderEngagementRecords') && ui.includes('workforce-engagement-action')
   && ui.includes('engagementAction'),
   'engagement records must expose their canonical lifecycle actions');
