@@ -682,6 +682,25 @@ try {
   assert.equal(assessment.state, 'UNKNOWN',
     'assessment must fail closed while calendar and operational commitment evidence are incomplete');
   assert.equal(assessment.is_booking, false);
+  db.prepare(`
+    INSERT INTO service_bookings
+      (id, organization_id, chat_id, status, requested_start, requested_end, workforce_member_id)
+    VALUES (?, ?, ?, 'CONFIRMED', ?, ?, ?)
+  `).run('booking-assessment-a', scopeA.organization_id, scopeA.chat_id,
+    '2026-11-25T06:00:00.000Z', '2026-11-25T07:00:00.000Z', created.record.id);
+  const bookingAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.equal(bookingAssessment.state, 'UNKNOWN',
+    'unverified Logistics evidence keeps the aggregate result UNKNOWN');
+  assert.ok(bookingAssessment.findings.some(item => item.code === 'SERVICE_BOOKING_COMMITMENT'),
+    'confirmed Service Booking overlap must be included as an operational conflict');
   const assessmentEngagement = repository.create('engagement', {
     idempotency_key: 'assessment-engagement-a',
     member_id: created.record.id,
