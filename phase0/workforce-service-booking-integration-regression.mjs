@@ -193,7 +193,6 @@ try {
   }, ownerActor);
   assert.equal(confirmedB.booking.workforce_member_id, memberB.id);
 
-  const wrongWeekdayBooking = await createAcceptedBooking('recurrence-wrong-weekday', '2026-11-27T12:00:00+03:00', '2026-11-27T13:00:00+03:00');
   await assert.rejects(
     store.createServiceBooking(seller.chatId, order.server_order_id, {
       service_item_id: 'workforce-consultation',
