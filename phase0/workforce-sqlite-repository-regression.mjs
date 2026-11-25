@@ -688,8 +688,10 @@ try {
     timezone: 'Africa/Addis_Ababa',
   }, scopeA);
   assert.equal(assessment.state, 'UNKNOWN',
-    'assessment must fail closed while calendar and operational commitment evidence are incomplete');
+    'assessment must fail closed while scheduling-policy evidence is incomplete');
   assert.equal(assessment.is_booking, false);
+  assert.equal(assessment.source_versions.find(item => item.source === 'operational_commitments')?.status, 'COMPLETE',
+    'linked members with no active Logistics delivery assignment have complete assignment evidence');
   assert.equal(assessment.source_versions.find(item => item.source === 'calendar')?.status, 'COMPLETE',
     'the weekly calendar is complete when the requested interval is covered in its IANA timezone');
   assert.ok(!assessment.findings.some(item => item.code === 'CALENDAR_SCHEDULE_EVALUATION_UNKNOWN'));
