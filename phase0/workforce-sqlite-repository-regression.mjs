@@ -636,7 +636,10 @@ try {
   assert.equal(calendar.record.status, 'ACTIVE');
   const calendarUpdated = repository.update('calendar', calendar.record.id, {
     expected_version: 1,
-    weekly_schedule: [{ day: 'TUESDAY', intervals: [{ start: '10:00', end: '16:00' }] }],
+    weekly_schedule: [
+      { day: 'TUESDAY', intervals: [{ start: '10:00', end: '16:00' }] },
+      { day: 'WEDNESDAY', intervals: [{ start: '09:00', end: '17:00' }] },
+    ],
   }, scopeA);
   assert.equal(calendarUpdated.version, 2);
 
@@ -682,6 +685,21 @@ try {
   assert.equal(assessment.state, 'UNKNOWN',
     'assessment must fail closed while calendar and operational commitment evidence are incomplete');
   assert.equal(assessment.is_booking, false);
+  assert.equal(assessment.source_versions.find(item => item.source === 'calendar')?.status, 'COMPLETE',
+    'the weekly calendar is complete when the requested interval is covered in its IANA timezone');
+  assert.ok(!assessment.findings.some(item => item.code === 'CALENDAR_SCHEDULE_EVALUATION_UNKNOWN'));
+  const outsideCalendarAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T15:00:00.000Z',
+    ends_at: '2026-11-25T15:30:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.ok(outsideCalendarAssessment.findings.some(item => item.code === 'CALENDAR_WORKING_HOURS_NOT_COVERED'
+    && item.state === 'UNAVAILABLE'),
+  'a request outside declared weekly working hours must be unavailable');
   db.prepare(`
     INSERT INTO service_bookings
       (id, organization_id, chat_id, status, requested_start, requested_end, workforce_member_id)
@@ -753,6 +771,29 @@ try {
   assert.equal(pendingLeaveAssessment.state, 'UNKNOWN');
   assert.ok(pendingLeaveAssessment.findings.some(item => item.code === 'PENDING_LEAVE_OVERLAP'),
     'pending leave must remain UNKNOWN until an authorized decision');
+  const dstCalendar = repository.create('calendar', {
+    idempotency_key: 'calendar-create-dst-a',
+    member_id: created.record.id,
+    timezone: 'America/New_York',
+    weekly_schedule: [{ day: 'SUNDAY', intervals: [{ start: '02:30', end: '04:00' }] }],
+    holiday_calendar: [],
+    effective_from: '2027-03-01',
+  }, scopeA);
+  assert.equal(dstCalendar.record.status, 'ACTIVE');
+  const dstAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2027-03-14T07:30:00.000Z',
+    ends_at: '2027-03-14T08:00:00.000Z',
+    timezone: 'America/New_York',
+  }, scopeA);
+  assert.equal(dstAssessment.source_versions.find(item => item.source === 'calendar')?.status, 'MISSING',
+    'a nonexistent DST wall-clock boundary must make calendar evidence incomplete');
+  assert.ok(dstAssessment.findings.some(item => item.code === 'CALENDAR_SCHEDULE_EVALUATION_UNKNOWN'
+    && item.state === 'UNKNOWN'),
+  'DST gaps must fail closed rather than being shifted silently');
 
   assert.ok(assessment.findings.some(item => item.code === 'EVIDENCE_INCOMPLETE'
     || item.code === 'EVIDENCE_SOURCE_MISSING'));
