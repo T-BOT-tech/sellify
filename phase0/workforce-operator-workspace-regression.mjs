@@ -26,6 +26,13 @@ assert.ok(ui.includes('employee_number') && ui.includes('department_id') && ui.i
   'member creation must support employee numbers and organizational references');
 assert.ok(ui.includes('saveMemberCreate') && ui.includes('saveDepartment') && ui.includes('savePosition'),
   'authorized operators must be able to create member, department and position records');
+assert.ok(ui.includes('workforceEngagementForm') && ui.includes('saveEngagement'),
+  'authorized managers must be able to create member-scoped engagements');
+assert.ok(ui.includes('renderEngagementRecords') && ui.includes('workforce-engagement-action')
+  && ui.includes('engagementAction'),
+  'engagement records must expose their canonical lifecycle actions');
+assert.ok(['submit','activate','suspend','end'].every(action => ui.includes("'" + action + "'")),
+  'engagement UI must preserve the entity-specific lifecycle transitions');
 assert.ok(ui.includes('organizationAction') && ui.includes('memberAction'),
   'lifecycle actions must call the authorized Workforce API');
 assert.ok(ui.includes("endpoint('utilization', '/summary')"), 'the workspace must load canonical utilization analytics');
