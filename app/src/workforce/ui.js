@@ -565,7 +565,6 @@ async function saveEngagement(form, root) {
       body: JSON.stringify(payload),
     });
     form.reset(); status.textContent = 'Engagement recorded.';
-    await refreshMember(root, memberId);
     await refreshWorkspace(root);
   } catch (error) { status.textContent = error.message || 'Engagement could not be created.'; }
   finally { submit.disabled = false; }
@@ -581,8 +580,6 @@ async function engagementAction(button, root) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ expected_version: version }),
     });
-    const memberId = root.querySelector('#workforceEngagementForm')?.dataset.memberId;
-    if (memberId) await refreshMember(root, memberId);
     await refreshWorkspace(root);
   } catch (error) {
     const status = root.querySelector('#workforceStatus');
