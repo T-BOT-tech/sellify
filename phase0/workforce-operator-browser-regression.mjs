@@ -47,10 +47,13 @@ try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const page = await context.newPage();
   const dismissSettingsOverlay = async () => {
-    // The settings overlay belongs to the surrounding app shell, not this synthetic Workforce journey.
-    // Remove it from the fixture so it cannot intercept the Workforce controls under test.
+    // Keep the app-shell modal DOM intact for its existing handlers, but hide it from this Workforce-only journey.
     const modal = page.locator('#settingsModal');
-    if (await modal.count()) await modal.evaluate(element => element.remove());
+    if (await modal.count()) await modal.evaluate(element => {
+      element.classList.remove('open');
+      element.style.display = 'none';
+      element.setAttribute('aria-hidden', 'true');
+    });
   };
   pageErrors.length = 0;
   apiCalls.length = 0;
