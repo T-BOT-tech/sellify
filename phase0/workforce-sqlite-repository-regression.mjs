@@ -38,7 +38,8 @@ try {
     );
     CREATE TABLE service_bookings (
       id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id),
-      chat_id TEXT NOT NULL REFERENCES tenants(chat_id), status TEXT NOT NULL DEFAULT 'REQUESTED'
+      chat_id TEXT NOT NULL REFERENCES tenants(chat_id), status TEXT NOT NULL DEFAULT 'REQUESTED',
+      requested_start TEXT, requested_end TEXT
     );
     CREATE TABLE audit_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT, action TEXT NOT NULL,
