@@ -370,7 +370,8 @@ try {
       assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
       generatedShift = { id: 'generated-shift-synthetic-1', member_id: member.id, shift_template_id: shiftTemplate.id,
         generated_local_date: body.from_date, starts_at: '2026-11-26T05:00:00.000Z', ends_at: '2026-11-26T13:30:00.000Z',
-        timezone: shiftTemplate.timezone, status: 'PLANNED', version: 1 };
+        timezone: shiftTemplate.timezone, status: 'PLANNED', version: 1,
+        constraint_state: 'PASS', constraint_policy_version: 3, constraint_findings: [] };
       await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
         created_count: 1, existing_count: 0, conflict_count: 0, skipped_count: 0,
         created_records: [generatedShift], existing_records: [], conflicts: [], skipped: [],
@@ -688,6 +689,7 @@ try {
   await generationForm.getByRole('button', { name: 'Generate dated shifts' }).click();
   await page.getByText('Created 1, already existed 0, conflicts 0, skipped 0.').waitFor({ timeout: 10000 });
   await page.locator('.workforce-dated-shift-row').waitFor({ timeout: 10000 });
+  await page.getByText('Scheduling assessment: PASS · policy v3', { exact: true }).waitFor({ timeout: 10000 });
   const reassignForm = page.locator('.workforce-shift-reassign-form');
   await reassignForm.locator('[name="member_id"]').selectOption('member-synthetic-2');
   await reassignForm.locator('[name="reason"]').fill('Coverage transfer');
