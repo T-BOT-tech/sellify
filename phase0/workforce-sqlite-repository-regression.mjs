@@ -181,10 +181,16 @@ try {
   const activeSupervisor = repository.activate('member', supervisor.record.id, { expected_version: 1 }, scopeA);
   const reporting = repository.update('member', created.record.id, { expected_version: 3, supervisor_member_id: activeSupervisor.id }, scopeA);
   assert.equal(reporting.supervisor_member_id, activeSupervisor.id);
-  assert.throws(() => repository.update('member', activeSupervisor.id, { expected_version: 2, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_REPORTING_CYCLE_INVALID');
-  assert.throws(() => repository.update('member', created.record.id, { expected_version: 4, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_SELF_INVALID');
-  assert.throws(() => repository.deactivate('member', activeSupervisor.id, { expected_version: 2 }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_HAS_ACTIVE_REPORTS');
-  assert.equal(Number(db.prepare('SELECT COUNT(*) AS count FROM audit_events WHERE entity_id = ? AND action = ?').get(created.record.id, 'workforce.member.reporting_relationship_changed').count), 1);
+  const replacementSupervisor = repository.create('member', { idempotency_key: 'member-replacement-supervisor', member_type: 'EMPLOYEE', display_name: 'Replacement Supervisor' }, scopeA);
+  const activeReplacementSupervisor = repository.activate('member', replacementSupervisor.record.id, { expected_version: 1 }, scopeA);
+  const reassigned = repository.update('member', created.record.id, { expected_version: 4, supervisor_member_id: activeReplacementSupervisor.id }, scopeA);
+  assert.equal(reassigned.supervisor_member_id, activeReplacementSupervisor.id, 'reporting lines can be safely reassigned');
+  assert.throws(() => repository.update('member', activeReplacementSupervisor.id, { expected_version: 2, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_REPORTING_CYCLE_INVALID');
+  assert.throws(() => repository.update('member', created.record.id, { expected_version: 5, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_SELF_INVALID');
+  const inactiveOldSupervisor = repository.deactivate('member', activeSupervisor.id, { expected_version: 2 }, scopeA);
+  assert.equal(inactiveOldSupervisor.status, 'INACTIVE', 'a supervisor can be deactivated after active reports are reassigned');
+  assert.throws(() => repository.deactivate('member', activeReplacementSupervisor.id, { expected_version: 2 }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_HAS_ACTIVE_REPORTS');
+  assert.equal(Number(db.prepare('SELECT COUNT(*) AS count FROM audit_events WHERE entity_id = ? AND action = ?').get(created.record.id, 'workforce.member.reporting_relationship_changed').count), 2);
   assert.throws(() => repository.deactivate('department', department.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS');
   assert.throws(() => repository.deactivate('position', position.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS');
 
