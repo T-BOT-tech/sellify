@@ -326,6 +326,15 @@ try {
     assert.equal(list.response.status, 200, plural + ' collection read: ' + JSON.stringify(list.payload));
     assert.ok(list.payload.records?.some(item => item.id === record.id), plural + ' collection must include its created record');
   }
+  const profileUpdate = await jsonRequest(baseUrl,
+    '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/profiles/' + encodeURIComponent(createdEntities.profiles.id), {
+      token: ownerSession.token, method: 'PATCH',
+      body: { expected_version: 1, notes: 'Verified HTTP profile update', skills: ['HTTP regression skill','Inventory control'] },
+    });
+  assert.equal(profileUpdate.response.status, 200, JSON.stringify(profileUpdate.payload));
+  assert.equal(profileUpdate.payload.record?.version, 2);
+  assert.equal(profileUpdate.payload.record?.notes, 'Verified HTTP profile update');
+  assert.deepEqual(profileUpdate.payload.record?.skills, ['HTTP regression skill','Inventory control']);
 
   async function lifecycle(plural, record, action, expectedVersion, expectedState, stateField = 'status') {
     const result = await jsonRequest(
