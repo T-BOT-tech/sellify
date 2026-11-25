@@ -20,7 +20,7 @@ const FINDING_STATES = new Set(['UNAVAILABLE', 'CONFLICT', 'UNKNOWN']);
 
 function validTimestamp(value) {
   return typeof value === 'string' && Number.isFinite(Date.parse(value))
-    && /(Z|[+-]\\d{2}:?\\d{2})$/i.test(value);
+    && /(Z|[+-]\d{2}:?\d{2})$/i.test(value);
 }
 function validTimezone(value) {
   if (typeof value !== 'string' || !value.trim()) return false;
