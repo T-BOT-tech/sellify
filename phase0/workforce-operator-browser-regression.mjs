@@ -211,7 +211,7 @@ try {
   assert.match(engagementCreateCall.idempotencyKey, /^workforce-ui-/);
   await page.getByRole('button', { name: 'Submit for approval' }).click();
   await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'PENDING APPROVAL' }).waitFor();
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
   const engagementSubmitCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagement-synthetic-1/submit'));
   const engagementActivateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagement-synthetic-1/activate'));
