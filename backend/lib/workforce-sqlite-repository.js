@@ -908,11 +908,17 @@ export class WorkforceSqliteRepository {
       const positions = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_positions WHERE organization_id=? AND tenant_id=? AND department_id=? AND status='ACTIVE'")
         .get(scope.organization_id, scope.tenant_id, String(id)).count;
       if (Number(members) || Number(positions)) throw fail('WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS', 'Reassign active members and positions before deactivating this department', 409);
+      const templates = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_shift_templates WHERE organization_id=? AND tenant_id=? AND department_id=? AND status='ACTIVE'")
+        .get(scope.organization_id, scope.tenant_id, String(id)).count;
+      if (Number(templates)) throw fail('WORKFORCE_DEPARTMENT_HAS_ACTIVE_SHIFT_TEMPLATES', 'Deactivate or reassign active shift templates before deactivating this department', 409);
     }
     if (entity === 'position' && operation === 'deactivate') {
       const members = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_members WHERE organization_id=? AND tenant_id=? AND position_id=? AND status='ACTIVE'")
         .get(scope.organization_id, scope.tenant_id, String(id)).count;
       if (Number(members)) throw fail('WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS', 'Reassign active members before deactivating this position', 409);
+      const templates = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_shift_templates WHERE organization_id=? AND tenant_id=? AND position_id=? AND status='ACTIVE'")
+        .get(scope.organization_id, scope.tenant_id, String(id)).count;
+      if (Number(templates)) throw fail('WORKFORCE_POSITION_HAS_ACTIVE_SHIFT_TEMPLATES', 'Deactivate or reassign active shift templates before deactivating this position', 409);
     }
     const now = this.clock();
     this.db.exec('BEGIN IMMEDIATE');
