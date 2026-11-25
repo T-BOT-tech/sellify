@@ -27,7 +27,7 @@ const ENFORCEMENT_KEYS = Object.freeze([
   'required_qualifications','location_policy',
 ]);
 const RULE_KEYS = Object.freeze([
-  ...Object.keys(NUMERIC_RULES),'required_qualifications','location_policy','enforcement',
+  ...Object.keys(NUMERIC_RULES),'required_qualifications','location_policy','enforcement','allow_overrides','allow_unknown_overrides',
 ]);
 
 function isPlainObject(value) {
@@ -124,6 +124,9 @@ export function validateWorkforceSchedulingPolicyRules(input = {}) {
       errors.push('required_qualifications must contain up to 30 unique non-empty strings of at most 120 characters');
     }
   }
+  for (const key of ['allow_overrides','allow_unknown_overrides']) {
+    if (input[key] !== undefined && typeof input[key] !== 'boolean') errors.push(key + ' must be a boolean');
+  }
   if (input.location_policy !== undefined && !WORKFORCE_SCHEDULING_LOCATION_POLICIES.includes(input.location_policy)) {
     errors.push('location_policy must be ANY or ASSIGNED_ONLY');
   }
@@ -164,7 +167,9 @@ export function evaluateWorkforceSchedulingConstraints({
   policy, candidate, existing_shifts = [], qualifications, eligible_location_ids,
 } = {}) {
   const policyVersion = Number(policy?.version || 0);
-  const base = { policy_id: policy?.id || null, policy_version: policyVersion || null };
+  const base = { policy_id: policy?.id || null, policy_version: policyVersion || null,
+    allow_overrides: policy?.rules?.allow_overrides === true,
+    allow_unknown_overrides: policy?.rules?.allow_unknown_overrides === true };
   if (!policy || String(policy.status || '').toUpperCase() !== 'ACTIVE' || !candidate
     || !Array.isArray(existing_shifts) || !candidate.starts_at || !candidate.ends_at
     || !candidate.timezone || !Number.isFinite(Date.parse(candidate.starts_at))
