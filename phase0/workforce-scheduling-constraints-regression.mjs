@@ -17,18 +17,19 @@ const validRules = validateWorkforceSchedulingPolicyRules({
   max_shift_minutes: 600, max_daily_minutes: 600, max_weekly_minutes: 2400,
   minimum_rest_minutes: 660, minimum_break_after_minutes: 360,
   minimum_break_duration_minutes: 30, max_consecutive_days: 6,
-  required_qualifications: ['First Aid'], location_policy: 'ASSIGNED_ONLY',
+  required_qualifications: ['First Aid'], location_policy: 'ASSIGNED_ONLY', allow_overrides: true, allow_unknown_overrides: false,
   enforcement: { max_daily_minutes: 'WARN' },
 });
 assert.equal(validRules.valid, true);
 const invalidRules = validateWorkforceSchedulingPolicyRules({
-  max_shift_minutes: 0, max_daily_minutes: 2000, unsupported_rule: true,
+  max_shift_minutes: 0, max_daily_minutes: 2000, unsupported_rule: true, allow_overrides: 'yes',
   required_qualifications: ['First Aid','first aid'], location_policy: 'ANYWHERE',
 });
 assert.equal(invalidRules.valid, false);
 assert.ok(invalidRules.errors.some(error => error.includes('max_shift_minutes')));
 assert.ok(invalidRules.errors.some(error => error.includes('Unsupported scheduling rule')));
 assert.ok(invalidRules.errors.some(error => error.includes('unique')));
+assert.ok(invalidRules.errors.some(error => error.includes('allow_overrides must be a boolean')));
 assert.equal(validateWorkforceSchedulingPolicy({
   name: 'Operations', effective_from: '2026-11-25', effective_until: '2026-11-24',
   rules: { max_shift_minutes: 600 },
