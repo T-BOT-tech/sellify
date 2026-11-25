@@ -146,6 +146,15 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
       errors.push('timezone must be a valid IANA timezone');
     }
   }
+  if (entity === 'shift' && ['cancel','reassign'].includes(operation)) {
+    if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.trim().length > 500) {
+      errors.push('reason must be a non-empty string of at most 500 characters');
+    }
+  }
+  if (entity === 'shift' && operation === 'reassign'
+    && (typeof input.member_id !== 'string' || !input.member_id.trim())) {
+    errors.push('member_id is required to reassign a dated shift');
+  }
   if (input.expected_version !== undefined &&
     (!Number.isInteger(Number(input.expected_version)) || Number(input.expected_version) < 1)) {
     errors.push('expected_version must be a positive integer');
