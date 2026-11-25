@@ -50,7 +50,7 @@ try {
     // The settings overlay belongs to the surrounding app shell, not this synthetic Workforce journey.
     // Remove it from the fixture so it cannot intercept the Workforce controls under test.
     const modal = page.locator('#settingsModal');
-    await modal.evaluate(element => element.classList.remove('open'));
+    if (await modal.count()) await modal.evaluate(element => element.remove());
   };
   pageErrors.length = 0;
   apiCalls.length = 0;
