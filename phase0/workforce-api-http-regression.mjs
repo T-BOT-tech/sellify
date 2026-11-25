@@ -81,6 +81,9 @@ try {
     currency: 'ETB',
     timezone: 'Africa/Addis_Ababa',
   });
+  const managerUser = await store.getOrCreateUserByTelegram('workforce-http-manager-' + suffix, 'Workforce HTTP Manager');
+  await store.ensureMembership(managerUser.id, tenant.chatId, 'manager');
+  await store.ensureMembership(memberUser.id, tenant.chatId, 'staff');
   const primaryLocation = await store.createOrganizationLocation(tenant.chatId, {
     code: 'WF-HTTP-PRIMARY-' + suffix, name: 'Workforce HTTP Primary Branch', timezone: 'Africa/Addis_Ababa',
   });
@@ -99,6 +102,12 @@ try {
   await store.ensureMembership(externalAccountUser.id, tenant.chatId, 'staff');
   const ownerSession = await store.createSession({
     userId: owner.id, chatId: tenant.chatId, deviceName: 'Workforce HTTP owner',
+  });
+  const managerSession = await store.createSession({
+    userId: managerUser.id, chatId: tenant.chatId, deviceName: 'Workforce HTTP manager',
+  });
+  const employeeSession = await store.createSession({
+    userId: memberUser.id, chatId: tenant.chatId, deviceName: 'Workforce HTTP employee',
   });
   const otherSession = await store.createSession({
     userId: otherOwner.id, chatId: otherTenant.chatId, deviceName: 'Other tenant owner',
@@ -454,6 +463,83 @@ try {
   assert.equal(cancelledShift.payload.record?.status, 'CANCELLED');
   const cancellationHistory = await jsonRequest(baseUrl, shiftsPath + '/' + encodeURIComponent(cancellationShift.id) + '/history', { token: ownerSession.token });
   assert.ok(cancellationHistory.payload.records?.some(event => event.action === 'workforce.shift.cancel' && event.metadata?.reason === 'Branch closed for maintenance'));
+  const leavePath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/leave-requests';
+  const employeeMembers = await jsonRequest(baseUrl, collection, { token: employeeSession.token });
+  assert.equal(employeeMembers.response.status, 200, JSON.stringify(employeeMembers.payload));
+  assert.deepEqual(employeeMembers.payload.records?.map(item => item.id), [memberId],
+    'staff Workforce member reads must be scoped to the linked employee');
+  const leaveRequest = await createWorkforceRecord(baseUrl, employeeSession.token, leavePath,
+    'workforce-http-employee-leave-' + suffix, {
+      member_id: memberId, leave_category: 'ANNUAL',
+      starts_at: '2026-12-10T00:00:00.000Z', ends_at: '2026-12-11T00:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa', reason: 'Employee planned leave', all_day: true,
+    });
+  assert.equal(leaveRequest.status, 'DRAFT');
+  assert.equal(leaveRequest.requested_by, memberUser.id);
+  const employeeLeaveSubmit = await jsonRequest(baseUrl, leavePath + '/' + encodeURIComponent(leaveRequest.id) + '/submit', {
+    token: employeeSession.token, method: 'POST', body: { expected_version: 1 },
+  });
+  assert.equal(employeeLeaveSubmit.response.status, 200, JSON.stringify(employeeLeaveSubmit.payload));
+  assert.equal(employeeLeaveSubmit.payload.record?.status, 'PENDING_APPROVAL');
+  const employeeLeaveList = await jsonRequest(baseUrl, leavePath, { token: employeeSession.token });
+  assert.equal(employeeLeaveList.response.status, 200, JSON.stringify(employeeLeaveList.payload));
+  assert.ok(employeeLeaveList.payload.records?.some(item => item.id === leaveRequest.id));
+  const employeeCannotApprove = await jsonRequest(baseUrl, leavePath + '/' + encodeURIComponent(leaveRequest.id) + '/approve', {
+    token: employeeSession.token, method: 'POST', body: { expected_version: 2 },
+  });
+  assert.equal(employeeCannotApprove.response.status, 403, 'employees cannot approve leave requests');
+  const managerApproval = await jsonRequest(baseUrl, leavePath + '/' + encodeURIComponent(leaveRequest.id) + '/approve', {
+    token: managerSession.token, method: 'POST', body: { expected_version: 2, decision_reason: 'Coverage confirmed' },
+  });
+  assert.equal(managerApproval.response.status, 200, JSON.stringify(managerApproval.payload));
+  assert.equal(managerApproval.payload.record?.status, 'APPROVED');
+  const leaveHistory = await jsonRequest(baseUrl, leavePath + '/' + encodeURIComponent(leaveRequest.id) + '/history', {
+    token: managerSession.token,
+  });
+  assert.equal(leaveHistory.response.status, 200, JSON.stringify(leaveHistory.payload));
+  assert.ok(leaveHistory.payload.records?.some(event => event.action === 'workforce.leave_request.approve'));
+  const leaveCancellation = await jsonRequest(baseUrl, leavePath + '/' + encodeURIComponent(leaveRequest.id) + '/cancel', {
+    token: managerSession.token, method: 'POST',
+    body: { expected_version: 3, reason: 'Coverage plan changed' },
+  });
+  assert.equal(leaveCancellation.response.status, 200, JSON.stringify(leaveCancellation.payload));
+  assert.equal(leaveCancellation.payload.record?.status, 'CANCELLED');
+
+  const managerCreatedLeave = await createWorkforceRecord(baseUrl, managerSession.token, leavePath,
+    'workforce-http-manager-created-leave-' + suffix, {
+      member_id: memberId, leave_category: 'PERSONAL',
+      starts_at: '2026-12-12T00:00:00.000Z', ends_at: '2026-12-13T00:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa', reason: 'Manager-created leave request',
+    });
+  const managerLeaveSubmit = await jsonRequest(baseUrl, leavePath + '/' + encodeURIComponent(managerCreatedLeave.id) + '/submit', {
+    token: managerSession.token, method: 'POST', body: { expected_version: 1 },
+  });
+  assert.equal(managerLeaveSubmit.response.status, 200);
+  const selfApproval = await jsonRequest(baseUrl, leavePath + '/' + encodeURIComponent(managerCreatedLeave.id) + '/approve', {
+    token: managerSession.token, method: 'POST', body: { expected_version: 2 },
+  });
+  assert.equal(selfApproval.response.status, 403, 'a requester cannot approve their own leave request');
+
+  const absencePath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/absences';
+  const absence = await createWorkforceRecord(baseUrl, managerSession.token, absencePath,
+    'workforce-http-absence-' + suffix, {
+      member_id: memberId, absence_type: 'SICKNESS',
+      starts_at: '2026-12-14T06:00:00.000Z', ends_at: '2026-12-14T12:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa', reason: 'Unplanned sickness',
+    });
+  assert.equal(absence.status, 'RECORDED');
+  const voidAbsence = await jsonRequest(baseUrl, absencePath + '/' + encodeURIComponent(absence.id) + '/void', {
+    token: managerSession.token, method: 'POST',
+    body: { expected_version: 1, reason: 'Absence record corrected' },
+  });
+  assert.equal(voidAbsence.response.status, 200, JSON.stringify(voidAbsence.payload));
+  assert.equal(voidAbsence.payload.record?.status, 'VOIDED');
+  const absenceHistory = await jsonRequest(baseUrl, absencePath + '/' + encodeURIComponent(absence.id) + '/history', {
+    token: managerSession.token,
+  });
+  assert.ok(absenceHistory.payload.records?.some(event => event.action === 'workforce.absence.void'
+    && event.metadata?.reason === 'Absence record corrected'));
+
   engagement = await lifecycle('engagements', engagement, 'suspend', 3, 'SUSPENDED');
   engagement = await lifecycle('engagements', engagement, 'activate', 4, 'ACTIVE');
   await lifecycle('engagements', engagement, 'end', 5, 'ENDED');
