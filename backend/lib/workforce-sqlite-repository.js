@@ -8,6 +8,7 @@ import {
 const TABLES = Object.freeze({
   department: { table: 'workforce_departments', id: 'id', state: 'status', fields: ['code','name','description'], createOnlyFields: [], json: [] },
   position: { table: 'workforce_positions', id: 'id', state: 'status', fields: ['code','name','description','department_id','classification'], createOnlyFields: [], json: [] },
+  shift_template: { table: 'workforce_shift_templates', id: 'id', state: 'status', fields: ['name','start_local_time','end_local_time','timezone','break_rules','work_days','department_id','position_id','location_id','effective_from','effective_until'], createOnlyFields: [], json: ['break_rules_json','work_days_json'] },
   member: {
     table: 'workforce_members', id: 'id', state: 'status',
     fields: ['member_type','primary_location_id','timezone','display_name','employee_number','department_id','position_id','supervisor_member_id'],
@@ -71,7 +72,7 @@ const TABLES = Object.freeze({
 });
 
 const INITIAL_STATES = Object.freeze({
-  department: 'ACTIVE', position: 'ACTIVE',
+  department: 'ACTIVE', position: 'ACTIVE', shift_template: 'ACTIVE',
   member: 'DRAFT',
   engagement: 'DRAFT',
   calendar: 'ACTIVE',
@@ -86,6 +87,7 @@ const INITIAL_STATES = Object.freeze({
 const TRANSITIONS = Object.freeze({
   department: { activate: { from: ['INACTIVE'], to: 'ACTIVE' }, deactivate: { from: ['ACTIVE'], to: 'INACTIVE' } },
   position: { activate: { from: ['INACTIVE'], to: 'ACTIVE' }, deactivate: { from: ['ACTIVE'], to: 'INACTIVE' } },
+  shift_template: { activate: { from: ['INACTIVE'], to: 'ACTIVE' }, deactivate: { from: ['ACTIVE'], to: 'INACTIVE' } },
   member: {
     activate: { from: ['DRAFT','SUSPENDED'], to: 'ACTIVE' },
     suspend: { from: ['ACTIVE'], to: 'SUSPENDED' },
@@ -144,6 +146,44 @@ function normalizeRepositoryValue(field, value) {
     if (value == null) return '';
     if (typeof value !== 'string' || value.length > 1000) throw fail('WORKFORCE_DESCRIPTION_INVALID', 'description must be a string of at most 1000 characters');
     return value.trim();
+  }
+  if (field === 'start_local_time' || field === 'end_local_time') {
+    if (typeof value !== 'string' || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(value)) {
+      throw fail('WORKFORCE_LOCAL_TIME_INVALID', field + ' must use HH:MM in local time');
+    }
+    return value;
+  }
+  if (field === 'timezone') {
+    try {
+      if (typeof value !== 'string' || !value.trim()) throw new Error('empty timezone');
+      new Intl.DateTimeFormat('en-US', { timeZone: value });
+      return value.trim();
+    } catch { throw fail('WORKFORCE_TIMEZONE_INVALID', 'timezone must be a valid IANA timezone'); }
+  }
+  if (field === 'effective_from' || field === 'effective_until') {
+    if (value == null && field === 'effective_until') return null;
+    if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+      || !Number.isFinite(Date.parse(value + 'T00:00:00Z'))
+      || new Date(value + 'T00:00:00Z').toISOString().slice(0,10) !== value) {
+      throw fail('WORKFORCE_EFFECTIVE_DATE_INVALID', field + ' must be a valid YYYY-MM-DD date');
+    }
+    return value;
+  }
+  if (field === 'work_days_json') {
+    if (!Array.isArray(value) || value.some(day => !Number.isInteger(day) || day < 1 || day > 7)
+      || new Set(value).size !== value.length || value.length === 0) {
+      throw fail('WORKFORCE_WORK_DAYS_INVALID', 'work_days must contain unique ISO weekdays from 1 to 7');
+    }
+    return [...value].sort((a,b) => a-b);
+  }
+  if (field === 'break_rules_json') {
+    if (!Array.isArray(value) || value.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule)
+      || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.start_local_time || ''))
+      || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.end_local_time || ''))
+      || rule.start_local_time === rule.end_local_time)) {
+      throw fail('WORKFORCE_BREAK_RULES_INVALID', 'break_rules must be intervals with valid start_local_time and end_local_time');
+    }
+    return value.map(rule => ({ start_local_time: rule.start_local_time, end_local_time: rule.end_local_time }));
   }
   if (field === 'classification') {
     if (value == null) return null;
@@ -280,6 +320,20 @@ export class WorkforceSqliteRepository {
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
       `).get(String(data.calendar_id), scope.organization_id, scope.tenant_id, scope.chat_id);
       if (!calendar) throw fail('WORKFORCE_CALENDAR_SCOPE_INVALID', 'Calendar does not belong to the active organization and tenant', 422);
+    }
+    if (entity === 'shift_template') {
+      if (data.department_id) {
+        const department = this.db.prepare("SELECT id FROM workforce_departments WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
+          .get(String(data.department_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!department) throw fail('WORKFORCE_TEMPLATE_DEPARTMENT_SCOPE_INVALID', 'Template department is outside the active organization and tenant', 422);
+      }
+      if (data.position_id) {
+        const position = this.db.prepare("SELECT id, department_id FROM workforce_positions WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
+          .get(String(data.position_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!position || (position.department_id && String(position.department_id) !== String(data.department_id || ''))) {
+          throw fail('WORKFORCE_TEMPLATE_POSITION_SCOPE_INVALID', 'Template position must be active and match its department in the current organization', 422);
+        }
+      }
     }
     if (entity === 'position' && data.department_id) {
       const department = this.db.prepare("SELECT id FROM workforce_departments WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
