@@ -16,7 +16,7 @@ import {
   isValidWorkforceMemberStatus,
 } from './workforce-contract.js';
 
-export const WORKFORCE_MEMBER_CONTRACT_VERSION = '1.1';
+export const WORKFORCE_MEMBER_CONTRACT_VERSION = '1.2';
 
 export const WORKFORCE_MEMBER_PERMISSIONS = Object.freeze({
   view: 'workforce:member:view',
@@ -32,7 +32,7 @@ export const WORKFORCE_MEMBER_TRANSITIONS = Object.freeze({
   INACTIVE: Object.freeze([]),
 });
 
-export const WORKFORCE_MEMBER_OPTIONAL_FIELDS = Object.freeze(['employee_number']);
+export const WORKFORCE_MEMBER_OPTIONAL_FIELDS = Object.freeze(['employee_number','department_id','position_id','supervisor_member_id']);
 
 export const WORKFORCE_MEMBER_CREATE_REQUIRED_FIELDS = Object.freeze([
   'organization_id',
@@ -66,6 +66,9 @@ export function workforceMemberContract() {
     identity_link_is_optional: true,
     optional_fields: WORKFORCE_MEMBER_OPTIONAL_FIELDS,
     employee_number_unique_within_organization: true,
+    supports_department_assignment: true,
+    supports_position_assignment: true,
+    supports_reporting_relationships: true,
     reuses_existing_organization_authority: true,
     creates_duplicate_user_identity: false,
     member_types: WORKFORCE_MEMBER_TYPES,
@@ -100,6 +103,10 @@ export function validateWorkforceMemberCreate(input = {}) {
     (typeof input.employee_number !== 'string' || input.employee_number.trim().length > 80)) {
     errors.push('employee_number must be a string of at most 80 characters');
   }
+  for (const field of ['department_id','position_id','supervisor_member_id']) {
+    if (input[field] !== undefined && input[field] !== null &&
+      (typeof input[field] !== 'string' || !input[field].trim())) errors.push(field + ' must be a non-empty string or null');
+  }
 
   return Object.freeze({ valid: errors.length === 0, errors });
 }
@@ -119,6 +126,10 @@ export function validateWorkforceMemberUpdate(input = {}) {
   if (input.employee_number !== undefined && input.employee_number !== null &&
     (typeof input.employee_number !== 'string' || input.employee_number.trim().length > 80)) {
     errors.push('employee_number must be a string of at most 80 characters');
+  }
+  for (const field of ['department_id','position_id','supervisor_member_id']) {
+    if (input[field] !== undefined && input[field] !== null &&
+      (typeof input[field] !== 'string' || !input[field].trim())) errors.push(field + ' must be a non-empty string or null');
   }
 
   if (
