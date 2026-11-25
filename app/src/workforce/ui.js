@@ -240,6 +240,26 @@ export function workforceWorkspaceShell() {
     + '<label><input name="all_day" type="checkbox"> All-day absence</label><label>Reason<textarea name="reason" rows="2" maxlength="1000" required></textarea></label>'
     + '<button type="submit" class="btn-primary">Record absence</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div></div>'
     + '<h4>Leave requests</h4><div id="workforceLeaveRequests"></div><h4>Recorded absences</h4><div id="workforceAbsences"></div></section>'
+    + '<section id="workforceSchedulingPolicyAdmin" hidden><h3>Scheduling policy</h3>'
+    + '<p class="logistics-meta">Configure organization rules used to assess shift feasibility. Warnings and unknown evidence are distinct from blocking conflicts.</p>'
+    + '<div id="workforceSchedulingPolicies"></div>'
+    + '<form id="workforceSchedulingPolicyForm" class="settings-form workforce-admin-form">'
+    + '<h4 id="workforceSchedulingPolicyFormTitle">Create scheduling policy</h4>'
+    + '<label>Policy name<input name="name" maxlength="120" required></label>'
+    + '<label>Effective from<input name="effective_from" type="date" required></label><label>Effective until (optional)<input name="effective_until" type="date"></label>'
+    + '<fieldset><legend>Shift and working-time limits (minutes)</legend>'
+    + '<label>Maximum shift duration<input name="max_shift_minutes" type="number" min="1" max="1440" step="1"></label>'
+    + '<label>Maximum daily working time<input name="max_daily_minutes" type="number" min="1" max="1440" step="1"></label>'
+    + '<label>Maximum weekly working time<input name="max_weekly_minutes" type="number" min="1" max="10080" step="1"></label>'
+    + '<label>Minimum rest between shifts<input name="minimum_rest_minutes" type="number" min="0" max="10080" step="1"></label>'
+    + '<label>Require a break after (minutes)<input name="minimum_break_after_minutes" type="number" min="1" max="1440" step="1"></label>'
+    + '<label>Minimum break duration<input name="minimum_break_duration_minutes" type="number" min="1" max="240" step="1"></label>'
+    + '<label>Maximum consecutive working days<input name="max_consecutive_days" type="number" min="1" max="31" step="1"></label></fieldset>'
+    + '<label>Required qualifications (comma-separated)<textarea name="required_qualifications" rows="2" maxlength="1000"></textarea></label>'
+    + '<label>Location policy<select name="location_policy"><option value="ANY">Any location</option><option value="ASSIGNED_ONLY">Assigned locations only</option></select></label>'
+    + '<label>Daily limit enforcement<select name="max_daily_enforcement"><option value="BLOCK">Block scheduling</option><option value="WARN">Warn only</option></select></label>'
+    + '<div class="workforce-form-actions"><button type="submit" class="btn-primary">Save scheduling policy</button><button type="button" class="btn-secondary" id="workforceSchedulingPolicyClear">Clear form</button></div>'
+    + '<p class="logistics-meta workforce-form-status" role="status"></p></form></section>'
     + '<section id="workforceMemberDetails" hidden><div class="workforce-heading"><h3 id="workforceSelectedMemberTitle">Member workspace</h3>'
     + '<button type="button" class="btn-secondary" id="workforceClearMember">Close</button></div><div id="workforceMemberProfile"></div><div id="workforceMemberRecords"></div>'
     + '<form id="workforceProfileForm" class="settings-form workforce-admin-form" hidden>'
@@ -614,7 +634,7 @@ async function voidAbsence(form, root) {
 async function loadWorkforceRecordHistory(button) {
   const entity = button.dataset.entity, recordId = button.dataset.recordId;
   const host = button.parentElement?.querySelector('.workforce-record-history');
-  if (!['leave-requests','absences'].includes(entity) || !recordId || !host) return;
+  if (!['leave-requests','absences','scheduling-policies'].includes(entity) || !recordId || !host) return;
   if (!host.hidden) { host.hidden = true; return; }
   host.hidden = false; host.innerHTML = '<p class="logistics-meta">Loading history…</p>';
   try {
@@ -627,6 +647,121 @@ async function loadWorkforceRecordHistory(button) {
     ).join('');
     host.innerHTML = rows ? '<ul>' + rows + '</ul>' : '<p class="logistics-meta">No history is available.</p>';
   } catch (error) { host.innerHTML = '<p class="logistics-meta">' + escapeHtml(error.message || 'History could not be loaded.') + '</p>'; }
+}
+
+function renderSchedulingPolicyAdmin(workspace, policies) {
+  const section = workspace.querySelector('#workforceSchedulingPolicyAdmin');
+  if (!section) return;
+  const manager = canManageMembers();
+  section.hidden = !manager;
+  if (!manager) return;
+  const rows = policies.map(policy => {
+    const rules = policy.rules || {};
+    const summary = Object.entries(rules).filter(([key]) => key !== 'enforcement')
+      .map(([key,value]) => key === 'required_qualifications' ? 'Qualifications: ' + (Array.isArray(value) ? value.join(', ') : '')
+        : key === 'location_policy' ? 'Location: ' + value
+        : key.replaceAll('_',' ') + ': ' + value).join(' · ');
+    const state = String(policy.status || 'DRAFT').toUpperCase();
+    const action = state === 'ACTIVE' ? 'deactivate' : 'activate';
+    const actionLabel = state === 'ACTIVE' ? 'Deactivate policy' : 'Activate policy';
+    return '<article class="workforce-record-row workforce-scheduling-policy-row"><div><strong>' + escapeHtml(policy.name || 'Scheduling policy') + '</strong>'
+      + '<span class="logistics-status">' + escapeHtml(state) + '</span>'
+      + '<div class="logistics-meta">Policy version ' + Number(policy.version || 1) + ' · Effective ' + escapeHtml(policy.effective_from || '')
+      + (policy.effective_until ? ' to ' + escapeHtml(policy.effective_until) : ' onward') + '</div>'
+      + '<div class="logistics-meta">' + escapeHtml(summary || 'No additional constraints configured') + '</div>'
+      + '<button type="button" class="btn-secondary workforce-scheduling-policy-edit" data-policy-id="' + escapeAttr(policy.id) + '">Edit policy</button>'
+      + '<button type="button" class="btn-secondary workforce-record-history-button" data-entity="scheduling-policies" data-record-id="' + escapeAttr(policy.id) + '">View history</button>'
+      + '<div class="workforce-record-history" hidden></div></div>'
+      + '<div class="workforce-member-controls"><form class="workforce-scheduling-policy-action-form" data-record-id="' + escapeAttr(policy.id) + '" data-action="' + action + '" data-version="' + Number(policy.version || 1) + '">'
+      + '<button type="submit" class="btn-secondary">' + actionLabel + '</button></form></div></article>';
+  }).join('');
+  section.querySelector('#workforceSchedulingPolicies').innerHTML = rows || '<p class="logistics-meta">No scheduling policy configured. Create a draft policy to define organization rules.</p>';
+}
+
+function editSchedulingPolicy(button, root) {
+  const workspace = root.querySelector('#workforceWorkspace');
+  const form = workspace?.querySelector('#workforceSchedulingPolicyForm');
+  const policy = workspaceData.get(workspace)?.schedulingPolicies?.find(item => String(item.id) === String(button.dataset.policyId));
+  if (!form || !policy) return;
+  const rules = policy.rules || {};
+  form.dataset.policyId = String(policy.id);
+  form.dataset.version = String(policy.version);
+  form.elements.name.value = policy.name || '';
+  form.elements.effective_from.value = policy.effective_from || '';
+  form.elements.effective_until.value = policy.effective_until || '';
+  for (const field of ['max_shift_minutes','max_daily_minutes','max_weekly_minutes','minimum_rest_minutes',
+    'minimum_break_after_minutes','minimum_break_duration_minutes','max_consecutive_days']) {
+    form.elements[field].value = rules[field] ?? '';
+  }
+  form.elements.required_qualifications.value = Array.isArray(rules.required_qualifications) ? rules.required_qualifications.join(', ') : '';
+  form.elements.location_policy.value = rules.location_policy || 'ANY';
+  form.elements.max_daily_enforcement.value = rules.enforcement?.max_daily_minutes || 'BLOCK';
+  form.querySelector('#workforceSchedulingPolicyFormTitle').textContent = 'Edit ' + policy.name + ' · version ' + policy.version;
+  form.querySelector('.workforce-form-status').textContent = 'Editing the selected policy. Saving creates the next policy version.';
+  form.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+}
+
+async function saveSchedulingPolicy(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const rules = {};
+  for (const field of ['max_shift_minutes','max_daily_minutes','max_weekly_minutes','minimum_rest_minutes',
+    'minimum_break_after_minutes','minimum_break_duration_minutes','max_consecutive_days']) {
+    const value = String(values.get(field) || '').trim();
+    if (value) rules[field] = Number(value);
+  }
+  const qualifications = String(values.get('required_qualifications') || '').split(',').map(value => value.trim()).filter(Boolean);
+  if (qualifications.length) rules.required_qualifications = qualifications;
+  const locationPolicy = String(values.get('location_policy') || 'ANY');
+  if (locationPolicy !== 'ANY') rules.location_policy = locationPolicy;
+  if (rules.max_daily_minutes !== undefined) rules.enforcement = { max_daily_minutes: String(values.get('max_daily_enforcement') || 'BLOCK') };
+  const body = {
+    name: String(values.get('name') || '').trim(),
+    effective_from: String(values.get('effective_from') || ''),
+    effective_until: String(values.get('effective_until') || '') || null,
+    rules,
+  };
+  if (!body.name || !body.effective_from) {
+    status.textContent = 'Provide a policy name and effective-from date.'; return;
+  }
+  const policyId = form.dataset.policyId || '';
+  if (policyId) {
+    const version = Number(form.dataset.version);
+    if (!Number.isInteger(version) || version < 1) { status.textContent = 'Reload the policy before editing it.'; return; }
+    body.expected_version = version;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Saving scheduling policy…';
+  try {
+    const result = await request(policyId ? endpoint('scheduling-policies', '/' + encodeURIComponent(policyId)) : endpoint('scheduling-policies'), {
+      method: policyId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json', ...(policyId ? {} : { 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() }) },
+      body: JSON.stringify(body),
+    });
+    form.reset(); delete form.dataset.policyId; delete form.dataset.version;
+    form.querySelector('#workforceSchedulingPolicyFormTitle').textContent = 'Create scheduling policy';
+    await refreshWorkspaceWithStatus(root, '#workforceSchedulingPolicyAdmin', policyId ? 'Scheduling policy version saved.' : 'Scheduling policy created as a draft.');
+  } catch (error) { status.textContent = error.message || 'Scheduling policy could not be saved.'; }
+  finally { submit.disabled = false; }
+}
+
+async function schedulingPolicyAction(form, root) {
+  const action = form.dataset.action, id = form.dataset.recordId, version = Number(form.dataset.version);
+  if (!['activate','deactivate'].includes(action) || !id || !Number.isInteger(version) || version < 1) return;
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true;
+  try {
+    await request(endpoint('scheduling-policies', '/' + encodeURIComponent(id) + '/' + action), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_version: version }),
+    });
+    await refreshWorkspaceWithStatus(root, '#workforceSchedulingPolicyAdmin', action === 'activate'
+      ? 'Scheduling policy activated.' : 'Scheduling policy deactivated.');
+  } catch (error) {
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = error.message || 'Scheduling policy action failed.';
+    submit.disabled = false;
+  }
 }
 
 async function refreshWorkspace(root) {
@@ -645,17 +780,17 @@ async function refreshWorkspace(root) {
   const tenantId = String(config.chatId), token = String(config.sessionToken);
   status.textContent = 'Loading Workforce records…'; status.dataset.state = 'LOADING';
   try {
-    const [membersData, summaryData, departments, positions, engagements, locations, shiftTemplates, shifts, leaveRequests, absences] = await Promise.all([
+    const [membersData, summaryData, departments, positions, engagements, locations, shiftTemplates, shifts, leaveRequests, absences, schedulingPolicies] = await Promise.all([
       request(endpoint('members') + '?limit=100'),
       request(endpoint('utilization', '/summary')),
       optionalRecords('departments'), optionalRecords('positions'), optionalRecords('engagements'),
       optionalOrganizationLocations(), optionalRecords('shift-templates'), optionalRecords('shifts'),
-      optionalRecords('leave-requests'), optionalRecords('absences'),
+      optionalRecords('leave-requests'), optionalRecords('absences'), optionalRecords('scheduling-policies'),
     ]);
     if (!workspace.isConnected || workspace.dataset.refreshSequence !== String(seq)
       || String(config.chatId) !== tenantId || String(config.sessionToken) !== token) return;
     const members = Array.isArray(membersData.records) ? membersData.records : [];
-    workspaceData.set(workspace, { members, departments, positions, engagements, locations, shiftTemplates, shifts, leaveRequests, absences });
+    workspaceData.set(workspace, { members, departments, positions, engagements, locations, shiftTemplates, shifts, leaveRequests, absences, schedulingPolicies });
     workspace.querySelector('#workforceOverviewMetrics').innerHTML =
       renderOverviewMetrics(members, departments, positions, engagements);
     summaryNode.innerHTML = renderSummary(summaryData.summary || {});
@@ -664,6 +799,7 @@ async function refreshWorkspace(root) {
     renderShiftTemplateAdmin(workspace, shiftTemplates, departments, positions, locations, members);
     renderDatedShiftAdmin(workspace, shifts, members);
     renderLeaveAbsenceAdmin(workspace, leaveRequests, absences, members);
+    renderSchedulingPolicyAdmin(workspace, schedulingPolicies);
     status.textContent = members.length + ' Workforce member' + (members.length === 1 ? '' : 's') + ' loaded.';
     status.dataset.state = 'READY';
     const selected = workspace.dataset.selectedMemberId;
@@ -1300,6 +1436,8 @@ export function mountWorkforceWorkspace(root = document) {
       const shiftTransitionButton = event.target.closest('.workforce-shift-transition');
       const shiftHistoryButton = event.target.closest('.workforce-shift-history-button');
       const recordHistoryButton = event.target.closest('.workforce-record-history-button');
+      const policyEditButton = event.target.closest('.workforce-scheduling-policy-edit');
+      const policyClearButton = event.target.closest('#workforceSchedulingPolicyClear');
       const page = event.target.closest('[data-member-page]');
       const clear = event.target.closest('#workforceClearMember');
       if (refresh) refreshWorkspace(root);
@@ -1311,6 +1449,12 @@ export function mountWorkforceWorkspace(root = document) {
       if (shiftTransitionButton) transitionDatedShift(shiftTransitionButton, root);
       if (shiftHistoryButton) loadDatedShiftHistory(shiftHistoryButton, root);
       if (recordHistoryButton) loadWorkforceRecordHistory(recordHistoryButton);
+      if (policyEditButton) editSchedulingPolicy(policyEditButton, root);
+      if (policyClearButton) {
+        const form = root.querySelector('#workforceSchedulingPolicyForm');
+        form?.reset(); delete form.dataset.policyId; delete form.dataset.version;
+        if (form) { form.querySelector('#workforceSchedulingPolicyFormTitle').textContent = 'Create scheduling policy'; form.querySelector('.workforce-form-status').textContent = ''; }
+      }
       if (page) {
         const current = Number(workspace.dataset.memberPage || 0);
         workspace.dataset.memberPage = String(Math.max(0, current + (page.dataset.memberPage === 'next' ? 1 : -1)));
@@ -1340,7 +1484,7 @@ export function mountWorkforceWorkspace(root = document) {
     root.addEventListener('submit', event => {
       const id = event.target?.id;
       if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm','workforceLeaveRequestForm','workforceAbsenceForm'].includes(id)
-        && !['workforce-leave-action-form','workforce-absence-void-form'].some(name => event.target?.classList?.contains(name))
+        && !['workforce-leave-action-form','workforce-absence-void-form','workforce-scheduling-policy-action-form'].some(name => event.target?.classList?.contains(name))
         && !['workforce-shift-generation-form','workforce-shift-reassign-form','workforce-shift-cancel-form'].some(name => event.target?.classList?.contains(name))) return;
       event.preventDefault();
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
@@ -1348,8 +1492,10 @@ export function mountWorkforceWorkspace(root = document) {
       if (id === 'workforceShiftTemplateForm') saveShiftTemplate(event.target, root);
       if (id === 'workforceLeaveRequestForm') saveLeaveRequest(event.target, root);
       if (id === 'workforceAbsenceForm') saveAbsence(event.target, root);
+      if (id === 'workforceSchedulingPolicyForm') saveSchedulingPolicy(event.target, root);
       if (event.target?.classList?.contains('workforce-leave-action-form')) submitLeaveAction(event.target, root);
       if (event.target?.classList?.contains('workforce-absence-void-form')) voidAbsence(event.target, root);
+      if (event.target?.classList?.contains('workforce-scheduling-policy-action-form')) schedulingPolicyAction(event.target, root);
       if (event.target?.classList?.contains('workforce-shift-generation-form')) generateTemplateShifts(event.target, root);
       if (event.target?.classList?.contains('workforce-shift-reassign-form')) reassignDatedShift(event.target, root);
       if (event.target?.classList?.contains('workforce-shift-cancel-form')) cancelDatedShift(event.target, root);
