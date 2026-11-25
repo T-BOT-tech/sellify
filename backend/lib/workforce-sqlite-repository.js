@@ -380,17 +380,6 @@ export class WorkforceSqliteRepository {
       `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(data.member_id), data.ends_at, data.starts_at);
       if (recordedAbsence) throw fail('WORKFORCE_ABSENCE_AVAILABILITY_CONFLICT', 'A recorded absence blocks this shift period', 409);
     }
-    if (entity === 'shift') {
-      const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(data.member_id, {
-        member_id: data.member_id, starts_at: data.starts_at, ends_at: data.ends_at,
-        timezone: data.timezone, location_id: data.location_id,
-        break_rules: data.break_rules_json || [],
-      }, scope));
-      data.constraint_policy_id = assessment.policy_id;
-      data.constraint_policy_version = assessment.policy_version;
-      data.constraint_state = assessment.state;
-      data.constraint_findings_json = assessment.findings;
-    }
     if (data.calendar_id) {
       const calendar = this.db.prepare(`
         SELECT id FROM workforce_calendars
@@ -1071,6 +1060,18 @@ export class WorkforceSqliteRepository {
       this.assertResourceVisibility(context, entity, record);
       this.assertAuthorized(context, entity, 'create', record);
       return { record, duplicate: true };
+    }
+
+    if (entity === 'shift') {
+      const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(data.member_id, {
+        member_id: data.member_id, starts_at: data.starts_at, ends_at: data.ends_at,
+        timezone: data.timezone, location_id: data.location_id,
+        break_rules: data.break_rules_json || [],
+      }, scope));
+      data.constraint_policy_id = assessment.policy_id;
+      data.constraint_policy_version = assessment.policy_version;
+      data.constraint_state = assessment.state;
+      data.constraint_findings_json = assessment.findings;
     }
 
     const id = String(payload.id || this.idFactory());
