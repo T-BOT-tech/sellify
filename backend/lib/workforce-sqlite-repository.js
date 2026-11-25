@@ -183,7 +183,7 @@ function normalizeRepositoryValue(field, value) {
     return value;
   }
   if (field === 'generated_local_date') {
-    if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)
       || !Number.isFinite(Date.parse(value + 'T00:00:00Z'))
       || new Date(value + 'T00:00:00Z').toISOString().slice(0,10) !== value) {
       throw fail('WORKFORCE_SHIFT_DATE_INVALID', 'generated_local_date must be a valid YYYY-MM-DD date');
@@ -308,7 +308,7 @@ export class WorkforceSqliteRepository {
         WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=?
       `).get(String(data.shift_template_id), scope.organization_id, scope.tenant_id, scope.chat_id);
       if (!template) throw fail('WORKFORCE_SHIFT_TEMPLATE_SCOPE_INVALID', 'Shift template does not belong to the active organization and tenant', 422);
-      if (!Number.isInteger(data.template_version) || Number(data.template_version) < 1 || !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(data.generated_local_date || ''))) {
+      if (!Number.isInteger(data.template_version) || Number(data.template_version) < 1 || !/^\d{4}-\d{2}-\d{2}$/.test(String(data.generated_local_date || ''))) {
         throw fail('WORKFORCE_SHIFT_TEMPLATE_PROVENANCE_INVALID', 'Generated shifts require a template version and local generation date', 422);
       }
     }
