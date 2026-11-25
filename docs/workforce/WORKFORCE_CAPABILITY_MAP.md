@@ -57,13 +57,14 @@ It reuses existing canonical authorities. It does not replace User identity, Org
 
 ## Implementation status
 
-Implemented and regression-verified on 2026-11-24.
+Implemented on the Workforce source branch and selectively extracted onto `integration/workforce-capability-20261126`, based on the current `main`. The extracted implementation is undergoing targeted commit-boundary hardening and integration verification; it is not merged or deployed.
 
 ### Persistence
 
 - Additive migration 86: runWorkforceSqliteMigrations.
 - Additive migration 87: runWorkforceServiceBookingMigration.
-- Ten Workforce tables: members, profiles, engagements, calendars, calendar exceptions, availability windows, assignments, shifts, allocations, and utilization events.
+- Ten initial core tables: members, profiles, engagements, calendars, calendar exceptions, availability windows, assignments, shifts, allocations, and utilization events.
+- Follow-on additive migrations 88–100 extend the model with external-member identity support, employee numbers, departments, positions, reporting structure, shift templates, leave/absence, scheduling policies, persisted scheduling-assessment evidence, and authorized overrides.
 - Organization, tenant, user, location, Service Resource, and Service Booking references reuse existing canonical tables.
 - Version, idempotency, audit provenance, and organization/tenant indexes are included.
 
@@ -78,12 +79,18 @@ It provides organization- and tenant-scoped create, get, list, and update, plus 
 - Calendar exception: cancel.
 - Assignment: activate, suspend, end.
 - Shift: confirm, start, complete, cancel.
-- Allocation: submit, approve, release, cancel.
-- Utilization: start, complete, cancel.
+- Allocation: submit, approve, release, cancel; approval must re-assess current availability inside the write transaction.
+- Shift creation, updates, and reassignment re-check active member/engagement and scheduling constraints within the write transaction.
+- Utilization: start, complete, cancel; the repository exposes a read-only planned-versus-actual summary projection.
 
 Calendar and availability records use CRUD; availability state is expressed by the availability value, not a booking state.
 
 The production store exposes createWorkforceSqliteRepository() and binds it to the central authorization adapter.
+
+### Operator workspace
+
+- `app/src/workforce/ui.js` provides the authenticated roster, member record views, utilization summary, availability declaration, and member lifecycle actions.
+- The workspace is registered through the existing tab/navigation system; it does not create a separate identity or authorization boundary.
 
 ### API
 
@@ -110,9 +117,9 @@ API payload allowlists and contract validation reject unsupported fields, invali
 
 ## Remaining scope and limitations
 
-- Workforce UI and operator workflows are not included in this persistence/API increment.
+- The operator workspace is implemented and covered by UI/API integration regressions; manual visual and interaction review on a real browser/mobile device remains outstanding.
 - Recurrence rules are stored but are not evaluated by the Service Booking eligibility check; that check requires concrete availability windows with explicit start and end timestamps.
-- Utilization analytics and planned-versus-actual reporting remain future work.
+- Basic read-only utilization summaries and planned-versus-actual reporting are implemented; richer forecasting and advanced analytics remain future work.
 - The allocation API is implemented, but Service Booking does not create a second Workforce allocation record; the booking reference and canonical resource commitment remain the integration evidence.
 - Legacy provider appointments without a Workforce member link are hidden from provider appointment queues until ownership can be established.
 - Payroll, HRIS, supplier-capacity ownership, and logistics-task execution are outside this capability.
