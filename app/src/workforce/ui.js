@@ -195,6 +195,22 @@ export function workforceWorkspaceShell() {
     + '<form id="workforceDepartmentForm" class="settings-form workforce-admin-form"><label>Code<input name="code" maxlength="40" required></label><label>Name<input name="name" maxlength="120" required></label><label>Description<input name="description" maxlength="1000"></label><button type="submit" class="btn-primary">Add department</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div>'
     + '<div><h4>Positions</h4><div id="workforcePositions"></div>'
     + '<form id="workforcePositionForm" class="settings-form workforce-admin-form"><label>Code<input name="code" maxlength="40" required></label><label>Name<input name="name" maxlength="120" required></label><label>Department<select name="department_id"><option value="">No department</option></select></label><label>Classification<input name="classification" maxlength="80"></label><button type="submit" class="btn-primary">Add position</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div></div></section>'
+    + '<section id="workforceShiftTemplateAdmin" hidden><h3>Shift templates and roster generation</h3>'
+    + '<p class="logistics-meta">Templates are reusable local-time definitions. Generation creates dated shifts for eligible members; existing shifts are never silently rewritten.</p>'
+    + '<div id="workforceShiftTemplates"></div>'
+    + '<form id="workforceShiftTemplateForm" class="settings-form workforce-admin-form">'
+    + '<h4>Create shift template</h4><label>Name<input name="name" maxlength="120" required></label>'
+    + '<label>Start (local time)<input name="start_local_time" type="time" required></label><label>End (local time)<input name="end_local_time" type="time" required></label>'
+    + '<label>Timezone<input name="timezone" value="' + escapeAttr(zone) + '" maxlength="80" required></label>'
+    + '<fieldset><legend>Working days</legend><div class="workforce-day-options">'
+    + ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((day,index) => '<label><input type="checkbox" name="work_days" value="' + (index+1) + '"' + (index<5?' checked':'') + '> ' + day + '</label>').join('')
+    + '</div></fieldset>'
+    + '<label>Break start (optional)<input name="break_start_local_time" type="time"></label><label>Break end (optional)<input name="break_end_local_time" type="time"></label>'
+    + '<label>Department<select name="department_id"><option value="">Any department</option></select></label>'
+    + '<label>Position<select name="position_id"><option value="">Any position</option></select></label>'
+    + '<label>Location<select name="location_id"><option value="">Member primary location</option></select></label>'
+    + '<label>Effective from<input name="effective_from" type="date" required></label><label>Effective until (optional)<input name="effective_until" type="date"></label>'
+    + '<button type="submit" class="btn-primary">Create shift template</button><p class="logistics-meta workforce-form-status" role="status"></p></form></section>'
     + '<section id="workforceMemberDetails" hidden><div class="workforce-heading"><h3 id="workforceSelectedMemberTitle">Member workspace</h3>'
     + '<button type="button" class="btn-secondary" id="workforceClearMember">Close</button></div><div id="workforceMemberProfile"></div><div id="workforceMemberRecords"></div>'
     + '<form id="workforceProfileForm" class="settings-form workforce-admin-form" hidden>'
@@ -276,6 +292,42 @@ function fillSelect(select, records, selected = '', labelField = 'name') {
     + (String(record.id) === String(selected) ? ' selected' : '') + '>' + escapeHtml(record[labelField] || record.code || record.id) + '</option>').join('');
 }
 
+function renderShiftTemplateAdmin(workspace, templates, departments, positions, locations, members) {
+  const section = workspace.querySelector('#workforceShiftTemplateAdmin');
+  if (!canManageMembers()) { section.hidden = true; return; }
+  section.hidden = false;
+  fillSelect(section.querySelector('#workforceShiftTemplateForm [name="department_id"]'), departments);
+  fillSelect(section.querySelector('#workforceShiftTemplateForm [name="position_id"]'), positions);
+  fillSelect(section.querySelector('#workforceShiftTemplateForm [name="location_id"]'), locations);
+  const eligibleMembers = members.filter(member => member.status === 'ACTIVE');
+  const rows = templates.map(template => {
+    const state = String(template.status || 'UNKNOWN').toUpperCase();
+    const action = state === 'ACTIVE' ? 'deactivate' : 'activate';
+    const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const days = (Array.isArray(template.work_days) ? template.work_days : []).map(day => dayLabels[Number(day)-1]).filter(Boolean).join(', ');
+    const breaks = Array.isArray(template.break_rules) && template.break_rules.length
+      ? ' · Breaks: ' + template.break_rules.map(rule => escapeHtml(rule.start_local_time + '–' + rule.end_local_time)).join(', ') : '';
+    const generation = state === 'ACTIVE'
+      ? '<form class="settings-form workforce-shift-generation-form" data-template-id="' + escapeAttr(template.id)
+        + '" data-template-version="' + Number(template.version || 1) + '"><label>Professional<select name="member_id" required><option value="">Choose an active member</option>'
+        + eligibleMembers.map(member => '<option value="' + escapeAttr(member.id) + '">' + escapeHtml(member.display_name || member.id) + '</option>').join('')
+        + '</select></label><label>From<input type="date" name="from_date" required></label><label>To<input type="date" name="to_date" required></label>'
+        + '<button type="submit" class="btn-secondary">Generate dated shifts</button><p class="logistics-meta workforce-form-status" role="status"></p></form>'
+      : '<p class="logistics-meta">Activate this template before generating dated shifts.</p>';
+    return '<article class="workforce-record-row workforce-shift-template-row"><div><strong>' + escapeHtml(template.name || 'Shift template')
+      + '</strong><span class="logistics-status">' + escapeHtml(state) + '</span>'
+      + '<div class="logistics-meta">' + escapeHtml(template.start_local_time || '') + '–' + escapeHtml(template.end_local_time || '')
+      + ' · ' + escapeHtml(template.timezone || 'Timezone not set') + ' · ' + escapeHtml(days || 'No days configured') + breaks + '</div>'
+      + '<div class="logistics-meta">Effective ' + escapeHtml(template.effective_from || '—')
+      + (template.effective_until ? ' – ' + escapeHtml(template.effective_until) : ' · Ongoing')
+      + ' · v' + Number(template.version || 1) + '</div></div>'
+      + '<div class="workforce-member-controls"><button type="button" class="btn-secondary workforce-structure-action" data-entity="shift-templates" data-id="'
+      + escapeAttr(template.id) + '" data-version="' + Number(template.version || 1) + '" data-action="' + action + '">'
+      + (action === 'deactivate' ? 'Deactivate' : 'Activate') + '</button></div>' + generation + '</article>';
+  }).join('');
+  section.querySelector('#workforceShiftTemplates').innerHTML = rows || '<p class="logistics-meta">No shift templates yet.</p>';
+}
+
 function renderOrganizationAdmin(workspace, departments, positions) {
   const section = workspace.querySelector('#workforceOrganizationAdmin');
   const createSection = workspace.querySelector('#workforceMemberCreateSection');
@@ -338,21 +390,22 @@ async function refreshWorkspace(root) {
   const tenantId = String(config.chatId), token = String(config.sessionToken);
   status.textContent = 'Loading Workforce records…'; status.dataset.state = 'LOADING';
   try {
-    const [membersData, summaryData, departments, positions, engagements, locations] = await Promise.all([
+    const [membersData, summaryData, departments, positions, engagements, locations, shiftTemplates] = await Promise.all([
       request(endpoint('members') + '?limit=100'),
       request(endpoint('utilization', '/summary')),
       optionalRecords('departments'), optionalRecords('positions'), optionalRecords('engagements'),
-      optionalOrganizationLocations(),
+      optionalOrganizationLocations(), optionalRecords('shift-templates'),
     ]);
     if (!workspace.isConnected || workspace.dataset.refreshSequence !== String(seq)
       || String(config.chatId) !== tenantId || String(config.sessionToken) !== token) return;
     const members = Array.isArray(membersData.records) ? membersData.records : [];
-    workspaceData.set(workspace, { members, departments, positions, engagements, locations });
+    workspaceData.set(workspace, { members, departments, positions, engagements, locations, shiftTemplates });
     workspace.querySelector('#workforceOverviewMetrics').innerHTML =
       renderOverviewMetrics(members, departments, positions, engagements);
     summaryNode.innerHTML = renderSummary(summaryData.summary || {});
     renderMemberDirectory(root);
     renderOrganizationAdmin(workspace, departments, positions);
+    renderShiftTemplateAdmin(workspace, shiftTemplates, departments, positions, locations, members);
     status.textContent = members.length + ' Workforce member' + (members.length === 1 ? '' : 's') + ' loaded.';
     status.dataset.state = 'READY';
     const selected = workspace.dataset.selectedMemberId;
@@ -630,7 +683,7 @@ async function savePosition(form, root) {
 async function organizationAction(button, root) {
   const entity = button.dataset.entity, id = button.dataset.id, action = button.dataset.action;
   const version = Number(button.dataset.version);
-  if (!['departments','positions'].includes(entity) || !id || !['activate','deactivate'].includes(action) || !Number.isInteger(version)) return;
+  if (!['departments','positions','shift-templates'].includes(entity) || !id || !['activate','deactivate'].includes(action) || !Number.isInteger(version)) return;
   button.disabled = true;
   try {
     await request(endpoint(entity, '/' + encodeURIComponent(id) + '/' + action), {
@@ -639,7 +692,7 @@ async function organizationAction(button, root) {
     await refreshWorkspace(root);
   } catch (error) {
     const status = root.querySelector('#workforceStatus');
-    if (status) status.textContent = error.message || 'Organization structure status could not be changed.';
+    if (status) status.textContent = error.message || 'Workforce record status could not be changed.';
     button.disabled = false;
   }
 }
@@ -725,6 +778,85 @@ async function saveProfile(form, root) {
     }
     await refreshWorkspaceWithStatus(root, '#workforceProfileForm', 'Profile saved.');
   } catch (error) { status.textContent = error.message || 'Professional profile could not be saved.'; }
+  finally { submit.disabled = false; }
+}
+
+async function saveShiftTemplate(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const name = String(values.get('name') || '').trim();
+  const start = String(values.get('start_local_time') || '');
+  const end = String(values.get('end_local_time') || '');
+  const timezone = String(values.get('timezone') || '').trim();
+  const effectiveFrom = String(values.get('effective_from') || '');
+  const effectiveUntil = String(values.get('effective_until') || '');
+  const workDays = values.getAll('work_days').map(Number);
+  const breakStart = String(values.get('break_start_local_time') || '');
+  const breakEnd = String(values.get('break_end_local_time') || '');
+  if (!name || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(start) || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(end)
+    || start === end || !timezone || !/^\\d{4}-\\d{2}-\\d{2}$/.test(effectiveFrom)
+    || (effectiveUntil && effectiveUntil < effectiveFrom) || !workDays.length
+    || ((breakStart || breakEnd) && (!breakStart || !breakEnd || breakStart === breakEnd))) {
+    status.textContent = 'Complete the template name, valid local times, timezone, working days and effective dates. Provide both break times or neither.'; return;
+  }
+  const payload = {
+    name, start_local_time: start, end_local_time: end, timezone,
+    work_days: workDays, effective_from: effectiveFrom,
+    break_rules: breakStart ? [{ start_local_time: breakStart, end_local_time: breakEnd }] : [],
+  };
+  if (effectiveUntil) payload.effective_until = effectiveUntil;
+  for (const field of ['department_id','position_id','location_id']) {
+    const value = String(values.get(field) || '').trim();
+    if (value) payload[field] = value;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Creating shift template…';
+  try {
+    await request(endpoint('shift-templates'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify(payload),
+    });
+    form.reset();
+    form.querySelector('[name="timezone"]').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    for (const day of form.querySelectorAll('[name="work_days"]')) day.checked = Number(day.value) <= 5;
+    await refreshWorkspaceWithStatus(root, '#workforceShiftTemplateAdmin', 'Shift template created.');
+  } catch (error) { status.textContent = error.message || 'Shift template could not be created.'; }
+  finally { submit.disabled = false; }
+}
+
+async function generateTemplateShifts(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const templateId = form.dataset.templateId;
+  const expectedVersion = Number(form.dataset.templateVersion);
+  const values = new FormData(form);
+  const memberId = String(values.get('member_id') || '').trim();
+  const fromDate = String(values.get('from_date') || '');
+  const toDate = String(values.get('to_date') || '');
+  const from = Date.parse(fromDate + 'T00:00:00Z');
+  const to = Date.parse(toDate + 'T00:00:00Z');
+  const dayCount = (to - from) / 86400000 + 1;
+  if (!templateId || !memberId || !Number.isInteger(expectedVersion) || expectedVersion < 1
+    || !/^\\d{4}-\\d{2}-\\d{2}$/.test(fromDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(toDate)
+    || !Number.isFinite(from) || !Number.isFinite(to) || dayCount < 1 || dayCount > 31) {
+    status.textContent = 'Choose an active member and a valid ascending date range of no more than 31 days.'; return;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Generating dated shifts…';
+  try {
+    const result = await request(endpoint('shift-templates', '/' + encodeURIComponent(templateId) + '/generate'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify({ expected_version: expectedVersion, member_id: memberId, from_date: fromDate, to_date: toDate }),
+    });
+    const message = 'Created ' + Number(result.created_count || 0) + ', already existed ' + Number(result.existing_count || 0)
+      + ', conflicts ' + (Array.isArray(result.conflicts) ? result.conflicts.length : 0)
+      + ', skipped ' + (Array.isArray(result.skipped) ? result.skipped.length : 0) + '.';
+    await refreshWorkspace(root);
+    const workspace = root.querySelector('#workforceWorkspace');
+    const statusNode = workspace?.querySelector('#workforceStatus');
+    if (statusNode) statusNode.textContent = message;
+  } catch (error) { status.textContent = error.message || 'Dated shifts could not be generated.'; }
   finally { submit.disabled = false; }
 }
 
@@ -856,10 +988,13 @@ export function mountWorkforceWorkspace(root = document) {
     });
     root.addEventListener('submit', event => {
       const id = event.target?.id;
-      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm'].includes(id)) return;
+      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm'].includes(id)
+        && !event.target?.classList?.contains('workforce-shift-generation-form')) return;
       event.preventDefault();
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
       if (id === 'workforceEngagementForm') saveEngagement(event.target, root);
+      if (id === 'workforceShiftTemplateForm') saveShiftTemplate(event.target, root);
+      if (event.target?.classList?.contains('workforce-shift-generation-form')) generateTemplateShifts(event.target, root);
       if (id === 'workforceProfileForm') saveProfile(event.target, root);
       if (id === 'workforceLocationAssignmentForm') saveLocationAssignment(event.target, root);
       if (id === 'workforceMemberCreateForm') saveMemberCreate(event.target, root);
