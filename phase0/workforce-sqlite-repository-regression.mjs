@@ -259,7 +259,7 @@ try {
     member_type: 'PROVIDER',
     display_name: 'Duplicate provider identity',
   }, scopeA), error => error.code === 'WORKFORCE_USER_ALREADY_LINKED',
-  'a Sellify account cannot be linked to multiple Workforce members in one organization');
+  'a Sellify account cannot be linked to multiple Workforce members within one organization/tenant scope');
 
   const updated = repository.update('member', created.record.id, {
     expected_version: 1,
