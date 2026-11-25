@@ -681,6 +681,29 @@ try {
   assert.equal(assessment.state, 'UNKNOWN',
     'assessment must fail closed while calendar and operational commitment evidence are incomplete');
   assert.equal(assessment.is_booking, false);
+  const pendingAssessmentLeave = repository.create('leave_request', {
+    idempotency_key: 'assessment-pending-leave-a',
+    member_id: created.record.id,
+    leave_category: 'PERSONAL',
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T08:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+    reason: 'Pending assessment leave',
+  }, scopeA);
+  repository.submit('leave_request', pendingAssessmentLeave.record.id, { expected_version: 1 }, scopeA);
+  const pendingLeaveAssessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.equal(pendingLeaveAssessment.state, 'UNKNOWN');
+  assert.ok(pendingLeaveAssessment.findings.some(item => item.code === 'PENDING_LEAVE_OVERLAP'),
+    'pending leave must remain UNKNOWN until an authorized decision');
+
   assert.ok(assessment.findings.some(item => item.code === 'EVIDENCE_INCOMPLETE'
     || item.code === 'EVIDENCE_SOURCE_MISSING'));
   assert.throws(() => repository.assessAvailability({
