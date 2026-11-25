@@ -124,7 +124,7 @@ export function workforceWorkspaceShell() {
     + '<div><h4>Positions</h4><div id="workforcePositions"></div>'
     + '<form id="workforcePositionForm" class="settings-form workforce-admin-form"><label>Code<input name="code" maxlength="40" required></label><label>Name<input name="name" maxlength="120" required></label><label>Department<select name="department_id"><option value="">No department</option></select></label><label>Classification<input name="classification" maxlength="80"></label><button type="submit" class="btn-primary">Add position</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div></div></section>'
     + '<section id="workforceMemberDetails" hidden><div class="workforce-heading"><h3 id="workforceSelectedMemberTitle">Member workspace</h3>'
-    + '<button type="button" class="btn-secondary" id="workforceClearMember">Close</button></div><div id="workforceMemberRecords"></div>'
+    + '<button type="button" class="btn-secondary" id="workforceClearMember">Close</button></div><div id="workforceMemberProfile"></div><div id="workforceMemberRecords"></div>'
     + '<form id="workforceAvailabilityForm" class="settings-form workforce-availability-form">'
     + '<h4>Declare availability</h4><label>Availability<select name="availability" required><option value="AVAILABLE">Available</option>'
     + '<option value="UNAVAILABLE">Unavailable</option><option value="TENTATIVE">Tentative</option><option value="BLACKOUT">Blackout</option></select></label>'
@@ -272,7 +272,10 @@ async function refreshMember(root, memberId, member = null) {
   const workspace = root.querySelector('#workforceWorkspace');
   const details = workspace?.querySelector('#workforceMemberDetails');
   const recordsNode = workspace?.querySelector('#workforceMemberRecords');
-  if (!workspace || !details || !recordsNode) return;
+  const profileNode = workspace?.querySelector('#workforceMemberProfile');
+  if (!workspace || !details || !recordsNode || !profileNode) return;
+  member = member || workspaceData.get(workspace)?.members.find(item => String(item.id) === String(memberId)) || null;
+  profileNode.innerHTML = member ? renderMemberProfile(workspace, member) : '';
   const seq = Number(workspace.dataset.detailSequence || 0) + 1;
   workspace.dataset.detailSequence = String(seq);
   const tenantId = String(config.chatId), token = String(config.sessionToken);
@@ -294,6 +297,105 @@ async function refreshMember(root, memberId, member = null) {
   const form = workspace.querySelector('#workforceAvailabilityForm');
   form.dataset.memberId = memberId;
   form.hidden = !canManageMembers();
+}
+
+function renderMemberProfile(workspace, member) {
+  const data = workspaceData.get(workspace) || { members: [], departments: [], positions: [] };
+  const supervisors = data.members.filter(item => item.status === 'ACTIVE' && String(item.id) !== String(member.id));
+  const department = data.departments.find(item => String(item.id) === String(member.department_id));
+  const position = data.positions.find(item => String(item.id) === String(member.position_id));
+  const supervisor = data.members.find(item => String(item.id) === String(member.supervisor_member_id));
+  const account = member.user_id
+    ? '<div class="workforce-account-status"><span class="logistics-status logistics-status-active">Sellify account linked</span>'
+      + '<p class="logistics-meta">The linked account must retain an active tenant membership. Workforce does not manage its authentication.</p>'
+      + '<button type="button" class="btn-secondary" id="workforceUnlinkAccount" data-member-id="' + escapeAttr(member.id)
+      + '" data-version="' + Number(member.version || 1) + '">Unlink account</button></div>'
+    : '<form id="workforceAccountLinkForm" class="settings-form workforce-admin-form" data-member-id="' + escapeAttr(member.id)
+      + '" data-version="' + Number(member.version || 1) + '"><h4>Link an existing Sellify account</h4>'
+      + '<label>Existing account user ID<input name="user_id" autocomplete="off" required></label>'
+      + '<p class="logistics-meta">This links an existing user with active membership in this tenant. It does not create a user or grant membership.</p>'
+      + '<button type="submit" class="btn-primary">Link existing account</button><p class="logistics-meta workforce-form-status" role="status"></p></form>';
+  const editor = canManageMembers()
+    ? '<form id="workforceMemberProfileForm" class="settings-form workforce-admin-form" data-member-id="' + escapeAttr(member.id)
+      + '" data-version="' + Number(member.version || 1) + '"><h4>Professional profile and assignments</h4>'
+      + '<label>Display name<input name="display_name" maxlength="120" required value="' + escapeAttr(member.display_name || '') + '"></label>'
+      + '<label>Employee number<input name="employee_number" maxlength="80" value="' + escapeAttr(member.employee_number || '') + '"></label>'
+      + '<label>Department<select name="department_id"><option value="">Unassigned</option>' + data.departments.map(item => '<option value="' + escapeAttr(item.id) + '"'
+        + (String(item.id) === String(member.department_id || '') ? ' selected' : '') + '>' + escapeHtml(item.name) + '</option>').join('') + '</select></label>'
+      + '<label>Position<select name="position_id"><option value="">Unassigned</option>' + data.positions.map(item => '<option value="' + escapeAttr(item.id) + '"'
+        + (String(item.id) === String(member.position_id || '') ? ' selected' : '') + '>' + escapeHtml(item.name) + '</option>').join('') + '</select></label>'
+      + '<label>Supervisor<select name="supervisor_member_id"><option value="">No supervisor</option>' + supervisors.map(item => '<option value="' + escapeAttr(item.id) + '"'
+        + (String(item.id) === String(member.supervisor_member_id || '') ? ' selected' : '') + '>' + escapeHtml(item.display_name || item.id) + '</option>').join('') + '</select></label>'
+      + '<button type="submit" class="btn-primary">Save profile and assignments</button><p class="logistics-meta workforce-form-status" role="status"></p></form>'
+    : '<p class="logistics-meta">Profile and reporting changes require Workforce management permission.</p>';
+  return '<section class="workforce-profile-summary"><h4>Professional profile</h4><div class="workforce-profile-grid">'
+    + '<div><span class="logistics-meta">Type</span><strong>' + escapeHtml(member.member_type || '—') + '</strong></div>'
+    + '<div><span class="logistics-meta">Status</span><strong>' + escapeHtml(member.status || '—') + '</strong></div>'
+    + '<div><span class="logistics-meta">Department</span><strong>' + escapeHtml(department?.name || 'Unassigned') + '</strong></div>'
+    + '<div><span class="logistics-meta">Position</span><strong>' + escapeHtml(position?.name || 'Unassigned') + '</strong></div>'
+    + '<div><span class="logistics-meta">Supervisor</span><strong>' + escapeHtml(supervisor?.display_name || 'Unassigned') + '</strong></div>'
+    + '<div><span class="logistics-meta">Employee number</span><strong>' + escapeHtml(member.employee_number || 'Not assigned') + '</strong></div>'
+    + '</div>' + editor + account + '</section>';
+}
+
+async function saveMemberProfile(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const memberId = form.dataset.memberId;
+  const payload = { expected_version: Number(form.dataset.version), display_name: String(values.get('display_name') || '').trim() };
+  for (const field of ['employee_number','department_id','position_id','supervisor_member_id']) {
+    const value = String(values.get(field) || '').trim();
+    payload[field] = value || null;
+  }
+  const workspace = root.querySelector('#workforceWorkspace');
+  const position = workspaceData.get(workspace)?.positions.find(item => String(item.id) === String(payload.position_id || ''));
+  if (position?.department_id) {
+    if (payload.department_id && payload.department_id !== position.department_id) {
+      status.textContent = 'Choose a position from the selected department.'; return;
+    }
+    payload.department_id = position.department_id;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Saving professional profile…';
+  try {
+    await request(endpoint('members', '/' + encodeURIComponent(memberId)), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    status.textContent = 'Profile and assignments saved.'; await refreshWorkspace(root);
+  } catch (error) { status.textContent = error.message || 'Profile could not be saved.'; }
+  finally { submit.disabled = false; }
+}
+
+async function linkMemberAccount(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const memberId = form.dataset.memberId;
+  const payload = { expected_version: Number(form.dataset.version), user_id: String(values.get('user_id') || '').trim() };
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Checking existing account membership…';
+  try {
+    await request(endpoint('members', '/' + encodeURIComponent(memberId) + '/link-account'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    status.textContent = 'Existing account linked.'; await refreshWorkspace(root);
+  } catch (error) { status.textContent = error.message || 'Account could not be linked.'; }
+  finally { submit.disabled = false; }
+}
+
+async function unlinkMemberAccount(button, root) {
+  const memberId = button.dataset.memberId, version = Number(button.dataset.version);
+  if (!memberId || !Number.isInteger(version)) return;
+  button.disabled = true;
+  try {
+    await request(endpoint('members', '/' + encodeURIComponent(memberId) + '/unlink-account'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_version: version }),
+    });
+    await refreshWorkspace(root);
+  } catch (error) {
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = error.message || 'Account could not be unlinked.';
+    button.disabled = false;
+  }
 }
 
 async function memberAction(button, root) {
