@@ -46,6 +46,13 @@ try {
   // Keep browser requests under Playwright routing; the app's service worker can otherwise bypass page.route().
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const page = await context.newPage();
+  const dismissSettingsOverlay = async () => {
+    const modal = page.locator('#settingsModal');
+    if (await modal.evaluate(element => element.classList.contains('open'))) {
+      await modal.getByRole('button', { name: 'Close Settings' }).click({ force: true });
+      await page.waitForFunction(() => !document.querySelector('#settingsModal')?.classList.contains('open'));
+    }
+  };
   pageErrors.length = 0;
   apiCalls.length = 0;
   page.on('console', message => { if (message.type() === 'error') browserDiagnostics.consoleErrors.push(message.text()); });
@@ -146,10 +153,7 @@ try {
   });
 
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
-  const settingsModal = page.locator('#settingsModal');
-  if (await settingsModal.evaluate(element => element.classList.contains('open'))) {
-    await settingsModal.getByRole('button', { name: 'Close Settings' }).click();
-  }
+  await dismissSettingsOverlay();
   await page.evaluate(async () => {
     const state = await import('/src/state.js');
     state.setConfig({
@@ -174,10 +178,7 @@ try {
     return ['READY', 'ERROR', 'DENIED'].includes(status?.dataset.state || '');
   }, null, { timeout: 10000 });
   const workspaceStatus = await page.locator('#workforceStatus').textContent();
-  const initializedSettingsModal = page.locator('#settingsModal');
-  if (await initializedSettingsModal.evaluate(element => element.classList.contains('open'))) {
-    await initializedSettingsModal.getByRole('button', { name: 'Close Settings' }).click();
-  }
+  await dismissSettingsOverlay();
   assert.equal(
     await page.locator('#workforceStatus').getAttribute('data-state'),
     'READY',
@@ -198,11 +199,7 @@ try {
   await engagementForm.locator('[name="terms_reference"]').fill('SYNTHETIC-EMPLOYMENT-001');
   await engagementForm.getByRole('button', { name: 'Create engagement' }).click();
   await page.getByText('Engagement recorded.').waitFor({ timeout: 10000 });
-  const engagementSettingsModal = page.locator('#settingsModal');
-  if (await engagementSettingsModal.evaluate(element => element.classList.contains('open'))) {
-    await engagementSettingsModal.getByRole('button', { name: 'Close Settings' }).click({ force: true });
-    await page.waitForFunction(() => !document.querySelector('#settingsModal')?.classList.contains('open'));
-  }
+  await dismissSettingsOverlay();
   await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'DRAFT' }).waitFor();
   const engagementCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagements'));
   assert.ok(engagementCreateCall, 'manager engagement form must submit through the canonical API');
@@ -211,8 +208,10 @@ try {
   assert.match(engagementCreateCall.idempotencyKey, /^workforce-ui-/);
   await page.getByRole('button', { name: 'Submit for approval' }).click();
   await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'PENDING APPROVAL' }).waitFor();
+  await dismissSettingsOverlay();
   await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
+  await dismissSettingsOverlay();
   const engagementSubmitCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagement-synthetic-1/submit'));
   const engagementActivateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagement-synthetic-1/activate'));
   assert.equal(engagementSubmitCall?.body.expected_version, 1, 'engagement submit must use optimistic concurrency');
@@ -226,6 +225,7 @@ try {
   assert.ok(browserTimezone, 'workspace must provide a read-only timezone context');
   await form.getByRole('button', { name: 'Save availability' }).click();
   await page.getByText('Availability saved.').waitFor({ timeout: 10000 });
+  await dismissSettingsOverlay();
 
   const availabilityCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/availability'));
   assert.ok(availabilityCall, 'browser form must submit availability through the API');
