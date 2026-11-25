@@ -69,10 +69,10 @@ try {
   };
   const managerContext = { ...repositoryContext, actor: managerActor, actor_id: manager.id };
 
-  async function createActiveMember(userId, label, key, recurrenceRule = null) {
+  async function createActiveMember(userId, label, key, recurrenceRule = null, { withEngagement = true } = {}) {
     const memberResult = repository.create('member', {
       idempotency_key: `workforce-member-${key}-${suffix}`,
-      user_id: userId,
+      ...(userId ? { user_id: userId } : {}),
       member_type: 'PROVIDER',
       display_name: label,
       primary_location_id: resource.locationId || null,
@@ -105,12 +105,14 @@ try {
       effective_from: recurrenceRule ? '2026-11-19' : '2026-11-26',
       ...(recurrenceRule ? { recurrence_rule: recurrenceRule } : {}),
     }, repositoryContext);
-    const engagementResult = repository.create('engagement', {
-      idempotency_key: `workforce-engagement-${key}-${suffix}`, member_id: member.id,
-      engagement_type: 'EMPLOYMENT', starts_at: '2026-11-19T00:00:00.000Z', ends_at: '2026-12-31T15:00:00.000Z',
-    }, repositoryContext);
-    const submittedEngagement = repository.submit('engagement', engagementResult.record.id, { expected_version: 1 }, repositoryContext);
-    repository.activate('engagement', engagementResult.record.id, { expected_version: submittedEngagement.version }, repositoryContext);
+    if (withEngagement) {
+      const engagementResult = repository.create('engagement', {
+        idempotency_key: `workforce-engagement-${key}-${suffix}`, member_id: member.id,
+        engagement_type: 'EMPLOYMENT', starts_at: '2026-11-19T00:00:00.000Z', ends_at: '2026-12-31T15:00:00.000Z',
+      }, repositoryContext);
+      const submittedEngagement = repository.submit('engagement', engagementResult.record.id, { expected_version: 1 }, repositoryContext);
+      repository.activate('engagement', engagementResult.record.id, { expected_version: submittedEngagement.version }, repositoryContext);
+    }
     return member;
   }
 
@@ -192,6 +194,29 @@ try {
     idempotency_key: `workforce-booking-confirm-b-${suffix}`,
   }, ownerActor);
   assert.equal(confirmedB.booking.workforce_member_id, memberB.id);
+
+  // An external professional without a Sellify user account remains assignable
+  // by an authorized manager; Identity membership is required only when linked.
+  const externalMember = await createActiveMember(null, 'External Provider', 'external');
+  const externalBooking = await createAcceptedBooking('external-provider', '2026-11-26T14:00:00+03:00', '2026-11-26T15:00:00+03:00');
+  const confirmedExternal = await store.transitionServiceBooking(seller.chatId, order.server_order_id, externalBooking.id, {
+    status: 'CONFIRMED', expected_version: externalBooking.version,
+    service_resource_id: resource.id, workforce_member_id: externalMember.id,
+    idempotency_key: `workforce-booking-confirm-external-${suffix}`,
+  }, ownerActor);
+  assert.equal(confirmedExternal.booking.workforce_member_id, externalMember.id);
+
+  // A member without an active engagement cannot be assigned to a booking.
+  const unengagedMember = await createActiveMember(manager.id, 'Unengaged Provider', 'unengaged', null, { withEngagement: false });
+  const unengagedBooking = await createAcceptedBooking('unengaged-provider', '2026-11-26T15:00:00+03:00', '2026-11-26T16:00:00+03:00');
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, unengagedBooking.id, {
+      status: 'CONFIRMED', expected_version: unengagedBooking.version,
+      service_resource_id: resource.id, workforce_member_id: unengagedMember.id,
+      idempotency_key: `workforce-booking-unengaged-${suffix}`,
+    }, ownerActor),
+    error => error?.code === 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+  );
 
   await assert.rejects(
     store.createServiceBooking(seller.chatId, order.server_order_id, {
