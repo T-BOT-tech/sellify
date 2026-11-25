@@ -931,17 +931,26 @@ export class WorkforceSqliteRepository {
     const applicableCalendars = activeCalendars.filter(item =>
       workforceCalendarCoversEffectiveRange(item, start, end));
     const calendar = applicableCalendars.length === 1 ? applicableCalendars[0] : null;
-    const logisticsAssignmentTable = this.db.prepare(`
-      SELECT name FROM sqlite_master WHERE type='table' AND name='delivery_assignments'
-    `).get();
-    const logisticsAssignments = member.user_id && logisticsAssignmentTable
+    const logisticsTables = new Set(this.db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type='table' AND name IN ('delivery_assignments','fulfillments','orders')
+    `).all().map(row => row.name));
+    const logisticsEvidenceAvailable = ['delivery_assignments','fulfillments','orders']
+      .every(name => logisticsTables.has(name));
+    const logisticsAssignments = member.user_id && logisticsEvidenceAvailable
       ? this.db.prepare(`
-        SELECT id, status, fulfillment_id, assigned_at, updated_at
-        FROM delivery_assignments
-        WHERE organization_id=? AND courier_user_id=?
-          AND status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
-        ORDER BY assigned_at LIMIT 250
-      `).all(scope.organization_id, String(member.user_id))
+        SELECT da.id, da.status, da.fulfillment_id, da.assigned_at, da.updated_at,
+          f.scheduled_at
+        FROM delivery_assignments da
+        JOIN fulfillments f
+          ON f.id=da.fulfillment_id AND f.organization_id=da.organization_id
+        JOIN orders o
+          ON o.server_order_id=f.server_order_id AND o.chat_id=?
+        WHERE da.organization_id=? AND da.courier_user_id=?
+          AND f.fulfillment_type='delivery'
+          AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
+        ORDER BY da.assigned_at LIMIT 250
+      `).all(scope.chat_id, scope.organization_id, String(member.user_id))
       : [];
 
     const calendarAssessment = applicableCalendars.length === 1
@@ -1066,12 +1075,12 @@ export class WorkforceSqliteRepository {
         policy.state === 'UNKNOWN' ? 'Scheduling policy evaluation is unknown' : null),
       operational_commitments: {
         status: !member.user_id ? 'COMPLETE'
-          : !logisticsAssignmentTable ? 'MISSING'
+          : !logisticsEvidenceAvailable ? 'MISSING'
             : logisticsAssignments.length ? 'MISSING' : 'COMPLETE',
         ...(!member.user_id
           ? { reason: 'Logistics courier assignment is not applicable because this Workforce member has no linked Identity user; Service Booking commitments were still checked by workforce_member_id' }
-          : !logisticsAssignmentTable
-            ? { reason: 'The canonical Logistics delivery-assignment table is not available to this repository connection' }
+          : !logisticsEvidenceAvailable
+            ? { reason: 'The canonical Logistics delivery-assignment, fulfillment, or order table is not available to this repository connection' }
             : logisticsAssignments.length
               ? { reason: 'Active Logistics assignments exist but do not expose a bounded work interval' } : {}),
         evaluated_at: this.clock(),
