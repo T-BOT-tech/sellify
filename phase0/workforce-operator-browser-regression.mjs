@@ -97,6 +97,15 @@ try {
   await page.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
+    const unrelatedAppEntrypoints = new Set([
+      '/src/p0-ai-procurement-proposal.js',
+      '/src/agriculture-cross-border-productization.js',
+      '/src/window-bridge.js',
+    ]);
+    if (unrelatedAppEntrypoints.has(url.pathname)) {
+      await route.fulfill({ status: 200, contentType: 'application/javascript', body: '// Isolated Workforce browser regression: unrelated app bootstrap is not under test.\n' });
+      return;
+    }
     if (url.hostname === 'telegram.org' && url.pathname === '/js/telegram-web-app.js') {
       await route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.Telegram = window.Telegram || { WebApp: { initData: "", initDataUnsafe: {}, ready() {}, expand() {} } };' });
       return;
