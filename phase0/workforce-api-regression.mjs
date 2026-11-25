@@ -86,6 +86,26 @@ const invalidUtilization = validateWorkforceApiPayload('utilization', 'create', 
 });
 assert.equal(invalidUtilization.valid, false);
 
+const validLeaveRequest = validateWorkforceApiPayload('leave_request','create', {
+  leave_category: 'ANNUAL', starts_at: '2026-12-01T00:00:00.000Z', ends_at: '2026-12-03T00:00:00.000Z',
+  timezone: 'Africa/Addis_Ababa', reason: 'Planned annual leave', all_day: true,
+});
+assert.equal(validLeaveRequest.valid,true);
+const invalidLeaveRequest = validateWorkforceApiPayload('leave_request','create', {
+  leave_category: 'UNSUPPORTED', starts_at: '2026-12-03T00:00:00', ends_at: '2026-12-01T00:00:00',
+  timezone: 'Not/A_Real_Zone', reason: '',
+});
+assert.equal(invalidLeaveRequest.valid,false);
+const invalidLeaveRejection = validateWorkforceApiPayload('leave_request','reject',{ decision_reason: '' });
+assert.equal(invalidLeaveRejection.valid,false);
+const validAbsence = validateWorkforceApiPayload('absence','create', {
+  absence_type: 'SICKNESS', starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T12:00:00.000Z',
+  timezone: 'Africa/Addis_Ababa', reason: 'Unplanned sickness',
+});
+assert.equal(validAbsence.valid,true);
+const invalidAbsenceVoid = validateWorkforceApiPayload('absence','void',{ reason: '' });
+assert.equal(invalidAbsenceVoid.valid,false);
+
 const server = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
 const handlerStart = server.indexOf('async function handleWorkforce(');
 const handlerEnd = server.indexOf('// ---------- routing ----------', handlerStart);
@@ -101,6 +121,8 @@ for (const token of [
   'workforceProviderResourceIds(session)',
   'listServiceResources(chatId',
   'provider_user_id',
+  'member_user_id',
+  'repository.listEntityHistory',
 ]) assert.ok(handler.includes(token), `missing API boundary: ${token}`);
 assert.ok(handler.includes('repository.generateShiftsFromTemplate'));
 assert.ok(handler.includes("action === 'generate'"));
@@ -128,7 +150,7 @@ for (const routeKey of [
   "members: 'member'", "profiles: 'profile'", "engagements: 'engagement'",
   "calendars: 'calendar'", "'calendar-exceptions': 'calendar_exception'",
   "availability: 'availability'", "assignments: 'assignment'", "shifts: 'shift'",
-  "allocations: 'allocation'", "utilization: 'utilization'",
+  "allocations: 'allocation'", "utilization: 'utilization'", "'leave-requests': 'leave_request'", "absences: 'absence'",
 ]) assert.ok(server.includes(routeKey), `missing route entity: ${routeKey}`);
 
 console.log('PASS Workforce API validation and route-boundary regression');
