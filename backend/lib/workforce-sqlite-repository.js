@@ -603,6 +603,10 @@ export class WorkforceSqliteRepository {
 
     const clauses = ['organization_id = ?', 'tenant_id = ?', 'chat_id = ?'];
     const values = [scope.organization_id, scope.tenant_id, scope.chat_id];
+    if (context.member_user_id) {
+      clauses.push('member_id IN (SELECT id FROM workforce_members WHERE organization_id = ? AND tenant_id = ? AND user_id = ?)');
+      values.push(scope.organization_id, scope.tenant_id, String(context.member_user_id));
+    }
     for (const field of ['member_id','resource_id','booking_id','operational_task_id']) {
       const value = filters[field];
       if (value !== undefined && value !== null && value !== '') {

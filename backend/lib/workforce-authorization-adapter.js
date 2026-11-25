@@ -34,7 +34,7 @@ function permissionFor(entity, operation) {
   if (entity === 'member' && operation === 'suspend') return 'workforce:member:suspend';
   if (entity === 'member' && ['link_account','unlink_account'].includes(operation)) return mapping.manage;
   if (entity === 'allocation' && operation === 'release') return mapping.release;
-  if (entity === 'leave_request' && ['create','submit'].includes(operation)) return mapping.request;
+  if (entity === 'leave_request' && ['create','update','submit'].includes(operation)) return mapping.request;
   if (entity === 'leave_request' && operation === 'withdraw') return mapping.withdraw;
   return mapping.manage;
 }
