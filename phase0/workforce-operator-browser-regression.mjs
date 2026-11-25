@@ -82,6 +82,8 @@ try {
     member_type: 'PROVIDER', status: 'ACTIVE', version: 1,
   };
   let engagement = null;
+  let shiftTemplate = null;
+  let generatedShift = null;
   let profile = null;
   let locationAssignment = null;
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
@@ -188,6 +190,43 @@ try {
     }
     if (pathname.endsWith('/engagements') && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: engagement ? [engagement] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/shift-templates') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: shiftTemplate ? [shiftTemplate] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/shift-templates') && method === 'POST') {
+      assert.equal(body.name, 'Morning Shift');
+      assert.equal(body.start_local_time, '08:00');
+      assert.equal(body.end_local_time, '16:30');
+      assert.equal(body.timezone, 'Africa/Addis_Ababa');
+      assert.deepEqual(body.work_days, [1,2,3,4,5]);
+      assert.deepEqual(body.break_rules, [{ start_local_time: '12:00', end_local_time: '12:30' }]);
+      assert.equal(body.location_id, 'location-synthetic-1');
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      shiftTemplate = { id: 'shift-template-synthetic-1', ...body, status: 'DRAFT', version: 1 };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: shiftTemplate }) });
+      return;
+    }
+    if (pathname.endsWith('/shift-template-synthetic-1/activate') && method === 'POST') {
+      assert.equal(body.expected_version, shiftTemplate.version);
+      shiftTemplate = { ...shiftTemplate, status: 'ACTIVE', version: shiftTemplate.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: shiftTemplate }) });
+      return;
+    }
+    if (pathname.endsWith('/shift-template-synthetic-1/generate') && method === 'POST') {
+      assert.equal(body.expected_version, shiftTemplate.version);
+      assert.equal(body.member_id, member.id);
+      assert.equal(body.from_date, '2026-11-26');
+      assert.equal(body.to_date, '2026-11-26');
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      generatedShift = { id: 'generated-shift-synthetic-1', member_id: member.id, shift_template_id: shiftTemplate.id,
+        generated_local_date: body.from_date, timezone: shiftTemplate.timezone, status: 'DRAFT', version: 1 };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
+        created_count: 1, existing_count: 0, conflict_count: 0, skipped_count: 0,
+        created_records: [generatedShift], existing_records: [], conflicts: [], skipped: [],
+      }) });
       return;
     }
     if (pathname.endsWith('/engagements') && method === 'POST') {
@@ -361,6 +400,36 @@ try {
   assert.equal(engagementSubmitCall?.body.expected_version, 1, 'engagement submit must use optimistic concurrency');
   assert.equal(engagementActivateCall?.body.expected_version, 2, 'engagement activation must use the latest version');
 
+  const templateForm = page.locator('#workforceShiftTemplateForm');
+  await templateForm.locator('[name="name"]').fill('Morning Shift');
+  await templateForm.locator('[name="start_local_time"]').fill('08:00');
+  await templateForm.locator('[name="end_local_time"]').fill('16:30');
+  await templateForm.locator('[name="timezone"]').fill('Africa/Addis_Ababa');
+  await templateForm.locator('[name="break_start_local_time"]').fill('12:00');
+  await templateForm.locator('[name="break_end_local_time"]').fill('12:30');
+  await templateForm.locator('[name="location_id"]').selectOption('location-synthetic-1');
+  await templateForm.locator('[name="effective_from"]').fill('2026-11-26');
+  await templateForm.getByRole('button', { name: 'Create shift template' }).click();
+  await page.getByText('Shift template created.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-shift-template-row .logistics-status').filter({ hasText: 'DRAFT' }).waitFor();
+  const templateCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/shift-templates'));
+  assert.ok(templateCreateCall, 'manager shift template form must use the canonical API');
+  assert.equal(templateCreateCall.authorization, 'Bearer synthetic-session-token');
+  assert.match(templateCreateCall.idempotencyKey, /^workforce-ui-/);
+  await page.locator('.workforce-shift-template-row').getByRole('button', { name: 'Activate' }).click();
+  await page.locator('.workforce-shift-template-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
+  const generationForm = page.locator('.workforce-shift-generation-form');
+  await generationForm.locator('[name="member_id"]').selectOption('member-synthetic-1');
+  await generationForm.locator('[name="from_date"]').fill('2026-11-26');
+  await generationForm.locator('[name="to_date"]').fill('2026-11-26');
+  await generationForm.getByRole('button', { name: 'Generate dated shifts' }).click();
+  await page.getByText('Created 1, already existed 0, conflicts 0, skipped 0.').waitFor({ timeout: 10000 });
+  const generationCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/shift-template-synthetic-1/generate'));
+  assert.equal(generationCall?.body.expected_version, 2, 'generation must use the active template version');
+  assert.equal(generationCall?.body.member_id, member.id);
+  assert.equal(generationCall?.authorization, 'Bearer synthetic-session-token');
+  assert.match(generationCall?.idempotencyKey || '', /^workforce-ui-/);
+
   const form = page.locator('#workforceAvailabilityForm');
   await form.locator('[name="availability"]').selectOption('AVAILABLE');
   await form.locator('[name="starts_at"]').fill('2026-11-26T09:00');
@@ -392,7 +461,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, primary location editing, account link/unlink, location assignment lifecycle, structured profile create/update, engagement lifecycle, availability, and optimistic concurrency: VERIFIED');
+  console.log('Mobile workspace, primary location editing, account link/unlink, location assignment lifecycle, structured profile create/update, engagement lifecycle, shift-template creation and roster generation, availability, and optimistic concurrency: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));
