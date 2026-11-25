@@ -639,6 +639,20 @@ try {
     starts_at: '2026-11-30T05:00:00.000Z', ends_at: '2026-11-30T13:30:00.000Z',
     timezone: 'Africa/Addis_Ababa', break_rules: [],
   }, scopeA);
+  const shiftUpdateCandidate = repository.create('shift', {
+    idempotency_key: 'shift-update-candidate',
+    member_id: created.record.id,
+    location_id: 'location-a',
+    starts_at: '2026-11-25T05:00:00.000Z',
+    ends_at: '2026-11-25T06:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.throws(() => repository.update('shift', shiftUpdateCandidate.record.id, {
+    expected_version: 1,
+    starts_at: '2026-11-26T05:30:00.000Z',
+    ends_at: '2026-11-26T06:30:00.000Z',
+  }, scopeA), error => error.code === 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT',
+  'shift updates must rerun overlap and active scheduling-policy checks inside the write transaction');
   const conflictedGeneration = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
     expected_version: templateAfterGeneration.version, member_id: created.record.id,
     from_date: '2026-11-30', to_date: '2026-11-30', idempotency_key: 'shift-generation-conflict',
