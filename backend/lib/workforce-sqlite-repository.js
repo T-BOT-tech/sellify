@@ -317,6 +317,17 @@ function addWorkforceCalendarDay(date) {
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
+function workforceCalendarCoversEffectiveRange(calendar, startsAt, endsAt) {
+  try {
+    const startDate = workforceCalendarLocalDateAt(Date.parse(startsAt), calendar.timezone);
+    const endDate = workforceCalendarLocalDateAt(Date.parse(endsAt) - 1, calendar.timezone);
+    return (!calendar.effective_from || calendar.effective_from <= startDate)
+      && (!calendar.effective_until || calendar.effective_until >= endDate);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Evaluates the weekly_schedule shape already present in repository fixtures:
  * [{ day: 'MONDAY', intervals: [{ start: '09:00', end: '17:00' }] }].
@@ -910,14 +921,23 @@ export class WorkforceSqliteRepository {
     `).all(scope.organization_id, scope.chat_id, String(candidate.member_id),
       end, start, candidate.booking_id ? String(candidate.booking_id) : null,
       candidate.booking_id ? String(candidate.booking_id) : null);
-    const calendar = this.db.prepare(`
+    const activeCalendars = this.db.prepare(`
       SELECT id, version, updated_at, timezone, weekly_schedule_json, holiday_calendar_json,
         effective_from, effective_until
       FROM workforce_calendars
       WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
-      ORDER BY effective_from DESC LIMIT 1
-    `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id));
-    const calendarAssessment = assessWeeklyCalendarCoverage(calendar, start, end);
+      ORDER BY effective_from DESC, updated_at DESC
+    `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id));
+    const applicableCalendars = activeCalendars.filter(item =>
+      workforceCalendarCoversEffectiveRange(item, start, end));
+    const calendar = applicableCalendars.length === 1 ? applicableCalendars[0] : null;
+    const calendarAssessment = applicableCalendars.length === 1
+      ? assessWeeklyCalendarCoverage(calendar, start, end)
+      : { complete: false, covered: false, reason: activeCalendars.length === 0
+        ? 'No active workforce calendar was found'
+        : applicableCalendars.length > 1
+          ? 'More than one active workforce calendar covers the requested interval'
+          : 'No active workforce calendar effective range covers the requested interval' };
     const exceptions = calendar ? this.db.prepare(`
       SELECT id, version, updated_at, exception_type, starts_at, ends_at
       FROM workforce_calendar_exceptions
@@ -1015,7 +1035,7 @@ export class WorkforceSqliteRepository {
       calendar: evidence(calendarAssessment.complete ? 'COMPLETE' : 'MISSING', calendar,
         calendarAssessment.complete ? null : calendarAssessment.reason),
       calendar_exceptions: evidence(calendar && !unsupportedCalendarException ? 'COMPLETE' : 'MISSING', calendar,
-        !calendar ? 'No active calendar was found to scope exceptions'
+        !calendar ? 'Exactly one effective active calendar is required to scope exceptions'
           : unsupportedCalendarException ? 'A calendar exception has no verified evaluation semantics' : null),
       availability_windows: queryEvidence(invalidAvailabilityWindow
         ? (invalidAvailabilityWindow.result.reason || 'An availability window could not be evaluated safely') : null),
