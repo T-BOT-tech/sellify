@@ -3878,13 +3878,16 @@ async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
 
 
 const WORKFORCE_API_ENTITIES = Object.freeze({
+  departments: 'department', positions: 'position',
   members: 'member', profiles: 'profile', engagements: 'engagement',
   calendars: 'calendar', 'calendar-exceptions': 'calendar_exception',
   availability: 'availability', assignments: 'assignment', shifts: 'shift',
   allocations: 'allocation', utilization: 'utilization',
 });
 const WORKFORCE_API_FIELDS = Object.freeze({
-  member: ['member_type','primary_location_id','timezone','display_name','employee_number'],
+  department: ['code','name','description'],
+  position: ['code','name','description','department_id','classification'],
+  member: ['member_type','primary_location_id','timezone','display_name','employee_number','department_id','position_id','supervisor_member_id'],
   profile: ['skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
   engagement: ['engagement_type','starts_at','ends_at','approver_user_id','terms_reference'],
   calendar: ['location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
@@ -3908,6 +3911,8 @@ const WORKFORCE_API_CREATE_ONLY_FIELDS = Object.freeze({
   utilization: ['member_id','booking_id','operational_task_id'],
 });
 const WORKFORCE_CREATE_REQUIRED = Object.freeze({
+  department: ['code','name'],
+  position: ['code','name'],
   member: ['member_type'],
   profile: ['member_id','effective_from'],
   engagement: ['member_id','engagement_type','starts_at'],
