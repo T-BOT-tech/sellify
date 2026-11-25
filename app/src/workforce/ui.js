@@ -8,6 +8,8 @@ const SECTIONS = Object.freeze([
   ['availability', 'Availability'], ['assignments', 'Assignments'], ['shifts', 'Shifts'], ['allocations', 'Allocations'],
 ]);
 const boundRoots = new WeakSet();
+const workspaceData = new WeakMap();
+const MEMBER_PAGE_SIZE = 20;
 let mountedWorkspace = null;
 
 function apiBase() { return String(config.syncUrl || window.location.origin).replace(/\/$/, ''); }
@@ -52,19 +54,30 @@ function renderSummary(summary = {}) {
     + ' · Open ' + Number(summary.open_events || 0) + ' · Cancelled ' + Number(summary.cancelled_events || 0)
     + ' · Missing actuals ' + Number(summary.completed_missing_actual_events || 0) + '</p>';
 }
-function renderMember(member) {
+function renderMember(member, lookup = {}) {
   const state = String(member.status || 'UNKNOWN').toUpperCase();
   const action = state === 'DRAFT' || state === 'SUSPENDED' ? 'activate' : state === 'ACTIVE' ? 'suspend' : '';
   const actionButton = canManageMembers() && action
     ? '<button class="btn-secondary workforce-member-action" type="button" data-action="' + action
       + '" data-member-id="' + escapeAttr(member.id) + '" data-version="' + Number(member.version || 1) + '">'
       + (action === 'activate' ? 'Activate' : 'Suspend') + '</button>' : '';
+  const deactivateButton = canManageMembers() && ['ACTIVE','SUSPENDED'].includes(state)
+    ? '<button class="btn-secondary workforce-member-action" type="button" data-action="deactivate" data-member-id="'
+      + escapeAttr(member.id) + '" data-version="' + Number(member.version || 1) + '">Deactivate</button>' : '';
+  const department = lookup.departments?.find(item => String(item.id) === String(member.department_id));
+  const position = lookup.positions?.find(item => String(item.id) === String(member.position_id));
+  const supervisor = lookup.members?.find(item => String(item.id) === String(member.supervisor_member_id));
   return '<article class="logistics-card workforce-member-card"><div class="logistics-top"><strong>'
     + escapeHtml(member.display_name || member.user_id || 'Workforce member') + '</strong><span class="logistics-status">'
     + escapeHtml(state.replaceAll('_', ' ')) + '</span></div><div class="logistics-meta">'
     + escapeHtml(String(member.member_type || 'Member').replaceAll('_', ' ')) + ' · v' + Number(member.version || 1)
-    + '</div><div class="workforce-member-controls"><button type="button" class="btn-secondary workforce-select-member" data-member-id="'
-    + escapeAttr(member.id) + '">Open member</button>' + actionButton + '</div></article>';
+    + '</div><div class="logistics-meta workforce-member-context">'
+    + (member.employee_number ? 'Employee # ' + escapeHtml(member.employee_number) + ' · ' : '')
+    + 'Department: ' + escapeHtml(department?.name || 'Unassigned') + ' · Position: ' + escapeHtml(position?.name || 'Unassigned')
+    + ' · Supervisor: ' + escapeHtml(supervisor?.display_name || 'Unassigned')
+    + ' · Account: ' + (member.user_id ? 'Linked' : 'No login linked') + '</div>'
+    + '<div class="workforce-member-controls"><button type="button" class="btn-secondary workforce-select-member" data-member-id="'
+    + escapeAttr(member.id) + '">Open member</button>' + actionButton + deactivateButton + '</div></article>';
 }
 function renderRecords(title, records) {
   const rows = records.slice(0, 12).map(record => {
@@ -83,11 +96,33 @@ function renderRecords(title, records) {
 export function workforceWorkspaceShell() {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   return '<section id="workforceWorkspace" class="settings-section" aria-label="Workforce workspace">'
-    + '<div class="workforce-heading"><div><h2>Workforce</h2><p class="logistics-meta">People, availability, assignments and work records. Server authorization remains authoritative.</p></div>'
+    + '<div class="workforce-heading"><div><h2>Workforce</h2><p class="logistics-meta">People, organizational structure, availability and work records. Server authorization remains authoritative.</p></div>'
     + '<button type="button" class="btn-secondary" id="workforceRefresh">Refresh</button></div>'
     + '<p id="workforceStatus" class="logistics-meta" role="status" aria-live="polite">Loading Workforce…</p>'
-    + '<section><h3>Utilization</h3><div id="workforceSummary"></div></section>'
-    + '<section><h3>Members</h3><div id="workforceMembers"></div></section>'
+    + '<section><h3>Overview</h3><div id="workforceOverviewMetrics" class="workforce-overview-metrics"></div><div id="workforceSummary"></div></section>'
+    + '<section><div class="workforce-heading"><h3>Professional directory</h3><span id="workforceDirectoryCount" class="logistics-meta"></span></div>'
+    + '<div class="workforce-directory-filters">'
+    + '<label class="workforce-search-label">Search<input id="workforceMemberSearch" type="search" placeholder="Name or employee number"></label>'
+    + '<label>Type<select id="workforceMemberTypeFilter"><option value="">All types</option><option>EMPLOYEE</option><option>CONTRACTOR</option><option>PROVIDER</option><option>VOLUNTEER</option></select></label>'
+    + '<label>Status<select id="workforceMemberStatusFilter"><option value="">All statuses</option><option>ACTIVE</option><option>DRAFT</option><option>SUSPENDED</option><option>INACTIVE</option></select></label>'
+    + '<label>Department<select id="workforceDepartmentFilter"><option value="">All departments</option></select></label>'
+    + '<label>Position<select id="workforcePositionFilter"><option value="">All positions</option></select></label>'
+    + '<label>Location ID<input id="workforceLocationFilter" type="search" placeholder="Any location"></label></div>'
+    + '<div id="workforceMembers"></div><div id="workforceMemberPagination" class="workforce-pagination"></div></section>'
+    + '<section id="workforceMemberCreateSection" hidden><h3>Add a professional</h3><p class="logistics-meta">A Workforce record can exist without a Sellify login. Link an account later when appropriate.</p>'
+    + '<form id="workforceMemberCreateForm" class="settings-form workforce-admin-form">'
+    + '<label>Professional type<select name="member_type" required><option value="EMPLOYEE">Employee</option><option value="CONTRACTOR">Contractor</option><option value="PROVIDER">Service professional</option><option value="VOLUNTEER">Volunteer</option></select></label>'
+    + '<label>Display name<input name="display_name" maxlength="120" required></label>'
+    + '<label>Employee number (optional)<input name="employee_number" maxlength="80"></label>'
+    + '<label>Department<select name="department_id"><option value="">Unassigned</option></select></label>'
+    + '<label>Position<select name="position_id"><option value="">Unassigned</option></select></label>'
+    + '<label>Supervisor<select name="supervisor_member_id"><option value="">No supervisor</option></select></label>'
+    + '<button type="submit" class="btn-primary">Create professional record</button><p class="logistics-meta workforce-form-status" role="status"></p></form></section>'
+    + '<section id="workforceOrganizationAdmin" hidden><h3>Organization structure</h3>'
+    + '<div class="workforce-admin-grid"><div><h4>Departments</h4><div id="workforceDepartments"></div>'
+    + '<form id="workforceDepartmentForm" class="settings-form workforce-admin-form"><label>Code<input name="code" maxlength="40" required></label><label>Name<input name="name" maxlength="120" required></label><label>Description<input name="description" maxlength="1000"></label><button type="submit" class="btn-primary">Add department</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div>'
+    + '<div><h4>Positions</h4><div id="workforcePositions"></div>'
+    + '<form id="workforcePositionForm" class="settings-form workforce-admin-form"><label>Code<input name="code" maxlength="40" required></label><label>Name<input name="name" maxlength="120" required></label><label>Department<select name="department_id"><option value="">No department</option></select></label><label>Classification<input name="classification" maxlength="80"></label><button type="submit" class="btn-primary">Add position</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div></div></section>'
     + '<section id="workforceMemberDetails" hidden><div class="workforce-heading"><h3 id="workforceSelectedMemberTitle">Member workspace</h3>'
     + '<button type="button" class="btn-secondary" id="workforceClearMember">Close</button></div><div id="workforceMemberRecords"></div>'
     + '<form id="workforceAvailabilityForm" class="settings-form workforce-availability-form">'
@@ -97,6 +132,84 @@ export function workforceWorkspaceShell() {
     + '<label>Timezone<input name="timezone" value="' + escapeAttr(zone) + '" readonly required></label>'
     + '<button type="submit" class="btn-primary">Save availability</button><p class="logistics-meta workforce-form-status" role="status"></p></form></section></section>';
 }
+function renderOverviewMetrics(members, departments, positions, engagements) {
+  const activeEmployees = members.filter(member => member.status === 'ACTIVE' && member.member_type === 'EMPLOYEE').length;
+  const external = members.filter(member => !member.user_id).length;
+  const inactive = members.filter(member => ['SUSPENDED','INACTIVE'].includes(member.status)).length;
+  const pending = engagements.filter(item => ['DRAFT','PENDING','REQUESTED','SUBMITTED'].includes(String(item.status || '').toUpperCase())).length;
+  const metrics = [
+    ['Active employees', activeEmployees], ['External professionals', external],
+    ['Suspended / inactive', inactive], ['Departments', departments.length],
+    ['Positions', positions.length], ['Pending engagements', pending],
+  ];
+  return metrics.map(([label,value]) => '<article class="logistics-card workforce-overview-metric"><span class="logistics-meta">'
+    + escapeHtml(label) + '</span><strong>' + Number(value) + '</strong></article>').join('');
+}
+
+function renderMemberDirectory(root) {
+  const workspace = root.querySelector('#workforceWorkspace');
+  const data = workspaceData.get(workspace);
+  if (!workspace || !data) return;
+  const query = String(workspace.querySelector('#workforceMemberSearch')?.value || '').trim().toLowerCase();
+  const type = String(workspace.querySelector('#workforceMemberTypeFilter')?.value || '');
+  const status = String(workspace.querySelector('#workforceMemberStatusFilter')?.value || '');
+  const departmentId = String(workspace.querySelector('#workforceDepartmentFilter')?.value || '');
+  const positionId = String(workspace.querySelector('#workforcePositionFilter')?.value || '');
+  const locationId = String(workspace.querySelector('#workforceLocationFilter')?.value || '').trim().toLowerCase();
+  const filtered = data.members.filter(member => {
+    const haystack = [member.display_name, member.employee_number, member.user_id].map(value => String(value || '').toLowerCase()).join(' ');
+    return (!query || haystack.includes(query))
+      && (!type || member.member_type === type)
+      && (!status || member.status === status)
+      && (!departmentId || String(member.department_id || '') === departmentId)
+      && (!positionId || String(member.position_id || '') === positionId)
+      && (!locationId || String(member.primary_location_id || '').toLowerCase().includes(locationId));
+  });
+  const pages = Math.max(1, Math.ceil(filtered.length / MEMBER_PAGE_SIZE));
+  const page = Math.min(Math.max(0, Number(workspace.dataset.memberPage || 0)), pages - 1);
+  workspace.dataset.memberPage = String(page);
+  const records = filtered.slice(page * MEMBER_PAGE_SIZE, (page + 1) * MEMBER_PAGE_SIZE);
+  const lookup = { members: data.members, departments: data.departments, positions: data.positions };
+  workspace.querySelector('#workforceDirectoryCount').textContent = filtered.length + ' of ' + data.members.length + ' professionals';
+  workspace.querySelector('#workforceMembers').innerHTML = records.length
+    ? records.map(member => renderMember(member, lookup)).join('')
+    : '<p class="logistics-meta">No professionals match these filters.</p>';
+  workspace.querySelector('#workforceMemberPagination').innerHTML = '<button type="button" class="btn-secondary" data-member-page="prev" '
+    + (page === 0 ? 'disabled' : '') + '>Previous</button><span class="logistics-meta">Page ' + (page + 1) + ' of ' + pages + '</span>'
+    + '<button type="button" class="btn-secondary" data-member-page="next" ' + (page >= pages - 1 ? 'disabled' : '') + '>Next</button>';
+}
+
+function fillSelect(select, records, selected = '', labelField = 'name') {
+  if (!select) return;
+  const first = select.options[0]?.outerHTML || '<option value="">Unassigned</option>';
+  select.innerHTML = first + records.map(record => '<option value="' + escapeAttr(record.id) + '"'
+    + (String(record.id) === String(selected) ? ' selected' : '') + '>' + escapeHtml(record[labelField] || record.code || record.id) + '</option>').join('');
+}
+
+function renderOrganizationAdmin(workspace, departments, positions) {
+  const section = workspace.querySelector('#workforceOrganizationAdmin');
+  const createSection = workspace.querySelector('#workforceMemberCreateSection');
+  if (!canManageMembers()) { section.hidden = true; createSection.hidden = true; return; }
+  section.hidden = false; createSection.hidden = false;
+  workspace.querySelector('#workforceDepartments').innerHTML = departments.length ? departments.map(item =>
+    '<article class="workforce-admin-row"><div><strong>' + escapeHtml(item.name) + '</strong><span class="logistics-meta">' + escapeHtml(item.code) + ' · ' + escapeHtml(item.status) + '</span></div>'
+    + '<button type="button" class="btn-secondary workforce-structure-action" data-entity="departments" data-action="' + (item.status === 'ACTIVE' ? 'deactivate' : 'activate')
+    + '" data-id="' + escapeAttr(item.id) + '" data-version="' + Number(item.version || 1) + '">' + (item.status === 'ACTIVE' ? 'Deactivate' : 'Activate') + '</button></article>'
+  ).join('') : '<p class="logistics-meta">No departments yet.</p>';
+  workspace.querySelector('#workforcePositions').innerHTML = positions.length ? positions.map(item =>
+    '<article class="workforce-admin-row"><div><strong>' + escapeHtml(item.name) + '</strong><span class="logistics-meta">' + escapeHtml(item.code) + ' · ' + escapeHtml(item.status) + '</span></div>'
+    + '<button type="button" class="btn-secondary workforce-structure-action" data-entity="positions" data-action="' + (item.status === 'ACTIVE' ? 'deactivate' : 'activate')
+    + '" data-id="' + escapeAttr(item.id) + '" data-version="' + Number(item.version || 1) + '">' + (item.status === 'ACTIVE' ? 'Deactivate' : 'Activate') + '</button></article>'
+  ).join('') : '<p class="logistics-meta">No positions yet.</p>';
+  fillSelect(workspace.querySelector('#workforceDepartmentFilter'), departments, '', 'name');
+  fillSelect(workspace.querySelector('#workforcePositionFilter'), positions, '', 'name');
+  fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="department_id"]'), departments);
+  fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="position_id"]'), positions);
+  fillSelect(workspace.querySelector('#workforcePositionForm [name="department_id"]'), departments);
+  const supervisors = workspaceData.get(workspace)?.members.filter(member => member.status === 'ACTIVE') || [];
+  fillSelect(workspace.querySelector('#workforceMemberCreateForm [name="supervisor_member_id"]'), supervisors, '', 'display_name');
+}
+
 
 async function refreshWorkspace(root) {
   const workspace = root.querySelector('#workforceWorkspace');
