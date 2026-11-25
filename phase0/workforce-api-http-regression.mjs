@@ -547,6 +547,7 @@ try {
       rules: { max_shift_minutes: 600, max_daily_minutes: 600, max_weekly_minutes: 2400,
         minimum_rest_minutes: 660, minimum_break_after_minutes: 360,
         minimum_break_duration_minutes: 30, max_consecutive_days: 6,
+        allow_overrides: true, allow_unknown_overrides: false,
         required_qualifications: ['First Aid'], location_policy: 'ASSIGNED_ONLY',
         enforcement: { max_daily_minutes: 'WARN' } },
     });
@@ -563,8 +564,8 @@ try {
   assert.equal(policyActivation.payload.record?.version, 2);
   const policyUpdate = await jsonRequest(baseUrl, policyPath + '/' + encodeURIComponent(policy.id), {
     token: managerSession.token, method: 'PATCH',
-    body: { expected_version: 2, rules: { max_shift_minutes: 540, max_daily_minutes: 540,
-      enforcement: { max_daily_minutes: 'BLOCK' } } },
+    body: { expected_version: 2, rules: { max_shift_minutes: 540, max_daily_minutes: 540, allow_overrides: true,
+      allow_unknown_overrides: false, enforcement: { max_daily_minutes: 'BLOCK' } } },
   });
   assert.equal(policyUpdate.response.status, 200, JSON.stringify(policyUpdate.payload));
   assert.equal(policyUpdate.payload.record?.version, 3);
@@ -576,6 +577,27 @@ try {
   assert.ok(policyHistory.payload.records?.some(event => event.action === 'workforce.scheduling_policy.updated'
     && event.metadata?.policy_version === 3 && event.metadata?.rules?.max_shift_minutes === 540),
   'policy history must retain the exact rule snapshot for each version');
+  const shiftPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/shifts';
+  const overriddenShift = await createWorkforceRecord(baseUrl, managerSession.token, shiftPath,
+    'workforce-http-scheduling-override-' + suffix, {
+      member_id: memberId, starts_at: '2026-12-20T06:00:00.000Z',
+      ends_at: '2026-12-20T16:00:00.000Z', timezone: 'Africa/Addis_Ababa',
+      break_rules: [], override_reason: 'Emergency coverage approved by manager',
+    });
+  assert.equal(overriddenShift.constraint_state, 'BLOCKING_CONFLICT');
+  assert.equal(overriddenShift.constraint_policy_version, 3);
+  assert.equal(overriddenShift.constraint_override_reason, 'Emergency coverage approved by manager');
+  assert.equal(overriddenShift.constraint_override_by, managerUser.id);
+  assert.ok(overriddenShift.constraint_override_at);
+  const overriddenShiftHistory = await jsonRequest(baseUrl, shiftPath + '/' + encodeURIComponent(overriddenShift.id) + '/history', {
+    token: managerSession.token,
+  });
+  assert.equal(overriddenShiftHistory.response.status, 200, JSON.stringify(overriddenShiftHistory.payload));
+  assert.ok(overriddenShiftHistory.payload.records?.some(event => event.action === 'workforce.shift.created'
+    && event.metadata?.constraint_state === 'BLOCKING_CONFLICT'
+    && event.metadata?.constraint_override_reason === 'Emergency coverage approved by manager'),
+  'the original conflict and manager override reason must both remain in audit history');
+
   const crossTenantPolicyRead = await jsonRequest(baseUrl, policyPath, { token: otherSession.token });
   assert.equal(crossTenantPolicyRead.response.status, 403,
     'a session from another tenant must not read scheduling policies');
