@@ -37,9 +37,10 @@ assert.ok(ui.includes('workforceProfileForm') && ui.includes('saveProfile'),
   'authorized managers must be able to create and update structured professional profiles');
 assert.ok(ui.includes('primary_location_id') && ui.includes('optionalOrganizationLocations'),
   'professional creation and editing must use the canonical organization location directory');
-assert.ok(ui.includes("id === 'workforceMemberProfileForm'") && ui.includes("id === 'workforceAccountLinkForm'")
-  && ui.includes('unlinkMemberAccount(unlinkAccountButton'),
-  'member edit and existing-account link/unlink handlers must be connected to the workspace events');
+assert.ok(ui.includes("memberProfileForm?.addEventListener('submit'")
+  && ui.includes("accountLinkForm?.addEventListener('submit'")
+  && ui.includes("unlinkAccountButton?.addEventListener('click'"),
+  'dynamically rendered member edit and existing-account link/unlink controls must have explicit event handlers');
 assert.ok(ui.includes('workforceLocationAssignmentForm') && ui.includes('saveLocationAssignment')
   && ui.includes('assignmentAction'),
   'authorized managers must be able to create and manage dated location assignments');
