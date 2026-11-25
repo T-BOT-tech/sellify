@@ -722,3 +722,93 @@ export function runWorkforceOrganizationStructureMigration(db, now = () => new D
   ];
   return { applied: results.some(result => result.applied), version: WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION };
 }
+
+
+/** M6 / migration 94 — reusable, organization-scoped shift templates. */
+export const WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION = 94;
+
+export function runWorkforceShiftTemplateMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS workforce_shift_templates (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+        start_local_time TEXT NOT NULL CHECK (length(start_local_time)=5),
+        end_local_time TEXT NOT NULL CHECK (length(end_local_time)=5),
+        timezone TEXT NOT NULL CHECK (length(trim(timezone)) BETWEEN 1 AND 80),
+        break_rules_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (json_valid(break_rules_json) AND json_type(break_rules_json)='array'),
+        work_days_json TEXT NOT NULL DEFAULT '[1,2,3,4,5]'
+          CHECK (json_valid(work_days_json) AND json_type(work_days_json)='array'),
+        department_id TEXT REFERENCES workforce_departments(id) ON DELETE RESTRICT,
+        position_id TEXT REFERENCES workforce_positions(id) ON DELETE RESTRICT,
+        location_id TEXT REFERENCES locations(id) ON DELETE RESTRICT,
+        effective_from TEXT NOT NULL CHECK (length(effective_from)=10),
+        effective_until TEXT CHECK (effective_until IS NULL OR length(effective_until)=10),
+        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','INACTIVE')),
+        idempotency_key TEXT,
+        request_hash TEXT,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        CHECK (effective_until IS NULL OR effective_until >= effective_from),
+        UNIQUE (organization_id, tenant_id, id),
+        UNIQUE (organization_id, tenant_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_workforce_shift_templates_org_status
+        ON workforce_shift_templates(organization_id, tenant_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_workforce_shift_templates_department
+        ON workforce_shift_templates(organization_id, tenant_id, department_id, status);
+      CREATE INDEX IF NOT EXISTS idx_workforce_shift_templates_position
+        ON workforce_shift_templates(organization_id, tenant_id, position_id, status);
+      CREATE INDEX IF NOT EXISTS idx_workforce_shift_templates_location
+        ON workforce_shift_templates(organization_id, tenant_id, location_id, status);
+      CREATE TRIGGER IF NOT EXISTS workforce_shift_templates_department_scope_insert
+      BEFORE INSERT ON workforce_shift_templates BEGIN
+        SELECT CASE WHEN NEW.department_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id
+          AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id
+          AND d.chat_id=NEW.chat_id AND d.status='ACTIVE'
+        ) THEN RAISE(ABORT, 'WORKFORCE_TEMPLATE_DEPARTMENT_SCOPE_INVALID') END;
+        SELECT CASE WHEN NEW.position_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM workforce_positions p WHERE p.id=NEW.position_id
+          AND p.organization_id=NEW.organization_id AND p.tenant_id=NEW.tenant_id
+          AND p.chat_id=NEW.chat_id AND p.status='ACTIVE'
+          AND (p.department_id IS NULL OR p.department_id=NEW.department_id)
+        ) THEN RAISE(ABORT, 'WORKFORCE_TEMPLATE_POSITION_SCOPE_INVALID') END;
+        SELECT CASE WHEN NEW.location_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM locations l WHERE l.id=NEW.location_id AND l.organization_id=NEW.organization_id
+        ) THEN RAISE(ABORT, 'WORKFORCE_TEMPLATE_LOCATION_SCOPE_INVALID') END;
+      END;
+      CREATE TRIGGER IF NOT EXISTS workforce_shift_templates_reference_scope_update
+      BEFORE UPDATE OF department_id, position_id, location_id, organization_id, tenant_id, chat_id
+      ON workforce_shift_templates BEGIN
+        SELECT CASE WHEN NEW.department_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM workforce_departments d WHERE d.id=NEW.department_id
+          AND d.organization_id=NEW.organization_id AND d.tenant_id=NEW.tenant_id
+          AND d.chat_id=NEW.chat_id AND d.status='ACTIVE'
+        ) THEN RAISE(ABORT, 'WORKFORCE_TEMPLATE_DEPARTMENT_SCOPE_INVALID') END;
+        SELECT CASE WHEN NEW.position_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM workforce_positions p WHERE p.id=NEW.position_id
+          AND p.organization_id=NEW.organization_id AND p.tenant_id=NEW.tenant_id
+          AND p.chat_id=NEW.chat_id AND p.status='ACTIVE'
+          AND (p.department_id IS NULL OR p.department_id=NEW.department_id)
+        ) THEN RAISE(ABORT, 'WORKFORCE_TEMPLATE_POSITION_SCOPE_INVALID') END;
+        SELECT CASE WHEN NEW.location_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM locations l WHERE l.id=NEW.location_id AND l.organization_id=NEW.organization_id
+        ) THEN RAISE(ABORT, 'WORKFORCE_TEMPLATE_LOCATION_SCOPE_INVALID') END;
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
