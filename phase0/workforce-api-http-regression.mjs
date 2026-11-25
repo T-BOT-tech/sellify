@@ -309,17 +309,6 @@ try {
     );
   }
 
-  const engagementPath = '/tenants/' + encodeURIComponent(tenant.chatId)
-    + '/workforce/engagements/' + encodeURIComponent(createdEntities.engagements.id);
-  const submittedEngagement = await jsonRequest(baseUrl, engagementPath + '/submit', {
-    token: ownerSession.token, method: 'POST', body: { expected_version: 1 },
-  });
-  assert.equal(submittedEngagement.response.status, 200, JSON.stringify(submittedEngagement.payload));
-  const activatedEngagement = await jsonRequest(baseUrl, engagementPath + '/activate', {
-    token: ownerSession.token, method: 'POST', body: { expected_version: 2 },
-  });
-  assert.equal(activatedEngagement.response.status, 200, JSON.stringify(activatedEngagement.payload));
-
 
   const assessmentPath = item + '/availability-assessment';
   const unauthenticatedAssessment = await jsonRequest(baseUrl, assessmentPath, {
@@ -345,6 +334,27 @@ try {
   assert.equal(assessmentResponse.payload.assessment?.state, 'UNKNOWN',
     'incomplete calendar and operational evidence must never be projected as AVAILABLE');
   assert.equal(assessmentResponse.payload.assessment?.is_booking, false);
+
+  // A separate active engagement supplies the eligibility evidence for the
+  // shift fixture while the original DRAFT engagement remains available for
+  // the lifecycle transition assertions below.
+  const shiftEngagement = await createWorkforceRecord(
+    baseUrl, ownerSession.token,
+    '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/engagements',
+    'workforce-http-shift-engagement-' + suffix,
+    { member_id: memberId, engagement_type: 'EMPLOYMENT',
+      starts_at: '2026-11-25T00:00:00.000Z', ends_at: '2026-12-26T08:00:00.000Z' },
+  );
+  const shiftEngagementPath = '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/workforce/engagements/' + encodeURIComponent(shiftEngagement.id);
+  const shiftEngagementSubmitted = await jsonRequest(baseUrl, shiftEngagementPath + '/submit', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 1 },
+  });
+  assert.equal(shiftEngagementSubmitted.response.status, 200, JSON.stringify(shiftEngagementSubmitted.payload));
+  const shiftEngagementActivated = await jsonRequest(baseUrl, shiftEngagementPath + '/activate', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 2 },
+  });
+  assert.equal(shiftEngagementActivated.response.status, 200, JSON.stringify(shiftEngagementActivated.payload));
 
   const calendarId = createdEntities.calendars.id;
   const additionalFixtures = [
