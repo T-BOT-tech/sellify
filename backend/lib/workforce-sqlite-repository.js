@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { validateWorkforceRecurrenceRule } from './workforce-recurrence-contract.js';
 import { WORKFORCE_LEAVE_TRANSITIONS, WORKFORCE_ABSENCE_TRANSITIONS, validateWorkforceLeaveRequest, validateWorkforceAbsence, validateWorkforceLeaveTransition, isValidWorkforceLeaveCategory, isValidWorkforceAbsenceType } from './workforce-leave-contract.js';
 import { validateWorkforceSchedulingPolicy, validateWorkforceSchedulingPolicyRules, evaluateWorkforceSchedulingConstraints } from './workforce-scheduling-constraints-contract.js';
-import { buildShiftWindowFromTemplate, isoWeekday } from './workforce-shift-time.js';
+import { buildShiftWindowFromTemplate, isoWeekday, localDateTimeToUtc } from './workforce-shift-time.js';
 import { assessWorkforceAvailability, validateWorkforceAvailabilityAssessmentCandidate } from './workforce-availability-assessment-contract.js';
 import {
   WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
@@ -296,6 +296,105 @@ function fromDatabaseRow(row, jsonColumns) {
 
 function scopedError() {
   return fail('WORKFORCE_SCOPE_NOT_FOUND', 'Workforce record was not found in the active organization and tenant', 404);
+}
+
+const CALENDAR_WEEKDAYS = Object.freeze({
+  MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4,
+  FRIDAY: 5, SATURDAY: 6, SUNDAY: 7,
+});
+
+function workforceCalendarLocalDateAt(epoch, timezone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date(epoch));
+  const values = Object.fromEntries(parts.filter(part => part.type !== 'literal')
+    .map(part => [part.type, part.value]));
+  return values.year + '-' + values.month + '-' + values.day;
+}
+
+function addWorkforceCalendarDay(date) {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * Evaluates the weekly_schedule shape already present in repository fixtures:
+ * [{ day: 'MONDAY', intervals: [{ start: '09:00', end: '17:00' }] }].
+ * Unsupported holiday payloads and ambiguous/nonexistent local times fail closed.
+ */
+function assessWeeklyCalendarCoverage(calendar, startsAt, endsAt) {
+  if (!calendar) return { complete: false, covered: false, reason: 'No active workforce calendar covers the requested interval' };
+  try {
+    const timezone = calendar.timezone;
+    const schedule = JSON.parse(calendar.weekly_schedule_json || '[]');
+    const holidays = JSON.parse(calendar.holiday_calendar_json || '[]');
+    if (!Array.isArray(schedule) || schedule.length === 0) {
+      return { complete: false, covered: false, reason: 'Weekly calendar schedule is empty or is not an array' };
+    }
+    if (!Array.isArray(holidays)) {
+      return { complete: false, covered: false, reason: 'Holiday calendar payload is not a supported array' };
+    }
+    if (holidays.length) {
+      return { complete: false, covered: false, reason: 'Holiday calendar entries are not yet evaluated by the Workforce availability assessment' };
+    }
+    const scheduleByDay = new Map();
+    for (const entry of schedule) {
+      const day = typeof entry?.day === 'string' ? entry.day.trim().toUpperCase() : '';
+      if (!Object.hasOwn(CALENDAR_WEEKDAYS, day) || scheduleByDay.has(day) || !Array.isArray(entry.intervals)) {
+        return { complete: false, covered: false, reason: 'Weekly schedule contains an unsupported or duplicate day entry' };
+      }
+      const intervals = [];
+      for (const interval of entry.intervals) {
+        if (!interval || typeof interval.start !== 'string' || typeof interval.end !== 'string'
+          || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(interval.start)
+          || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(interval.end) || interval.start >= interval.end) {
+          return { complete: false, covered: false, reason: 'Weekly schedule interval is invalid or uses unsupported overnight hours' };
+        }
+        intervals.push({ start: interval.start, end: interval.end });
+      }
+      scheduleByDay.set(day, intervals);
+    }
+    const startEpoch = Date.parse(startsAt);
+    const endEpoch = Date.parse(endsAt);
+    let localDate = workforceCalendarLocalDateAt(startEpoch, timezone);
+    const lastLocalDate = workforceCalendarLocalDateAt(endEpoch - 1, timezone);
+    if ((calendar.effective_from && localDate < calendar.effective_from)
+      || (calendar.effective_until && lastLocalDate > calendar.effective_until)) {
+      return { complete: false, covered: false, reason: 'The active calendar effective dates do not cover the complete requested interval' };
+    }
+    const windows = [];
+    let dayCount = 0;
+    while (localDate <= lastLocalDate) {
+      dayCount += 1;
+      if (dayCount > 366) return { complete: false, covered: false, reason: 'Requested interval exceeds the bounded weekly calendar evaluation window' };
+      const weekday = Object.keys(CALENDAR_WEEKDAYS).find(day => CALENDAR_WEEKDAYS[day] === isoWeekday(localDate));
+      for (const interval of scheduleByDay.get(weekday) || []) {
+        const windowStart = Date.parse(localDateTimeToUtc(localDate, interval.start, timezone));
+        const windowEnd = Date.parse(localDateTimeToUtc(localDate, interval.end, timezone));
+        if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd) || windowEnd <= windowStart) {
+          return { complete: false, covered: false, reason: 'A weekly schedule interval could not be resolved safely in its IANA timezone' };
+        }
+        windows.push({ starts_at: windowStart, ends_at: windowEnd });
+      }
+      localDate = addWorkforceCalendarDay(localDate);
+    }
+    windows.sort((a, b) => a.starts_at - b.starts_at);
+    let cursor = startEpoch;
+    for (const window of windows) {
+      if (window.ends_at <= cursor) continue;
+      if (window.starts_at > cursor) break;
+      cursor = Math.max(cursor, window.ends_at);
+      if (cursor >= endEpoch) return { complete: true, covered: true };
+    }
+    return { complete: true, covered: false };
+  } catch (error) {
+    return {
+      complete: false, covered: false,
+      reason: error?.code === 'WORKFORCE_SHIFT_LOCAL_TIME_NONEXISTENT' || error?.code === 'WORKFORCE_SHIFT_LOCAL_TIME_AMBIGUOUS'
+        ? 'A weekly schedule boundary is ambiguous or nonexistent in the calendar timezone'
+        : 'Weekly calendar evidence could not be evaluated safely',
+    };
+  }
 }
 
 export class WorkforceSqliteRepository {
@@ -812,12 +911,13 @@ export class WorkforceSqliteRepository {
       end, start, candidate.booking_id ? String(candidate.booking_id) : null,
       candidate.booking_id ? String(candidate.booking_id) : null);
     const calendar = this.db.prepare(`
-      SELECT id, version, updated_at FROM workforce_calendars
+      SELECT id, version, updated_at, timezone, weekly_schedule_json, holiday_calendar_json,
+        effective_from, effective_until
+      FROM workforce_calendars
       WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
-        AND (effective_from IS NULL OR effective_from<=?)
-        AND (effective_until IS NULL OR effective_until>=?)
       ORDER BY effective_from DESC LIMIT 1
-    `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id), start.slice(0,10), end.slice(0,10));
+    `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id));
+    const calendarAssessment = assessWeeklyCalendarCoverage(calendar, start, end);
     const exceptions = calendar ? this.db.prepare(`
       SELECT id, version, updated_at, exception_type, starts_at, ends_at
       FROM workforce_calendar_exceptions
@@ -856,7 +956,26 @@ export class WorkforceSqliteRepository {
     });
     if (policy.state === 'BLOCKING_CONFLICT') findings.push({ code:'SCHEDULING_POLICY_BLOCK', state:'CONFLICT', source:'scheduling_policy', message:'The active scheduling policy blocks this candidate' });
     if (policy.state === 'UNKNOWN') findings.push({ code:'SCHEDULING_POLICY_UNKNOWN', state:'UNKNOWN', source:'scheduling_policy', message:'Scheduling policy evidence is incomplete' });
-    if (exceptions.length) findings.push({ code:'CALENDAR_EXCEPTION_OVERLAP', state:'UNAVAILABLE', source:'calendar_exceptions', message:'An active calendar exception overlaps the requested interval', record_id:exceptions[0].id });
+    if (!calendarAssessment.complete) findings.push({
+      code:'CALENDAR_SCHEDULE_EVALUATION_UNKNOWN', state:'UNKNOWN', source:'calendar',
+      message: calendarAssessment.reason || 'Weekly calendar evidence is incomplete',
+    });
+    else if (!calendarAssessment.covered) findings.push({
+      code:'CALENDAR_WORKING_HOURS_NOT_COVERED', state:'UNAVAILABLE', source:'calendar',
+      message:'The weekly working calendar does not cover the complete requested interval',
+    });
+    const unsupportedCalendarException = exceptions.find(item => item.exception_type === 'TEMPORARY_CHANGE'
+      || !['HOLIDAY','LEAVE','BLACKOUT'].includes(item.exception_type));
+    if (unsupportedCalendarException) findings.push({
+      code:'CALENDAR_EXCEPTION_EVALUATION_UNKNOWN', state:'UNKNOWN', source:'calendar_exceptions',
+      message:'A calendar exception type has no verified availability evaluation semantics',
+      record_id: unsupportedCalendarException.id,
+    });
+    else if (exceptions.length) findings.push({
+      code:'CALENDAR_EXCEPTION_OVERLAP', state:'UNAVAILABLE', source:'calendar_exceptions',
+      message:'An active holiday, leave, or blackout exception overlaps the requested interval',
+      record_id:exceptions[0].id,
+    });
     if (windows.some(item => item.availability === 'UNAVAILABLE' || item.availability === 'BLACKOUT')) findings.push({ code:'AVAILABILITY_WINDOW_BLOCK', state:'UNAVAILABLE', source:'availability_windows', message:'An unavailable or blackout window overlaps the requested interval' });
 
     const evidence = (status, row, reason) => ({
@@ -871,8 +990,11 @@ export class WorkforceSqliteRepository {
     const sources = {
       member: evidence('COMPLETE', member),
       engagement: evidence('COMPLETE', engagement, engagement ? null : 'No active engagement record covers this interval'),
-      calendar: evidence(calendar ? 'MISSING' : 'MISSING', calendar, 'Weekly calendar coverage and timezone/DST interval evaluation are not yet implemented'),
-      calendar_exceptions: evidence(calendar ? 'COMPLETE' : 'MISSING', calendar, calendar ? null : 'No active calendar was found to scope exceptions'),
+      calendar: evidence(calendarAssessment.complete ? 'COMPLETE' : 'MISSING', calendar,
+        calendarAssessment.complete ? null : calendarAssessment.reason),
+      calendar_exceptions: evidence(calendar && !unsupportedCalendarException ? 'COMPLETE' : 'MISSING', calendar,
+        !calendar ? 'No active calendar was found to scope exceptions'
+          : unsupportedCalendarException ? 'A calendar exception has no verified evaluation semantics' : null),
       availability_windows: evidence(windows.every(item => !item.recurrence_rule) ? 'COMPLETE' : 'MISSING', windows[0], windows.some(item => item.recurrence_rule) ? 'Recurring availability window evaluation is not yet implemented' : null),
       leave_requests: queryEvidence(pendingLeave.length ? 'An overlapping leave request is pending approval' : null),
       absences: queryEvidence(),
