@@ -1449,12 +1449,12 @@ export class WorkforceSqliteRepository {
 
     const id = String(payload.id || this.idFactory());
     const now = this.clock();
-    const columns = [
+    let columns = [
       'id','organization_id','tenant_id','chat_id',...Object.keys(data),
       ...(spec.state ? [spec.state] : []),
       'idempotency_key','request_hash','created_by','updated_by','created_at','updated_at','version',
     ];
-    const values = [
+    let values = [
       id,scope.organization_id,scope.tenant_id,scope.chat_id,
       ...Object.entries(data).map(([key,value]) => toDatabaseValue(value,key,spec.json)),
       ...(spec.state ? [INITIAL_STATES[entity]] : []),
@@ -1479,6 +1479,58 @@ export class WorkforceSqliteRepository {
         this.assertAuthorized(context, entity, 'create', duplicateRecord);
         this.db.exec('COMMIT');
         return { record: duplicateRecord, duplicate: true };
+      }
+      if (entity === 'member' && data.user_id) {
+        const existingLink = this.db.prepare(`
+          SELECT id FROM workforce_members
+          WHERE organization_id = ? AND tenant_id = ? AND user_id = ?
+          LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, String(data.user_id));
+        if (existingLink) {
+          throw fail('WORKFORCE_USER_ALREADY_LINKED', 'This Sellify user is already linked to another Workforce member in this organization', 409);
+        }
+      }
+      if (entity === 'shift') {
+        const member = this.db.prepare(`
+          SELECT id, status FROM workforce_members
+          WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+        `).get(String(data.member_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!member || member.status !== 'ACTIVE') {
+          throw fail('WORKFORCE_MEMBER_NOT_ELIGIBLE', 'Only active Workforce members can receive a shift', 409);
+        }
+        const engagement = this.db.prepare(`
+          SELECT id FROM workforce_engagements
+          WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+            AND status = 'ACTIVE' AND starts_at <= ? AND (ends_at IS NULL OR ends_at >= ?)
+          ORDER BY starts_at DESC LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(data.member_id), data.starts_at, data.ends_at);
+        if (!engagement) {
+          throw fail('WORKFORCE_ACTIVE_ENGAGEMENT_REQUIRED', 'A shift requires an active engagement covering the full shift', 409);
+        }
+        this.assertReferences(entity, data, scope, id);
+        const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(data.member_id, {
+          member_id: data.member_id, starts_at: data.starts_at, ends_at: data.ends_at,
+          timezone: data.timezone, location_id: data.location_id,
+          break_rules: data.break_rules_json || [],
+        }, scope), { overrideReason: data.constraint_override_reason || '', context });
+        data.constraint_policy_id = assessment.policy_id;
+        data.constraint_policy_version = assessment.policy_version;
+        data.constraint_state = assessment.state;
+        data.constraint_findings_json = assessment.findings;
+        data.constraint_override_reason = assessment.override?.reason || null;
+        data.constraint_override_by = assessment.override?.actor_id || null;
+        data.constraint_override_at = assessment.override?.overridden_at || null;
+        columns = [
+          'id','organization_id','tenant_id','chat_id',...Object.keys(data),
+          ...(spec.state ? [spec.state] : []),
+          'idempotency_key','request_hash','created_by','updated_by','created_at','updated_at','version',
+        ];
+        values = [
+          id,scope.organization_id,scope.tenant_id,scope.chat_id,
+          ...Object.entries(data).map(([key,value]) => toDatabaseValue(value,key,spec.json)),
+          ...(spec.state ? [INITIAL_STATES[entity]] : []),
+          String(payload.idempotency_key),requestHash,context.actor_id || null,context.actor_id || null,now,now,1,
+        ];
       }
       const placeholders = columns.map(() => '?').join(', ');
       this.db.prepare(`INSERT INTO ${spec.table} (${columns.join(', ')}) VALUES (${placeholders})`).run(...values);
@@ -1518,6 +1570,12 @@ export class WorkforceSqliteRepository {
     if (Number(existing.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
     if (entity === 'leave_request' && existing.status !== 'DRAFT') throw fail('WORKFORCE_LEAVE_REQUEST_LOCKED', 'Only draft leave requests can be edited', 409);
     if (entity === 'absence' && existing.status !== 'RECORDED') throw fail('WORKFORCE_ABSENCE_LOCKED', 'Only recorded absences can be edited', 409);
+    if (entity === 'allocation' && existing.state !== 'DRAFT') {
+      throw fail('WORKFORCE_ALLOCATION_LOCKED', 'Only draft allocations can be edited; pending or committed allocations require an explicit lifecycle operation', 409);
+    }
+    if (entity === 'shift' && !['PLANNED','CONFIRMED'].includes(String(existing.status))) {
+      throw fail('WORKFORCE_SHIFT_LOCKED', 'Only planned or confirmed shifts can be edited', 409);
+    }
     const data = {};
     for (const field of spec.fields) if (Object.hasOwn(input, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), input[field]);
     if (Object.keys(data).length === 0) throw fail('WORKFORCE_UPDATE_EMPTY', 'At least one mutable Workforce field is required');
@@ -1537,12 +1595,64 @@ export class WorkforceSqliteRepository {
     }
     this.assertReferences(entity, referenceData, scope, String(id));
     const now = this.clock();
-    const assignments = Object.keys(data).map((key) => `${key} = ?`);
-    const values = Object.entries(data).map(([key,value]) => toDatabaseValue(value,key,spec.json));
-    assignments.push('updated_by = ?','updated_at = ?','version = version + 1');
-    values.push(context.actor_id || null,now,String(id),scope.organization_id,scope.tenant_id,scope.chat_id,expected);
     this.db.exec('BEGIN IMMEDIATE');
     try {
+      if (entity === 'shift') {
+        const current = this.getForMutation('shift', id, scope, context, 'update');
+        if (Number(current.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+        if (!['PLANNED','CONFIRMED'].includes(String(current.status))) {
+          throw fail('WORKFORCE_SHIFT_LOCKED', 'Only planned or confirmed shifts can be edited', 409);
+        }
+        const candidate = { ...current, ...data };
+        this.assertReferences('shift', candidate, scope, String(id));
+        const member = this.db.prepare(`
+          SELECT id, status FROM workforce_members
+          WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+        `).get(String(candidate.member_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!member || member.status !== 'ACTIVE') {
+          throw fail('WORKFORCE_MEMBER_NOT_ELIGIBLE', 'Only active Workforce members can own a shift', 409);
+        }
+        const engagement = this.db.prepare(`
+          SELECT id FROM workforce_engagements
+          WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+            AND status = 'ACTIVE' AND starts_at <= ? AND (ends_at IS NULL OR ends_at >= ?)
+          ORDER BY starts_at DESC LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id),
+          candidate.starts_at, candidate.ends_at);
+        if (!engagement) throw fail('WORKFORCE_ACTIVE_ENGAGEMENT_REQUIRED', 'A shift requires an active engagement covering the full shift', 409);
+        const approvedLeave = this.db.prepare(`
+          SELECT id FROM workforce_leave_requests
+          WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+            AND status = 'APPROVED' AND starts_at < ? AND ends_at > ? LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id),
+          candidate.ends_at, candidate.starts_at);
+        if (approvedLeave) throw fail('WORKFORCE_LEAVE_AVAILABILITY_CONFLICT', 'The shift overlaps approved leave', 409);
+        const recordedAbsence = this.db.prepare(`
+          SELECT id FROM workforce_absences
+          WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+            AND status = 'RECORDED' AND starts_at < ? AND ends_at > ? LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id),
+          candidate.ends_at, candidate.starts_at);
+        if (recordedAbsence) throw fail('WORKFORCE_ABSENCE_AVAILABILITY_CONFLICT', 'The shift overlaps a recorded absence', 409);
+        const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(candidate.member_id, {
+          member_id: candidate.member_id, starts_at: candidate.starts_at, ends_at: candidate.ends_at,
+          timezone: candidate.timezone, location_id: candidate.location_id,
+          break_rules: candidate.break_rules || [],
+        }, scope, String(id)), { context });
+        Object.assign(data, {
+          constraint_policy_id: assessment.policy_id,
+          constraint_policy_version: assessment.policy_version,
+          constraint_state: assessment.state,
+          constraint_findings_json: assessment.findings,
+          constraint_override_reason: assessment.override?.reason || null,
+          constraint_override_by: assessment.override?.actor_id || null,
+          constraint_override_at: assessment.override?.overridden_at || null,
+        });
+      }
+      const assignments = Object.keys(data).map((key) => `${key} = ?`);
+      const values = Object.entries(data).map(([key,value]) => toDatabaseValue(value,key,spec.json));
+      assignments.push('updated_by = ?','updated_at = ?','version = version + 1');
+      values.push(context.actor_id || null,now,String(id),scope.organization_id,scope.tenant_id,scope.chat_id,expected);
       const result = this.db.prepare(`
         UPDATE ${spec.table} SET ${assignments.join(', ')}
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ? AND version = ?
@@ -1910,8 +2020,37 @@ export class WorkforceSqliteRepository {
       extraValues.push(context.actor_id || null, now, reason);
     }
 
+    let allocationAssessment = null;
     this.db.exec('BEGIN IMMEDIATE');
     try {
+      if (entity === 'allocation' && operation === 'approve') {
+        const current = this.getForMutation('allocation', id, scope, context, 'approve');
+        if (Number(current.version) !== expected || current.state !== 'PENDING_APPROVAL') {
+          throw fail('WORKFORCE_VERSION_CONFLICT', 'Allocation changed before approval', 409);
+        }
+        const member = this.db.prepare(`
+          SELECT id, timezone, primary_location_id
+          FROM workforce_members
+          WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+        `).get(String(current.member_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        const candidate = {
+          organization_id: scope.organization_id,
+          tenant_id: scope.tenant_id,
+          chat_id: scope.chat_id,
+          member_id: String(current.member_id),
+          starts_at: current.starts_at,
+          ends_at: current.ends_at,
+          timezone: String(member?.timezone || ''),
+          location_id: member?.primary_location_id || null,
+        };
+        allocationAssessment = this.assessAvailability(candidate, context);
+        if (allocationAssessment.state !== 'AVAILABLE') {
+          const error = fail('WORKFORCE_ALLOCATION_AVAILABILITY_NOT_CONFIRMED',
+            'Allocation approval requires a current AVAILABLE assessment; conflicts, unavailable or unknown evidence cannot be committed', 409);
+          error.details = { assessment: allocationAssessment };
+          throw error;
+        }
+      }
       if (entity === 'leave_request' && operation === 'approve') {
         const activeEngagement = this.db.prepare(`
           SELECT id FROM workforce_engagements
@@ -1945,6 +2084,11 @@ export class WorkforceSqliteRepository {
       `).run(...values);
       if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
       const auditMetadata = { from: record[spec.state], to: transition.to, version: expected + 1 };
+      if (allocationAssessment) auditMetadata.availability_assessment = {
+        state: allocationAssessment.state,
+        evaluated_at: allocationAssessment.evaluated_at,
+        source_versions: allocationAssessment.source_versions,
+      };
       if (reason) auditMetadata.reason = reason;
       if (decisionReason) auditMetadata.decision_reason = decisionReason;
       this.writeAudit(scope, entity, String(id), operation, auditMetadata, context);
