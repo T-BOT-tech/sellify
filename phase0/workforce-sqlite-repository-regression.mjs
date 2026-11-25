@@ -900,8 +900,9 @@ try {
     .find(item => item.source === 'calendar')?.status, 'COMPLETE',
   'a future-dated active calendar must not shadow the effective calendar for an earlier interval');
 
-  assert.ok(assessment.findings.some(item => item.code === 'EVIDENCE_INCOMPLETE'
-    || item.code === 'EVIDENCE_SOURCE_MISSING'));
+  assert.ok(!assessment.findings.some(item => item.code === 'EVIDENCE_INCOMPLETE'
+    || item.code === 'EVIDENCE_SOURCE_MISSING'),
+  'complete source evidence must not be reported as missing');
   assert.throws(() => repository.assessAvailability({
     organization_id: scopeA.organization_id,
     tenant_id: scopeA.tenant_id,
