@@ -183,6 +183,7 @@ try {
   assert.equal(reporting.supervisor_member_id, activeSupervisor.id);
   assert.throws(() => repository.update('member', activeSupervisor.id, { expected_version: 2, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_REPORTING_CYCLE_INVALID');
   assert.throws(() => repository.update('member', created.record.id, { expected_version: 4, supervisor_member_id: created.record.id }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_SELF_INVALID');
+  assert.throws(() => repository.deactivate('member', activeSupervisor.id, { expected_version: 2 }, scopeA), error => error.code === 'WORKFORCE_SUPERVISOR_HAS_ACTIVE_REPORTS');
   assert.equal(Number(db.prepare('SELECT COUNT(*) AS count FROM audit_events WHERE entity_id = ? AND action = ?').get(created.record.id, 'workforce.member.reporting_relationship_changed').count), 1);
   assert.throws(() => repository.deactivate('department', department.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS');
   assert.throws(() => repository.deactivate('position', position.record.id, { expected_version: 1 }, scopeA), error => error.code === 'WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS');
