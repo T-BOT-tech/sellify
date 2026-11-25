@@ -150,6 +150,7 @@ export function workforceRepositoryCapability() {
     supports_audit_provenance: true,
     supports_leave_request_approval: true,
     supports_unplanned_absence_recording: true,
+    supports_versioned_scheduling_policies: true,
     pending_leave_blocks_availability: false,
     approved_leave_blocks_availability: true,
     recorded_absence_blocks_availability: true,
