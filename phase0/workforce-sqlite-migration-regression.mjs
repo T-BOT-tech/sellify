@@ -16,6 +16,8 @@ import {
   WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION,
   runWorkforceShiftTemplateMigration,
   WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION,
+  runWorkforceShiftTemplateReferenceGuardMigration,
+  WORKFORCE_SHIFT_TEMPLATE_REFERENCE_GUARD_MIGRATION_VERSION,
   WORKFORCE_MEMBER_ORG_REFERENCES_MIGRATION_VERSION,
   WORKFORCE_DEPARTMENT_MIGRATION_VERSION,
   WORKFORCE_POSITION_MIGRATION_VERSION,
@@ -197,6 +199,10 @@ try {
   const shiftTemplateReplay = runWorkforceShiftTemplateMigration(db);
   assert.deepEqual(shiftTemplateMigration, { applied: true, version: WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION });
   assert.deepEqual(shiftTemplateReplay, { applied: false, version: WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION });
+  const templateGuardMigration = runWorkforceShiftTemplateReferenceGuardMigration(db);
+  const templateGuardReplay = runWorkforceShiftTemplateReferenceGuardMigration(db);
+  assert.deepEqual(templateGuardMigration, { applied: true, version: WORKFORCE_SHIFT_TEMPLATE_REFERENCE_GUARD_MIGRATION_VERSION });
+  assert.deepEqual(templateGuardReplay, { applied: false, version: WORKFORCE_SHIFT_TEMPLATE_REFERENCE_GUARD_MIGRATION_VERSION });
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workforce_shift_templates'").get());
   db.prepare("INSERT INTO workforce_departments (id,organization_id,tenant_id,chat_id,code,name,created_at,updated_at) VALUES ('dept-a','org-a','tenant-a','chat-a','OPS','Operations','2026-01-01','2026-01-01')").run();
   db.prepare("INSERT INTO workforce_positions (id,organization_id,tenant_id,chat_id,code,name,department_id,created_at,updated_at) VALUES ('position-a','org-a','tenant-a','chat-a','LEAD','Team Lead','dept-a','2026-01-01','2026-01-01')").run();
@@ -216,6 +222,22 @@ try {
       '[{"start_local_time":"12:00","end_local_time":"12:30"}]','[1,2,3,4,5]','dept-a','position-a','location-a','2026-01-01','2026-01-01','2026-01-01')
   `).run();
   assert.equal(db.prepare('SELECT name FROM workforce_shift_templates WHERE id=?').get('template-a').name, 'Morning Shift');
+  db.prepare("INSERT INTO workforce_departments (id,organization_id,tenant_id,chat_id,code,name,created_at,updated_at) VALUES ('dept-template-only','org-a','tenant-a','chat-a','SCHED','Scheduling','2026-01-01','2026-01-01')").run();
+  db.prepare("INSERT INTO workforce_positions (id,organization_id,tenant_id,chat_id,code,name,created_at,updated_at) VALUES ('position-template-only','org-a','tenant-a','chat-a','SCHED-LEAD','Scheduling Lead','2026-01-01','2026-01-01')").run();
+  db.prepare(`
+    INSERT INTO workforce_shift_templates
+      (id,organization_id,tenant_id,chat_id,name,start_local_time,end_local_time,timezone,effective_from,department_id,created_at,updated_at)
+    VALUES ('template-department-guard','org-a','tenant-a','chat-a','Department Template','08:00','16:00','Africa/Addis_Ababa','2026-01-01','dept-template-only','2026-01-01','2026-01-01')
+  `).run();
+  db.prepare(`
+    INSERT INTO workforce_shift_templates
+      (id,organization_id,tenant_id,chat_id,name,start_local_time,end_local_time,timezone,effective_from,position_id,created_at,updated_at)
+    VALUES ('template-position-guard','org-a','tenant-a','chat-a','Position Template','08:00','16:00','Africa/Addis_Ababa','2026-01-01','position-template-only','2026-01-01','2026-01-01')
+  `).run();
+  assert.throws(() => db.prepare("UPDATE workforce_departments SET status='INACTIVE' WHERE id='dept-template-only'").run(),
+    /WORKFORCE_DEPARTMENT_HAS_ACTIVE_SHIFT_TEMPLATES/);
+  assert.throws(() => db.prepare("UPDATE workforce_positions SET status='INACTIVE' WHERE id='position-template-only'").run(),
+    /WORKFORCE_POSITION_HAS_ACTIVE_SHIFT_TEMPLATES/);
   assert.throws(() => db.prepare(`
     INSERT INTO workforce_shift_templates
       (id,organization_id,tenant_id,chat_id,name,start_local_time,end_local_time,timezone,effective_from,department_id,created_at,updated_at)
@@ -244,9 +266,10 @@ try {
     WORKFORCE_POSITION_MIGRATION_VERSION,
     WORKFORCE_REPORTING_RELATIONSHIP_MIGRATION_VERSION,
     WORKFORCE_SHIFT_TEMPLATE_MIGRATION_VERSION,
+    WORKFORCE_SHIFT_TEMPLATE_REFERENCE_GUARD_MIGRATION_VERSION,
   ]) assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?').get(version).count, 1);
 
-  console.log('PASS Workforce SQLite migrations 86-94: external professionals, employee numbers, departments, positions, reporting references, shift templates, rollback, idempotency, and foreign-key integrity');
+  console.log('PASS Workforce SQLite migrations 86-95: external professionals, employee numbers, departments, positions, reporting references, shift templates, rollback, idempotency, and foreign-key integrity');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
