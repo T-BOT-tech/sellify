@@ -1637,7 +1637,7 @@ export class WorkforceSqliteRepository {
         const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(candidate.member_id, {
           member_id: candidate.member_id, starts_at: candidate.starts_at, ends_at: candidate.ends_at,
           timezone: candidate.timezone, location_id: candidate.location_id,
-          break_rules: candidate.break_rules || [],
+          break_rules: data.break_rules_json ?? candidate.break_rules ?? [],
         }, scope, String(id)), { context });
         Object.assign(data, {
           constraint_policy_id: assessment.policy_id,
@@ -2033,6 +2033,14 @@ export class WorkforceSqliteRepository {
           FROM workforce_members
           WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
         `).get(String(current.member_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        const effectiveCalendar = this.db.prepare(`
+          SELECT timezone FROM workforce_calendars
+          WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+            AND status = 'ACTIVE' AND effective_from <= substr(?, 1, 10)
+            AND (effective_until IS NULL OR effective_until >= substr(?, 1, 10))
+          ORDER BY effective_from DESC, updated_at DESC LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(current.member_id),
+          String(current.starts_at), String(current.starts_at));
         const candidate = {
           organization_id: scope.organization_id,
           tenant_id: scope.tenant_id,
@@ -2040,7 +2048,7 @@ export class WorkforceSqliteRepository {
           member_id: String(current.member_id),
           starts_at: current.starts_at,
           ends_at: current.ends_at,
-          timezone: String(member?.timezone || ''),
+          timezone: String(member?.timezone || effectiveCalendar?.timezone || ''),
           location_id: member?.primary_location_id || null,
         };
         allocationAssessment = this.assessAvailability(candidate, context);
