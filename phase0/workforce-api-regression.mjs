@@ -3,16 +3,17 @@ import { readFile } from 'node:fs/promises';
 import { validateWorkforceApiPayload } from '../backend/lib/workforce-api-validation.js';
 
 const validMember = validateWorkforceApiPayload('member', 'create', {
-  member_type: 'PROVIDER', employee_number: 'EMP-001',
+  member_type: 'PROVIDER', employee_number: 'EMP-001', department_id: 'dept-a', position_id: 'position-a',
 });
 assert.equal(validMember.valid, true);
 
 const invalidMember = validateWorkforceApiPayload('member', 'create', {
-  member_type: 'TEMP_WORKER', employee_number: 123,
+  member_type: 'TEMP_WORKER', employee_number: 123, supervisor_member_id: '',
 });
 assert.equal(invalidMember.valid, false);
 assert.ok(invalidMember.errors.some((error) => error.includes('member_type')));
 assert.ok(invalidMember.errors.some((error) => error.includes('employee_number')));
+assert.ok(invalidMember.errors.some((error) => error.includes('supervisor_member_id')));
 
 const invalidWindow = validateWorkforceApiPayload('assignment', 'create', {
   starts_at: '2026-11-26T18:00:00.000Z',
@@ -20,6 +21,11 @@ const invalidWindow = validateWorkforceApiPayload('assignment', 'create', {
 });
 assert.equal(invalidWindow.valid, false);
 assert.ok(invalidWindow.errors.some((error) => error.includes('must be before')));
+
+const validDepartment = validateWorkforceApiPayload('department', 'create', { code: 'OPS', name: 'Operations' });
+assert.equal(validDepartment.valid, true);
+const invalidPosition = validateWorkforceApiPayload('position', 'create', { code: 'bad code', name: '' });
+assert.equal(invalidPosition.valid, false);
 
 const validCalendar = validateWorkforceApiPayload('calendar', 'create', {
   timezone: 'Africa/Addis_Ababa',
@@ -88,6 +94,7 @@ assert.ok(server.includes('IDEMPOTENCY_KEY_REQUIRED'));
 
 assert.ok(server.includes('\\/workforce\\/([a-z-]+)'));
 for (const routeKey of [
+  "departments: 'department'", "positions: 'position'",
   "members: 'member'", "profiles: 'profile'", "engagements: 'engagement'",
   "calendars: 'calendar'", "'calendar-exceptions': 'calendar_exception'",
   "availability: 'availability'", "assignments: 'assignment'", "shifts: 'shift'",
