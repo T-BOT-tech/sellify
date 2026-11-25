@@ -30,6 +30,7 @@ assert.ok(contract.entities.includes('position'));
 assert.ok(contract.entities.includes('shift_template'));
 assert.ok(contract.entity_operations.shift_template.includes('deactivate'));
 assert.ok(contract.entity_operations.shift_template.includes('activate'));
+assert.ok(contract.entity_operations.shift_template.includes('generate'));
 assert.ok(contract.entity_operations.department.includes('deactivate'));
 assert.ok(contract.entity_operations.position.includes('activate'));
 assert.ok(contract.entity_operations.shift.includes('confirm'));
