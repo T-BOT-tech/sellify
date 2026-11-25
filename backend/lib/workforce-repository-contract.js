@@ -8,7 +8,7 @@
 export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.3';
 
 export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
-  'department','position',
+  'department','position','shift_template',
   'member',
   'profile',
   'engagement',
@@ -31,6 +31,7 @@ export const WORKFORCE_REPOSITORY_BASE_OPERATIONS = Object.freeze([
 export const WORKFORCE_REPOSITORY_ENTITY_OPERATIONS = Object.freeze({
   department: Object.freeze(['create','get','list','update','activate','deactivate']),
   position: Object.freeze(['create','get','list','update','activate','deactivate']),
+  shift_template: Object.freeze(['create','get','list','update','activate','deactivate']),
   member: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'suspend', 'deactivate', 'link_account', 'unlink_account']),
   profile: Object.freeze(['create', 'get', 'list', 'update']),
   engagement: Object.freeze(['create', 'get', 'list', 'update', 'submit', 'activate', 'suspend', 'end']),
