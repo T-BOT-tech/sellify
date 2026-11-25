@@ -581,7 +581,7 @@ export class WorkforceSqliteRepository {
     if (!validation.valid) throw fail('WORKFORCE_CREATE_INVALID', validation.errors.join('; '));
     const data = {};
     for (const field of [...(spec.createOnlyFields || []), ...spec.fields]) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), payload[field]);
-    this.assertReferences(entity, data, scope);
+    this.assertReferences(entity, data, scope, payload.id || null);
     const requestHash = fingerprint({ entity, data });
     const existing = this.db.prepare(`
       SELECT * FROM ${spec.table}
@@ -660,7 +660,9 @@ export class WorkforceSqliteRepository {
     const data = {};
     for (const field of spec.fields) if (Object.hasOwn(input, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), input[field]);
     if (Object.keys(data).length === 0) throw fail('WORKFORCE_UPDATE_EMPTY', 'At least one mutable Workforce field is required');
-    this.assertReferences(entity, data, scope);
+    const referenceData = { ...existing, ...data };
+    if (entity === 'member' && !Object.hasOwn(data, 'user_id')) delete referenceData.user_id;
+    this.assertReferences(entity, referenceData, scope, String(id));
     const now = this.clock();
     const assignments = Object.keys(data).map((key) => `${key} = ?`);
     const values = Object.entries(data).map(([key,value]) => toDatabaseValue(value,key,spec.json));
@@ -674,6 +676,9 @@ export class WorkforceSqliteRepository {
       `).run(...values);
       if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
       this.writeAudit(scope, entity, String(id), 'updated', { version: expected + 1 }, context);
+      if (entity === 'member' && Object.hasOwn(data, 'supervisor_member_id')) {
+        this.writeAudit(scope, entity, String(id), 'reporting_relationship_changed', { from: existing.supervisor_member_id || null, to: data.supervisor_member_id || null, version: expected + 1 }, context);
+      }
       const row = this.db.prepare(`
         SELECT * FROM ${spec.table}
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
