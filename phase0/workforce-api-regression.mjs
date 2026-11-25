@@ -3,12 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { validateWorkforceApiPayload } from '../backend/lib/workforce-api-validation.js';
 
 const validMember = validateWorkforceApiPayload('member', 'create', {
-  member_type: 'PROVIDER', employee_number: 'EMP-001', department_id: 'dept-a', position_id: 'position-a',
+  member_type: 'PROVIDER', employee_number: 'EMP-001', primary_location_id: 'location-a', department_id: 'dept-a', position_id: 'position-a',
 });
 assert.equal(validMember.valid, true);
 
 const invalidMember = validateWorkforceApiPayload('member', 'create', {
-  member_type: 'TEMP_WORKER', employee_number: 123, supervisor_member_id: '',
+  member_type: 'TEMP_WORKER', employee_number: 123, primary_location_id: 123, supervisor_member_id: '',
 });
 assert.equal(invalidMember.valid, false);
 assert.ok(invalidMember.errors.some((error) => error.includes('member_type')));
@@ -21,6 +21,19 @@ const invalidWindow = validateWorkforceApiPayload('assignment', 'create', {
 });
 assert.equal(invalidWindow.valid, false);
 assert.ok(invalidWindow.errors.some((error) => error.includes('must be before')));
+
+const invalidLocationAssignment = validateWorkforceApiPayload('assignment', 'create', {
+  assignment_type: 'LOCATION',
+  starts_at: '2026-11-26T06:00:00.000Z',
+  ends_at: '2026-11-26T14:00:00.000Z',
+});
+assert.equal(invalidLocationAssignment.valid, false);
+assert.ok(invalidLocationAssignment.errors.some(error => error.includes('location_id')));
+const validLocationAssignment = validateWorkforceApiPayload('assignment', 'create', {
+  assignment_type: 'LOCATION', location_id: 'location-a',
+  starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T14:00:00.000Z',
+});
+assert.equal(validLocationAssignment.valid, true);
 
 const validDepartment = validateWorkforceApiPayload('department', 'create', { code: 'OPS', name: 'Operations' });
 assert.equal(validDepartment.valid, true);
