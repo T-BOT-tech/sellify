@@ -1,0 +1,67 @@
+name: Workforce capability verification
+
+on:
+  push:
+    branches:
+      - integration/workforce-capability-20261126
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workforce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Workforce contract and lifecycle regressions
+        run: |
+          node phase0/workforce-contract-regression.mjs
+          node phase0/workforce-member-contract-regression.mjs
+          node phase0/workforce-profile-engagement-regression.mjs
+          node phase0/workforce-calendar-availability-regression.mjs
+          node phase0/workforce-availability-assessment-regression.mjs
+          node phase0/workforce-assignment-shift-regression.mjs
+          node phase0/workforce-allocation-utilization-regression.mjs
+          npm run test:workforce-scheduling-constraints
+
+      - name: Repository and SQLite persistence
+        run: |
+          npm run test:workforce-repository-contract
+          npm run test:workforce-sqlite-migration
+          npm run test:workforce-sqlite-repository
+
+      - name: Authorization and authenticated API
+        run: |
+          npm run test:workforce-authorization-adapter
+          npm run test:workforce-api
+          npm run test:workforce-api-http
+
+      - name: Operator workspace
+        run: |
+          npm run test:workforce-operator-workspace
+          node phase0/workforce-operator-browser-regression.mjs
+
+      - name: Service Booking integration and provider isolation
+        run: npm run test:workforce-service-booking
+
+      - name: Backend route inventory
+        run: npm run test:workforce-route-inventory
