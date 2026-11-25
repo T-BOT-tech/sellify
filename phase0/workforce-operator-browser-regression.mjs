@@ -136,6 +136,19 @@ try {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: locationAssignment ? [locationAssignment] : [] }) });
       return;
     }
+    if (pathname.endsWith('/members/member-synthetic-1/link-account') && method === 'POST') {
+      assert.equal(body.expected_version, member.version);
+      assert.equal(body.user_id, 'synthetic-existing-user');
+      member = { ...member, user_id: body.user_id, version: member.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: member }) });
+      return;
+    }
+    if (pathname.endsWith('/members/member-synthetic-1/unlink-account') && method === 'POST') {
+      assert.equal(body.expected_version, member.version);
+      member = { ...member, user_id: null, version: member.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: member }) });
+      return;
+    }
     if (pathname.endsWith('/members/member-synthetic-1') && method === 'PATCH') {
       assert.equal(body.expected_version, member.version, 'member assignment update must use the current version');
       assert.equal(body.primary_location_id, 'location-synthetic-1');
@@ -260,6 +273,17 @@ try {
   const memberLocationCall = apiCalls.find(call => call.method === 'PATCH' && call.pathname.endsWith('/members/member-synthetic-1'));
   assert.equal(memberLocationCall?.body.expected_version, 1);
   assert.equal(memberLocationCall?.body.primary_location_id, 'location-synthetic-1');
+  const accountLinkForm = page.locator('#workforceAccountLinkForm');
+  await accountLinkForm.locator('[name="user_id"]').fill('synthetic-existing-user');
+  await accountLinkForm.getByRole('button', { name: 'Link existing account' }).click();
+  await page.getByText('Existing account linked.').waitFor({ timeout: 10000 });
+  const accountLinkCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/link-account'));
+  assert.equal(accountLinkCall?.body.expected_version, 2);
+  assert.equal(accountLinkCall?.body.user_id, 'synthetic-existing-user');
+  await page.getByRole('button', { name: 'Unlink account' }).click();
+  const accountUnlinkCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/unlink-account'));
+  assert.equal(accountUnlinkCall?.body.expected_version, 3);
+  await page.locator('#workforceAccountLinkForm').waitFor({ state: 'visible' });
   const locationAssignmentForm = page.locator('#workforceLocationAssignmentForm');
   await locationAssignmentForm.waitFor({ state: 'visible' });
   await locationAssignmentForm.locator('[name="location_id"]').selectOption('location-synthetic-1');
@@ -347,7 +371,7 @@ try {
   }, null, { timeout: 10000 });
   const suspendCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/suspend'));
   assert.ok(suspendCall, 'member lifecycle action must reach the API');
-  assert.equal(suspendCall.body.expected_version, 2);
+  assert.equal(suspendCall.body.expected_version, 4);
   assert.equal(suspendCall.authorization, 'Bearer synthetic-session-token');
 
   const card = await page.locator('#workforceWorkspace').boundingBox();
@@ -355,7 +379,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, authenticated API requests, primary location editing, location assignment lifecycle, structured profile create/update, engagement lifecycle, availability, idempotency, and optimistic concurrency: VERIFIED');
+  console.log('Mobile workspace, primary location editing, account link/unlink, location assignment lifecycle, structured profile create/update, engagement lifecycle, availability, and optimistic concurrency: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));
