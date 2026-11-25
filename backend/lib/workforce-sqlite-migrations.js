@@ -847,3 +847,55 @@ export function runWorkforceShiftTemplateReferenceGuardMigration(db, now = () =>
     return { applied: true, version };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+
+
+/** M8 / migration 96 — preserve template provenance on generated dated shifts. */
+export const WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION = 96;
+
+export function runWorkforceShiftInstanceProvenanceMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      ALTER TABLE workforce_shifts ADD COLUMN shift_template_id TEXT
+        REFERENCES workforce_shift_templates(id) ON DELETE RESTRICT;
+      ALTER TABLE workforce_shifts ADD COLUMN template_version INTEGER
+        CHECK (template_version IS NULL OR template_version > 0);
+      ALTER TABLE workforce_shifts ADD COLUMN generated_local_date TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_workforce_shifts_template_member_date
+        ON workforce_shifts(organization_id, tenant_id, shift_template_id, member_id, generated_local_date)
+        WHERE shift_template_id IS NOT NULL AND generated_local_date IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_workforce_shifts_template
+        ON workforce_shifts(organization_id, tenant_id, shift_template_id, generated_local_date);
+      CREATE TRIGGER IF NOT EXISTS workforce_shifts_template_provenance_insert
+      BEFORE INSERT ON workforce_shifts BEGIN
+        SELECT CASE WHEN
+          (NEW.shift_template_id IS NULL AND (NEW.template_version IS NOT NULL OR NEW.generated_local_date IS NOT NULL))
+          OR (NEW.shift_template_id IS NOT NULL AND (NEW.template_version IS NULL OR NEW.generated_local_date IS NULL))
+          THEN RAISE(ABORT, 'WORKFORCE_SHIFT_TEMPLATE_PROVENANCE_INVALID') END;
+        SELECT CASE WHEN NEW.shift_template_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM workforce_shift_templates t
+          WHERE t.id=NEW.shift_template_id AND t.organization_id=NEW.organization_id
+          AND t.tenant_id=NEW.tenant_id AND t.chat_id=NEW.chat_id
+        ) THEN RAISE(ABORT, 'WORKFORCE_SHIFT_TEMPLATE_SCOPE_INVALID') END;
+      END;
+      CREATE TRIGGER IF NOT EXISTS workforce_shifts_template_provenance_update
+      BEFORE UPDATE OF shift_template_id, template_version, generated_local_date, organization_id, tenant_id, chat_id
+      ON workforce_shifts BEGIN
+        SELECT CASE WHEN
+          (NEW.shift_template_id IS NULL AND (NEW.template_version IS NOT NULL OR NEW.generated_local_date IS NOT NULL))
+          OR (NEW.shift_template_id IS NOT NULL AND (NEW.template_version IS NULL OR NEW.generated_local_date IS NULL))
+          THEN RAISE(ABORT, 'WORKFORCE_SHIFT_TEMPLATE_PROVENANCE_INVALID') END;
+        SELECT CASE WHEN NEW.shift_template_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM workforce_shift_templates t
+          WHERE t.id=NEW.shift_template_id AND t.organization_id=NEW.organization_id
+          AND t.tenant_id=NEW.tenant_id AND t.chat_id=NEW.chat_id
+        ) THEN RAISE(ABORT, 'WORKFORCE_SHIFT_TEMPLATE_SCOPE_INVALID') END;
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
