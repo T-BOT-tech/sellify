@@ -664,6 +664,152 @@ export class WorkforceSqliteRepository {
     });
   }
 
+  generateShiftsFromTemplate(templateId, input = {}, context = {}) {
+    const scope = this.assertContext(context);
+    const template = this.get('shift_template', templateId, context);
+    this.assertAuthorized(context, 'shift_template', 'generate', template);
+    if (template.status !== 'ACTIVE') throw fail('WORKFORCE_SHIFT_TEMPLATE_INACTIVE', 'Only active shift templates can generate dated shifts', 409);
+    const expectedVersion = Number(input.expected_version);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      throw fail('WORKFORCE_EXPECTED_VERSION_REQUIRED', 'expected_version must be a positive integer');
+    }
+    if (Number(template.version) !== expectedVersion) {
+      throw fail('WORKFORCE_VERSION_CONFLICT', 'Shift template changed since it was loaded', 409);
+    }
+    const memberId = typeof input.member_id === 'string' ? input.member_id.trim() : '';
+    if (!memberId) throw fail('WORKFORCE_MEMBER_ID_REQUIRED', 'member_id is required to generate dated shifts');
+    const member = this.get('member', memberId, context);
+    if (member.status !== 'ACTIVE') throw fail('WORKFORCE_MEMBER_NOT_ELIGIBLE', 'Only active Workforce members can receive generated shifts', 409);
+    if (template.department_id && String(member.department_id || '') !== String(template.department_id)) {
+      throw fail('WORKFORCE_MEMBER_DEPARTMENT_MISMATCH', 'Member department does not match the shift template', 409);
+    }
+    if (template.position_id && String(member.position_id || '') !== String(template.position_id)) {
+      throw fail('WORKFORCE_MEMBER_POSITION_MISMATCH', 'Member position does not match the shift template', 409);
+    }
+    const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      && Number.isFinite(Date.parse(value + 'T00:00:00Z'))
+      && new Date(value + 'T00:00:00Z').toISOString().slice(0,10) === value;
+    const fromDate = input.from_date;
+    const toDate = input.to_date;
+    if (!validDate(fromDate) || !validDate(toDate) || fromDate > toDate) {
+      throw fail('WORKFORCE_SHIFT_GENERATION_RANGE_INVALID', 'from_date and to_date must be valid ascending YYYY-MM-DD dates');
+    }
+    const dayCount = Math.floor((Date.parse(toDate + 'T00:00:00Z') - Date.parse(fromDate + 'T00:00:00Z')) / 86400000) + 1;
+    if (dayCount > 31) throw fail('WORKFORCE_SHIFT_GENERATION_RANGE_TOO_LARGE', 'A single generation request may cover at most 31 calendar days', 422);
+    const key = typeof input.idempotency_key === 'string' ? input.idempotency_key.trim() : '';
+    if (!key || key.length > 160) throw fail('WORKFORCE_IDEMPOTENCY_KEY_INVALID', 'A valid idempotency key of at most 160 characters is required');
+    if (input.location_id && template.location_id && String(input.location_id) !== String(template.location_id)) {
+      throw fail('WORKFORCE_TEMPLATE_LOCATION_MISMATCH', 'Requested location does not match the template location', 422);
+    }
+    const locationId = template.location_id || input.location_id || member.primary_location_id || null;
+    if (locationId) {
+      const location = this.db.prepare('SELECT id FROM locations WHERE id=? AND organization_id=?')
+        .get(String(locationId), scope.organization_id);
+      if (!location) throw fail('WORKFORCE_LOCATION_SCOPE_INVALID', 'Generation location is outside the active organization', 422);
+    }
+
+    const createdRecords = [], existingRecords = [], conflicts = [], skipped = [];
+    const workDays = Array.isArray(template.work_days) ? template.work_days : [1,2,3,4,5];
+    for (let offset = 0; offset < dayCount; offset++) {
+      const localDate = new Date(Date.parse(fromDate + 'T00:00:00Z') + offset * 86400000).toISOString().slice(0,10);
+      if (!workDays.includes(isoWeekday(localDate))) {
+        skipped.push({ local_date: localDate, reason: 'NON_WORKING_DAY' });
+        continue;
+      }
+      if (localDate < template.effective_from || (template.effective_until && localDate > template.effective_until)) {
+        skipped.push({ local_date: localDate, reason: 'OUTSIDE_TEMPLATE_EFFECTIVE_DATES' });
+        continue;
+      }
+      const window = buildShiftWindowFromTemplate(template, localDate);
+      const existing = this.db.prepare(`
+        SELECT * FROM workforce_shifts
+        WHERE organization_id=? AND tenant_id=? AND shift_template_id=? AND member_id=? AND generated_local_date=?
+      `).get(scope.organization_id, scope.tenant_id, String(template.id), memberId, localDate);
+      if (existing) {
+        existingRecords.push(fromDatabaseRow(existing, TABLES.shift.json));
+        continue;
+      }
+      if (locationId && String(member.primary_location_id || '') !== String(locationId)) {
+        const assigned = this.db.prepare(`
+          SELECT id FROM workforce_assignments
+          WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
+            AND assignment_type='LOCATION' AND location_id=? AND status='ACTIVE'
+            AND starts_at<=? AND ends_at>=?
+          LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, String(locationId), window.starts_at, window.ends_at);
+        if (!assigned) {
+          skipped.push({ local_date: localDate, reason: 'LOCATION_ASSIGNMENT_REQUIRED' });
+          continue;
+        }
+      }
+      const engagement = this.db.prepare(`
+        SELECT id FROM workforce_engagements
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
+          AND starts_at<=? AND (ends_at IS NULL OR ends_at>=?)
+        ORDER BY starts_at DESC LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, window.starts_at, window.ends_at);
+      if (!engagement) {
+        skipped.push({ local_date: localDate, reason: 'ACTIVE_ENGAGEMENT_REQUIRED' });
+        continue;
+      }
+      const overlapping = this.db.prepare(`
+        SELECT id, starts_at, ends_at, status FROM workforce_shifts
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
+          AND status<>'CANCELLED' AND starts_at<? AND ends_at>?
+        ORDER BY starts_at LIMIT 10
+      `).all(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, window.ends_at, window.starts_at);
+      if (overlapping.length) {
+        conflicts.push({ local_date: localDate, reason: 'SHIFT_OVERLAP', existing_shifts: overlapping });
+        continue;
+      }
+      const perShiftKey = key + ':' + localDate;
+      if (perShiftKey.length > 200) throw fail('WORKFORCE_IDEMPOTENCY_KEY_INVALID', 'Derived shift idempotency key is too long');
+      try {
+        const result = this.create('shift', {
+          idempotency_key: perShiftKey,
+          member_id: memberId,
+          location_id: locationId,
+          starts_at: window.starts_at,
+          ends_at: window.ends_at,
+          timezone: window.timezone,
+          break_rules: window.break_rules,
+          shift_template_id: template.id,
+          template_version: template.version,
+          generated_local_date: localDate,
+        }, context);
+        if (result.duplicate) existingRecords.push(result.record);
+        else {
+          createdRecords.push(result.record);
+          this.writeAudit(scope, 'shift', result.record.id, 'generated_from_template', {
+            shift_template_id: template.id, template_version: template.version, generated_local_date: localDate,
+          }, context);
+        }
+      } catch (error) {
+        if (error.code !== 'WORKFORCE_CONSTRAINT_CONFLICT') throw error;
+        const raced = this.db.prepare(`
+          SELECT * FROM workforce_shifts
+          WHERE organization_id=? AND tenant_id=? AND shift_template_id=? AND member_id=? AND generated_local_date=?
+        `).get(scope.organization_id, scope.tenant_id, String(template.id), memberId, localDate);
+        if (!raced) throw error;
+        existingRecords.push(fromDatabaseRow(raced, TABLES.shift.json));
+      }
+    }
+    return Object.freeze({
+      template_id: template.id,
+      template_version: template.version,
+      member_id: memberId,
+      range: Object.freeze({ from: fromDate, to: toDate, timezone: template.timezone }),
+      created_records: createdRecords,
+      existing_records: existingRecords,
+      conflicts,
+      skipped,
+      created_count: createdRecords.length,
+      existing_count: existingRecords.length,
+      conflict_count: conflicts.length,
+      skipped_count: skipped.length,
+    });
+  }
+
   create(entity, input = {}, context = {}) {
     const spec = TABLES[entity];
     if (!spec) throw fail('WORKFORCE_ENTITY_INVALID', `Unsupported Workforce entity: ${entity}`);
