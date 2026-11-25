@@ -79,6 +79,23 @@ function renderMember(member, lookup = {}) {
     + '<div class="workforce-member-controls"><button type="button" class="btn-secondary workforce-select-member" data-member-id="'
     + escapeAttr(member.id) + '">Open member</button>' + actionButton + deactivateButton + '</div></article>';
 }
+function renderProfileRecords(records) {
+  const rows = records.map(record => {
+    const list = field => Array.isArray(record[field]) ? record[field].join(', ') : '';
+    return '<article class="workforce-record-row"><div><strong>' + escapeHtml(String(record.visibility || 'ORGANIZATION')) + '</strong>'
+      + '<div class="logistics-meta">Effective ' + escapeHtml(dateLabel(record.effective_from))
+      + (record.effective_until ? ' – ' + escapeHtml(dateLabel(record.effective_until)) : ' · Ongoing') + '</div>'
+      + '<div class="logistics-meta">Skills: ' + escapeHtml(list('skills') || '—')
+      + ' · Qualifications: ' + escapeHtml(list('qualifications') || '—') + '</div>'
+      + '<div class="logistics-meta">Languages: ' + escapeHtml(list('languages') || '—')
+      + ' · Service capabilities: ' + escapeHtml(list('service_capabilities') || '—') + '</div>'
+      + (record.notes ? '<p class="logistics-meta">' + escapeHtml(record.notes) + '</p>' : '')
+      + '</div><span class="logistics-meta">v' + Number(record.version || 1) + '</span></article>';
+  }).join('');
+  return '<section class="workforce-data-section"><h4>Professional profiles</h4>'
+    + (rows || '<p class="logistics-meta">No structured profile recorded.</p>') + '</section>';
+}
+
 function renderEngagementRecords(records) {
   const actionsByStatus = {
     DRAFT: ['submit','end'],
@@ -152,6 +169,15 @@ export function workforceWorkspaceShell() {
     + '<form id="workforcePositionForm" class="settings-form workforce-admin-form"><label>Code<input name="code" maxlength="40" required></label><label>Name<input name="name" maxlength="120" required></label><label>Department<select name="department_id"><option value="">No department</option></select></label><label>Classification<input name="classification" maxlength="80"></label><button type="submit" class="btn-primary">Add position</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div></div></section>'
     + '<section id="workforceMemberDetails" hidden><div class="workforce-heading"><h3 id="workforceSelectedMemberTitle">Member workspace</h3>'
     + '<button type="button" class="btn-secondary" id="workforceClearMember">Close</button></div><div id="workforceMemberProfile"></div><div id="workforceMemberRecords"></div>'
+    + '<form id="workforceProfileForm" class="settings-form workforce-admin-form" hidden>'
+    + '<h4>Professional skills and qualifications</h4><label>Skills (comma-separated)<textarea name="skills" rows="2"></textarea></label>'
+    + '<label>Qualifications (comma-separated)<textarea name="qualifications" rows="2"></textarea></label>'
+    + '<label>Languages (comma-separated)<textarea name="languages" rows="2"></textarea></label>'
+    + '<label>Service capabilities (comma-separated)<textarea name="service_capabilities" rows="2"></textarea></label>'
+    + '<label>Visibility<select name="visibility"><option value="PRIVATE">Private</option><option value="ORGANIZATION" selected>Organization</option><option value="LOCATION">Location</option><option value="PUBLIC">Public</option></select></label>'
+    + '<label>Effective from<input name="effective_from" type="date" required></label><label>Effective until (optional)<input name="effective_until" type="date"></label>'
+    + '<label>Notes<textarea name="notes" rows="3" maxlength="2000"></textarea></label>'
+    + '<button type="submit" class="btn-primary">Save professional profile</button><p class="logistics-meta workforce-form-status" role="status"></p></form>'
     + '<form id="workforceEngagementForm" class="settings-form workforce-admin-form" hidden>'
     + '<h4>Record an engagement</h4><label>Relationship type<select name="engagement_type" required><option value="EMPLOYMENT">Employment</option><option value="CONTRACT">Contract</option><option value="PROVIDER_RELATIONSHIP">Provider relationship</option><option value="VOLUNTEER">Volunteer</option><option value="INTERNAL_ASSIGNMENT">Internal assignment</option></select></label>'
     + '<label>Start<input name="starts_at" type="datetime-local" required></label><label>End (optional)<input name="ends_at" type="datetime-local"></label>'
@@ -325,7 +351,22 @@ async function refreshMember(root, memberId, member = null) {
   recordsNode.innerHTML = results.map(result => result.error
     ? '<section class="workforce-data-section"><h4>' + escapeHtml(result.title) + '</h4><p class="logistics-meta">Not available: '
       + escapeHtml(result.error.message) + '</p></section>'
-    : result.title === 'Engagements' ? renderEngagementRecords(result.records) : renderRecords(result.title, result.records)).join('');
+    : result.title === 'Profiles' ? renderProfileRecords(result.records)
+      : result.title === 'Engagements' ? renderEngagementRecords(result.records) : renderRecords(result.title, result.records)).join('');
+  const profileForm = workspace.querySelector('#workforceProfileForm');
+  const profileRecords = results.find(result => result.title === 'Profiles' && !result.error)?.records || [];
+  const selectedProfile = [...profileRecords].sort((a, b) => String(b.effective_from || '').localeCompare(String(a.effective_from || '')))[0] || null;
+  profileForm.dataset.memberId = memberId;
+  profileForm.dataset.profileId = selectedProfile?.id || '';
+  profileForm.dataset.version = String(selectedProfile?.version || 1);
+  profileForm.hidden = !canManageMembers();
+  for (const field of ['skills','qualifications','languages','service_capabilities']) {
+    profileForm.elements[field].value = Array.isArray(selectedProfile?.[field]) ? selectedProfile[field].join(', ') : '';
+  }
+  profileForm.elements.visibility.value = selectedProfile?.visibility || 'ORGANIZATION';
+  profileForm.elements.effective_from.value = String(selectedProfile?.effective_from || new Date().toISOString()).slice(0, 10);
+  profileForm.elements.effective_until.value = selectedProfile?.effective_until ? String(selectedProfile.effective_until).slice(0, 10) : '';
+  profileForm.elements.notes.value = selectedProfile?.notes || '';
   const engagementForm = workspace.querySelector('#workforceEngagementForm');
   engagementForm.dataset.memberId = memberId;
   engagementForm.hidden = !canManageMembers();
@@ -538,6 +579,48 @@ async function organizationAction(button, root) {
     button.disabled = false;
   }
 }
+async function saveProfile(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const memberId = form.dataset.memberId;
+  if (!memberId) return;
+  const payload = {
+    skills: String(values.get('skills') || '').split(',').map(value => value.trim()).filter(Boolean),
+    qualifications: String(values.get('qualifications') || '').split(',').map(value => value.trim()).filter(Boolean),
+    languages: String(values.get('languages') || '').split(',').map(value => value.trim()).filter(Boolean),
+    service_capabilities: String(values.get('service_capabilities') || '').split(',').map(value => value.trim()).filter(Boolean),
+    visibility: String(values.get('visibility') || 'ORGANIZATION'),
+    effective_from: String(values.get('effective_from') || '').trim(),
+    notes: String(values.get('notes') || '').trim(),
+  };
+  const effectiveUntil = String(values.get('effective_until') || '').trim();
+  if (effectiveUntil) payload.effective_until = effectiveUntil;
+  if (!payload.effective_from || (effectiveUntil && effectiveUntil < payload.effective_from)) {
+    status.textContent = 'Choose a valid effective date range.'; return;
+  }
+  const profileId = String(form.dataset.profileId || '');
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = profileId ? 'Updating professional profile…' : 'Saving professional profile…';
+  try {
+    if (profileId) {
+      payload.expected_version = Number(form.dataset.version);
+      await request(endpoint('profiles', '/' + encodeURIComponent(profileId)), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      });
+    } else {
+      payload.member_id = memberId;
+      await request(endpoint('profiles'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+        body: JSON.stringify(payload),
+      });
+    }
+    status.textContent = 'Profile saved.';
+    await refreshWorkspace(root);
+  } catch (error) { status.textContent = error.message || 'Professional profile could not be saved.'; }
+  finally { submit.disabled = false; }
+}
+
 async function saveEngagement(form, root) {
   const status = form.querySelector('.workforce-form-status');
   const values = new FormData(form);
@@ -665,10 +748,11 @@ export function mountWorkforceWorkspace(root = document) {
     });
     root.addEventListener('submit', event => {
       const id = event.target?.id;
-      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm'].includes(id)) return;
+      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm'].includes(id)) return;
       event.preventDefault();
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
       if (id === 'workforceEngagementForm') saveEngagement(event.target, root);
+      if (id === 'workforceProfileForm') saveProfile(event.target, root);
       if (id === 'workforceMemberCreateForm') saveMemberCreate(event.target, root);
       if (id === 'workforceDepartmentForm') saveDepartment(event.target, root);
       if (id === 'workforcePositionForm') savePosition(event.target, root);
