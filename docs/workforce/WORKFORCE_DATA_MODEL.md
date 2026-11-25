@@ -40,7 +40,7 @@ Member types: EMPLOYEE, CONTRACTOR, PROVIDER, VOLUNTEER.
 
 Statuses: DRAFT, ACTIVE, SUSPENDED, INACTIVE.
 
-user_id references the existing users table. Initial linking is accepted during member creation; later link/unlink uses explicit authorized and audited actions. A linked user must have active membership in the tenant, and one Sellify user cannot be linked to multiple Workforce members in the same organization.
+user_id references the existing users table. Initial linking is accepted during member creation; later link/unlink uses explicit authorized and audited actions. A linked user must have active membership in the tenant, and one Sellify user cannot be linked to multiple Workforce members in the same organization/tenant scope.
 
 ### workforce_profiles
 
