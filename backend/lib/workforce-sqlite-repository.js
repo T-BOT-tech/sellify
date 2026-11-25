@@ -346,8 +346,8 @@ function assessWeeklyCalendarCoverage(calendar, startsAt, endsAt) {
       const intervals = [];
       for (const interval of entry.intervals) {
         if (!interval || typeof interval.start !== 'string' || typeof interval.end !== 'string'
-          || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(interval.start)
-          || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(interval.end) || interval.start >= interval.end) {
+          || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(interval.start)
+          || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(interval.end) || interval.start >= interval.end) {
           return { complete: false, covered: false, reason: 'Weekly schedule interval is invalid or uses unsupported overnight hours' };
         }
         intervals.push({ start: interval.start, end: interval.end });
