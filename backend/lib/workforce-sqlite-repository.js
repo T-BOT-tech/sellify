@@ -930,6 +930,7 @@ export class WorkforceSqliteRepository {
     if (!validation.valid) throw fail('WORKFORCE_CREATE_INVALID', validation.errors.join('; '));
     const data = {};
     for (const field of [...(spec.createOnlyFields || []), ...spec.fields]) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), payload[field]);
+    if (entity === 'scheduling_policy' && !Object.hasOwn(data, 'rules_json')) data.rules_json = {};
     if (entity === 'leave_request') {
       const result = validateWorkforceLeaveRequest(data);
       if (!result.valid) throw fail('WORKFORCE_LEAVE_REQUEST_INVALID', result.errors.join('; '));

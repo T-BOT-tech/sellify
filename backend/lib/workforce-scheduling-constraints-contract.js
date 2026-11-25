@@ -175,8 +175,21 @@ export function evaluateWorkforceSchedulingConstraints({
   }
   const rules = policy.rules || {};
   const start = Date.parse(candidate.starts_at), end = Date.parse(candidate.ends_at);
+  try { new Intl.DateTimeFormat('en-US', { timeZone: candidate.timezone }).format(new Date(start)); }
+  catch {
+    const finding = Object.freeze({ code: 'SCHEDULING_TIMEZONE_INVALID', rule: 'timezone', status: 'UNKNOWN',
+      observed: candidate.timezone, limit: null, message: 'A valid IANA timezone is required for local scheduling constraints' });
+    return Object.freeze({ ...base, state: 'UNKNOWN', findings: Object.freeze([finding]), evaluated_at: new Date().toISOString() });
+  }
+  const activeExistingShifts = existing_shifts.filter(item => String(item.status || '').toUpperCase() !== 'CANCELLED');
+  if (activeExistingShifts.some(item => !Number.isFinite(Date.parse(item.starts_at))
+    || !Number.isFinite(Date.parse(item.ends_at)) || Date.parse(item.starts_at) >= Date.parse(item.ends_at))) {
+    const finding = Object.freeze({ code: 'SCHEDULE_HISTORY_INVALID', rule: 'assessment', status: 'UNKNOWN',
+      observed: null, limit: null, message: 'Existing shift history contains an invalid time interval' });
+    return Object.freeze({ ...base, state: 'UNKNOWN', findings: Object.freeze([finding]), evaluated_at: new Date().toISOString() });
+  }
   const candidateInterval = { start, end, id: candidate.id || 'candidate', candidate: true };
-  const existing = intervalsFor(candidate, existing_shifts).slice(1);
+  const existing = intervalsFor(candidate, activeExistingShifts).slice(1);
   const all = [candidateInterval, ...existing];
   const findings = [];
   const timezone = candidate.timezone;
@@ -201,28 +214,44 @@ export function evaluateWorkforceSchedulingConstraints({
     }
   }
 
-  const candidateDays = datesTouched(candidateInterval, timezone);
-  if (rules.max_daily_minutes !== undefined) {
-    for (const date of candidateDays) {
-      const bounds = dayBounds(date, timezone);
-      const minutes = all.reduce((sum, interval) => sum + overlapMinutes(interval, bounds), 0);
-      if (minutes > rules.max_daily_minutes) {
-        addFinding(findings, rules, 'MAX_DAILY_HOURS', 'max_daily_minutes', { date, minutes }, rules.max_daily_minutes,
-          'Scheduled work exceeds the configured daily limit on ' + date);
+  let candidateDays = [];
+  try { candidateDays = datesTouched(candidateInterval, timezone); }
+  catch {
+    if (rules.max_daily_minutes !== undefined) addFinding(findings, rules, 'DAILY_WINDOW_UNKNOWN',
+      'max_daily_minutes', null, rules.max_daily_minutes,
+      'The candidate interval is too wide to assess daily working-time limits', true);
+  }
+  if (rules.max_daily_minutes !== undefined && candidateDays.length) {
+    try {
+      for (const date of candidateDays) {
+        const bounds = dayBounds(date, timezone);
+        const minutes = all.reduce((sum, interval) => sum + overlapMinutes(interval, bounds), 0);
+        if (minutes > rules.max_daily_minutes) {
+          addFinding(findings, rules, 'MAX_DAILY_HOURS', 'max_daily_minutes', { date, minutes }, rules.max_daily_minutes,
+            'Scheduled work exceeds the configured daily limit on ' + date);
+        }
       }
+    } catch {
+      addFinding(findings, rules, 'DAILY_WINDOW_UNKNOWN', 'max_daily_minutes', null, rules.max_daily_minutes,
+        'The local day boundary could not be resolved safely for this timezone', true);
     }
   }
 
   if (rules.max_weekly_minutes !== undefined) {
-    const startDate = localDateAt(start, timezone);
-    const monday = addDays(startDate, -(isoWeekday(startDate) - 1));
-    const nextMonday = addDays(monday, 7);
-    const bounds = { start: Date.parse(localDateTimeToUtc(monday, '00:00', timezone)),
-      end: Date.parse(localDateTimeToUtc(nextMonday, '00:00', timezone)) };
-    const minutes = all.reduce((sum, interval) => sum + overlapMinutes(interval, bounds), 0);
-    if (minutes > rules.max_weekly_minutes) {
-      addFinding(findings, rules, 'MAX_WEEKLY_HOURS', 'max_weekly_minutes', minutes, rules.max_weekly_minutes,
-        'Scheduled work exceeds the configured weekly limit');
+    try {
+      const startDate = localDateAt(start, timezone);
+      const monday = addDays(startDate, -(isoWeekday(startDate) - 1));
+      const nextMonday = addDays(monday, 7);
+      const bounds = { start: Date.parse(localDateTimeToUtc(monday, '00:00', timezone)),
+        end: Date.parse(localDateTimeToUtc(nextMonday, '00:00', timezone)) };
+      const minutes = all.reduce((sum, interval) => sum + overlapMinutes(interval, bounds), 0);
+      if (minutes > rules.max_weekly_minutes) {
+        addFinding(findings, rules, 'MAX_WEEKLY_HOURS', 'max_weekly_minutes', minutes, rules.max_weekly_minutes,
+          'Scheduled work exceeds the configured weekly limit');
+      }
+    } catch {
+      addFinding(findings, rules, 'WEEKLY_WINDOW_UNKNOWN', 'max_weekly_minutes', null, rules.max_weekly_minutes,
+        'The local week boundary could not be resolved safely for this timezone', true);
     }
   }
 
