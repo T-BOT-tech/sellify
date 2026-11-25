@@ -791,9 +791,15 @@ export class WorkforceSqliteRepository {
       ORDER BY starts_at LIMIT 250
     `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id), ...states, end, start);
     const leave = overlaps('workforce_leave_requests', 'status', ['APPROVED']);
+    const pendingLeave = overlaps('workforce_leave_requests', 'status', ['PENDING_APPROVAL']);
     const absences = overlaps('workforce_absences', 'status', ['RECORDED']);
     const shifts = overlaps('workforce_shifts', 'status', ['PLANNED','CONFIRMED','IN_PROGRESS']);
     const allocations = overlaps('workforce_allocations', 'state', ['COMMITTED']);
+    const allocationsWithoutWindow = this.db.prepare(`
+      SELECT COUNT(*) AS count FROM workforce_allocations
+      WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
+        AND state='COMMITTED' AND (starts_at IS NULL OR ends_at IS NULL)
+    `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(candidate.member_id)).count;
     const calendar = this.db.prepare(`
       SELECT id, version, updated_at FROM workforce_calendars
       WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='ACTIVE'
@@ -823,7 +829,9 @@ export class WorkforceSqliteRepository {
     if (member.status !== 'ACTIVE') findings.push({ code:'MEMBER_NOT_ACTIVE', state:'UNAVAILABLE', source:'member', message:'Workforce member is not active' });
     if (!engagement) findings.push({ code:'ACTIVE_ENGAGEMENT_MISSING', state:'UNAVAILABLE', source:'engagement', message:'No active engagement covers the requested interval' });
     for (const item of leave) findings.push({ code:'APPROVED_LEAVE_OVERLAP', state:'UNAVAILABLE', source:'leave_requests', message:'Approved leave overlaps the requested interval', record_id:item.id });
+    if (pendingLeave.length) findings.push({ code:'PENDING_LEAVE_OVERLAP', state:'UNKNOWN', source:'leave_requests', message:'A pending leave request overlaps the requested interval and requires an authoritative decision', record_id:pendingLeave[0].id });
     for (const item of absences) findings.push({ code:'RECORDED_ABSENCE_OVERLAP', state:'UNAVAILABLE', source:'absences', message:'A recorded absence overlaps the requested interval', record_id:item.id });
+    if (allocationsWithoutWindow) findings.push({ code:'COMMITTED_ALLOCATION_WINDOW_MISSING', state:'UNKNOWN', source:'allocations', message:'A committed allocation has no bounded time interval and cannot be safely evaluated' });
     for (const item of shifts) if (item.id !== candidate.exclude_shift_id) findings.push({ code:'SHIFT_OVERLAP', state:'CONFLICT', source:'shifts', message:'An existing active shift overlaps the requested interval', record_id:item.id });
     for (const item of allocations) findings.push({ code:'COMMITTED_ALLOCATION_OVERLAP', state:'CONFLICT', source:'allocations', message:'A committed allocation overlaps the requested interval', record_id:item.id });
     if (policy.state === 'BLOCKING_CONFLICT') findings.push({ code:'SCHEDULING_POLICY_BLOCK', state:'CONFLICT', source:'scheduling_policy', message:'The active scheduling policy blocks this candidate' });
@@ -835,16 +843,21 @@ export class WorkforceSqliteRepository {
       status, ...(reason ? { reason } : {}),
       ...(row?.version == null ? { evaluated_at: row?.updated_at || this.clock() } : { version: String(row.version) }),
     });
+    const queryEvidence = (reason = null) => ({
+      status: reason ? 'MISSING' : 'COMPLETE',
+      ...(reason ? { reason } : {}),
+      evaluated_at: this.clock(),
+    });
     const sources = {
       member: evidence('COMPLETE', member),
       engagement: evidence('COMPLETE', engagement, engagement ? null : 'No active engagement record covers this interval'),
       calendar: evidence(calendar ? 'MISSING' : 'MISSING', calendar, 'Weekly calendar coverage and timezone/DST interval evaluation are not yet implemented'),
       calendar_exceptions: evidence(calendar ? 'COMPLETE' : 'MISSING', calendar, calendar ? null : 'No active calendar was found to scope exceptions'),
       availability_windows: evidence(windows.every(item => !item.recurrence_rule) ? 'COMPLETE' : 'MISSING', windows[0], windows.some(item => item.recurrence_rule) ? 'Recurring availability window evaluation is not yet implemented' : null),
-      leave_requests: evidence('COMPLETE', leave[0] || member),
-      absences: evidence('COMPLETE', absences[0] || member),
-      shifts: evidence('COMPLETE', shifts[0] || member),
-      allocations: evidence('COMPLETE', allocations[0] || member),
+      leave_requests: queryEvidence(pendingLeave.length ? 'An overlapping leave request is pending approval' : null),
+      absences: queryEvidence(),
+      shifts: queryEvidence(),
+      allocations: queryEvidence(allocationsWithoutWindow ? 'A committed allocation has no bounded time interval' : null),
       scheduling_policy: evidence(policy.state === 'UNKNOWN' ? 'MISSING' : 'COMPLETE', policy.policy_id ? { version: policy.policy_version || 1 } : member,
         policy.state === 'UNKNOWN' ? 'Scheduling policy evaluation is unknown' : null),
       operational_commitments: { status:'MISSING', reason:'Service Booking and Logistics commitments have not yet been aggregated into this assessment' },
