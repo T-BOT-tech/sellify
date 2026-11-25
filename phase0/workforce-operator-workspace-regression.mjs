@@ -47,6 +47,10 @@ assert.ok(ui.includes('reassignDatedShift') && ui.includes('loadDatedShiftHistor
   'dated shifts must expose reassignment with reason and immutable history');
 assert.ok(ui.includes('cancelDatedShift') && ui.includes('Cancellation reason'),
   'dated shift cancellation must capture a reason');
+assert.ok(ui.includes('constraint_state') && ui.includes('constraint_policy_version')
+  && ui.includes('Scheduling assessment:'),
+  'dated shifts must show the policy version and assessment state used when they were scheduled');
+
 assert.ok(ui.includes('workforceLeaveRequestForm') && ui.includes('saveLeaveRequest')
   && ui.includes("endpoint('leave-requests')") && ui.includes("'/submit'"),
   'employees and managers must be able to submit leave through the canonical Workforce API');
