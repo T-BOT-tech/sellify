@@ -13,6 +13,7 @@ assert.equal(authorizeWorkforceRepositoryAccess(base), true);
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'department', operation: 'list' }), true);
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'position', operation: 'create' }), true);
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'shift_template', operation: 'create' }), true);
+assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'shift_template', operation: 'generate' }), true);
 assert.equal(authorizeWorkforceRepositoryAccess({ ...base, entity: 'department', operation: 'list', actor: { ...manager, role: 'viewer' } }), false);
 
 const viewer = { ...manager, role: 'viewer' };
@@ -30,6 +31,7 @@ const providerRead = {
 };
 assert.equal(authorizeWorkforceRepositoryAccess(providerRead), true);
 assert.equal(authorizeWorkforceRepositoryAccess({ ...providerRead, entity: 'shift_template', operation: 'list' }), false, 'service providers must not read manager shift templates');
+assert.equal(authorizeWorkforceRepositoryAccess({ ...providerRead, entity: 'shift_template', operation: 'generate' }), false, 'service providers must not generate manager shifts');
 assert.equal(authorizeWorkforceRepositoryAccess({
   ...providerRead, operation: 'update',
 }), false);
