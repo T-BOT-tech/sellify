@@ -48,17 +48,23 @@ try {
   const page = await context.newPage();
   await page.addInitScript(() => {
     // The app shell may open Settings asynchronously after boot; this isolated Workforce journey does not test that modal.
-    const hide = () => {
-      const modal = document.getElementById('settingsModal');
-      if (!modal) return;
-      modal.classList.remove('open');
-      modal.style.setProperty('display', 'none', 'important');
-      modal.setAttribute('aria-hidden', 'true');
+    const installSettingsOverlayGuard = () => {
+      const root = document.documentElement;
+      if (!root) return;
+      const hide = () => {
+        const modal = document.getElementById('settingsModal');
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.style.setProperty('display', 'none', 'important');
+        modal.setAttribute('aria-hidden', 'true');
+      };
+      new MutationObserver(hide).observe(root, {
+        childList: true, subtree: true, attributes: true, attributeFilter: ['class'],
+      });
+      hide();
     };
-    new MutationObserver(hide).observe(document.documentElement, {
-      childList: true, subtree: true, attributes: true, attributeFilter: ['class'],
-    });
-    hide();
+    if (document.documentElement) installSettingsOverlayGuard();
+    else document.addEventListener('DOMContentLoaded', installSettingsOverlayGuard, { once: true });
   });
   const dismissSettingsOverlay = async () => {
     const modal = page.locator('#settingsModal');
