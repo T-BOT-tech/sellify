@@ -42,16 +42,18 @@ try {
       requested_start TEXT, requested_end TEXT
     );
     CREATE TABLE orders (
-      server_order_id TEXT PRIMARY KEY, chat_id TEXT NOT NULL
+      server_order_id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES tenants(chat_id)
     );
     CREATE TABLE fulfillments (
-      id TEXT PRIMARY KEY, server_order_id TEXT NOT NULL, organization_id TEXT NOT NULL,
+      id TEXT PRIMARY KEY, server_order_id TEXT NOT NULL REFERENCES orders(server_order_id),
+      organization_id TEXT NOT NULL REFERENCES organizations(id),
       fulfillment_type TEXT NOT NULL, scheduled_at TEXT
     );
     CREATE TABLE delivery_assignments (
-      id TEXT PRIMARY KEY, fulfillment_id TEXT NOT NULL, organization_id TEXT NOT NULL,
-      courier_user_id TEXT NOT NULL, status TEXT NOT NULL, assigned_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      id TEXT PRIMARY KEY, fulfillment_id TEXT NOT NULL REFERENCES fulfillments(id),
+      organization_id TEXT NOT NULL REFERENCES organizations(id),
+      courier_user_id TEXT NOT NULL REFERENCES users(id), status TEXT NOT NULL,
+      assigned_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE audit_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT, action TEXT NOT NULL,
@@ -60,7 +62,7 @@ try {
     );
     INSERT INTO organizations(id) VALUES ('org-a'), ('org-b');
     INSERT INTO tenants(chat_id, tenant_id, organization_id)
-      VALUES ('chat-a','tenant-a','org-a'), ('chat-b','tenant-b','org-b');
+      VALUES ('chat-a','tenant-a','org-a'), ('chat-a2','tenant-a2','org-a'), ('chat-b','tenant-b','org-b');
     INSERT INTO users(id) VALUES ('user-a'), ('user-b'), ('user-c'), ('user-d'), ('user-e');
     INSERT INTO memberships(id,user_id,chat_id,status)
       VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active'), ('membership-c','user-c','chat-a','active'), ('membership-d','user-d','chat-a','inactive'), ('membership-e','user-e','chat-a','active');
