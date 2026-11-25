@@ -117,6 +117,10 @@ try {
   await waitForHealth(baseUrl);
 
   const collection = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/members';
+  const departmentsPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/departments';
+  const positionsPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/positions';
+  const department = await createWorkforceRecord(baseUrl, ownerSession.token, departmentsPath, 'workforce-http-department-' + suffix, { code: 'OPS', name: 'Operations' });
+  const position = await createWorkforceRecord(baseUrl, ownerSession.token, positionsPath, 'workforce-http-position-' + suffix, { code: 'LEAD', name: 'Team Lead', department_id: department.id });
   const utilizationSummaryPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/utilization/summary';
   const unauthorizedSummary = await jsonRequest(baseUrl, utilizationSummaryPath);
   assert.equal(unauthorizedSummary.response.status, 401,
@@ -148,12 +152,15 @@ try {
     token: ownerSession.token,
     method: 'POST',
     headers: { 'Idempotency-Key': 'workforce-http-member-' + suffix },
-    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider' },
+    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider', employee_number: 'EMP-HTTP-001', department_id: department.id, position_id: position.id },
   });
   assert.equal(created.response.status, 201, JSON.stringify(created.payload));
   assert.equal(created.payload.record?.status, 'DRAFT');
   const memberId = created.payload.record?.id;
   assert.ok(memberId, 'create response must return the canonical Workforce member id');
+  assert.equal(created.payload.record?.employee_number, 'EMP-HTTP-001');
+  assert.equal(created.payload.record?.department_id, department.id);
+  assert.equal(created.payload.record?.position_id, position.id);
 
   const externalMember = await createWorkforceRecord(baseUrl, ownerSession.token, collection,
     'workforce-http-external-' + suffix, { member_type: 'CONTRACTOR', display_name: 'External HTTP Contractor' });
@@ -183,11 +190,12 @@ try {
     token: ownerSession.token,
     method: 'POST',
     headers: { 'Idempotency-Key': 'workforce-http-member-' + suffix },
-    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider' },
+    body: { user_id: memberUser.id, member_type: 'PROVIDER', display_name: 'HTTP Provider', employee_number: 'EMP-HTTP-001', department_id: department.id, position_id: position.id },
   });
   assert.equal(replay.response.status, 200);
   assert.equal(replay.payload.duplicate, true);
   assert.equal(replay.payload.record?.id, memberId, 'idempotent replay must return the original member');
+  assert.equal(replay.payload.record?.employee_number, 'EMP-HTTP-001');
 
   const listed = await jsonRequest(baseUrl, collection, { token: ownerSession.token });
   assert.equal(listed.response.status, 200);
