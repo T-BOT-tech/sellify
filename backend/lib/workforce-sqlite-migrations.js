@@ -899,3 +899,102 @@ export function runWorkforceShiftInstanceProvenanceMigration(db, now = () => new
     return { applied: true, version };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+
+
+/** M9 / migration 97 — separate planned leave requests from recorded absences. */
+export const WORKFORCE_LEAVE_ABSENCE_MIGRATION_VERSION = 97;
+
+export function runWorkforceLeaveAbsenceMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_LEAVE_ABSENCE_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS workforce_leave_requests (
+        id TEXT NOT NULL PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        member_id TEXT NOT NULL,
+        leave_category TEXT NOT NULL CHECK (leave_category IN ('ANNUAL','SICK','PERSONAL','UNPAID','PARENTAL','BEREAVEMENT','OTHER')),
+        starts_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL,
+        timezone TEXT NOT NULL CHECK (length(trim(timezone)) > 0),
+        all_day INTEGER NOT NULL DEFAULT 0 CHECK (all_day IN (0,1)),
+        reason TEXT NOT NULL CHECK (length(trim(reason)) BETWEEN 1 AND 1000),
+        status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','PENDING_APPROVAL','APPROVED','REJECTED','WITHDRAWN','CANCELLED')),
+        requested_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        submitted_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        submitted_at TEXT,
+        decided_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        decided_at TEXT,
+        decision_reason TEXT,
+        withdrawn_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        withdrawn_at TEXT,
+        withdrawal_reason TEXT,
+        cancelled_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        cancelled_at TEXT,
+        cancellation_reason TEXT,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        CHECK (starts_at < ends_at),
+        CHECK (decided_by IS NULL OR decided_by <> requested_by),
+        UNIQUE (organization_id, tenant_id, idempotency_key),
+        UNIQUE (id, organization_id, tenant_id, chat_id),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        FOREIGN KEY (chat_id) REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        FOREIGN KEY (member_id, organization_id, tenant_id, chat_id)
+          REFERENCES workforce_members(id, organization_id, tenant_id, chat_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_workforce_leave_member_status_start
+        ON workforce_leave_requests(organization_id, tenant_id, member_id, status, starts_at);
+      CREATE INDEX IF NOT EXISTS idx_workforce_leave_approval_inbox
+        ON workforce_leave_requests(organization_id, tenant_id, status, starts_at);
+
+      CREATE TABLE IF NOT EXISTS workforce_absences (
+        id TEXT NOT NULL PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        member_id TEXT NOT NULL,
+        absence_type TEXT NOT NULL CHECK (absence_type IN ('SICKNESS','UNPLANNED','NO_SHOW','OTHER')),
+        starts_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL,
+        timezone TEXT NOT NULL CHECK (length(trim(timezone)) > 0),
+        all_day INTEGER NOT NULL DEFAULT 0 CHECK (all_day IN (0,1)),
+        reason TEXT NOT NULL CHECK (length(trim(reason)) BETWEEN 1 AND 1000),
+        status TEXT NOT NULL DEFAULT 'RECORDED' CHECK (status IN ('RECORDED','VOIDED')),
+        recorded_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        voided_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        voided_at TEXT,
+        void_reason TEXT,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        CHECK (starts_at < ends_at),
+        UNIQUE (organization_id, tenant_id, idempotency_key),
+        UNIQUE (id, organization_id, tenant_id, chat_id),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        FOREIGN KEY (chat_id) REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        FOREIGN KEY (member_id, organization_id, tenant_id, chat_id)
+          REFERENCES workforce_members(id, organization_id, tenant_id, chat_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_workforce_absences_member_status_start
+        ON workforce_absences(organization_id, tenant_id, member_id, status, starts_at);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
