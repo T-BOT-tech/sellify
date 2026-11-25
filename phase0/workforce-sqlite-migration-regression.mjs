@@ -24,6 +24,8 @@ import {
   WORKFORCE_LEAVE_ABSENCE_MIGRATION_VERSION,
   runWorkforceSchedulingPolicyMigration,
   WORKFORCE_SCHEDULING_POLICY_MIGRATION_VERSION,
+  runWorkforceShiftSchedulingAssessmentMigration,
+  WORKFORCE_SHIFT_SCHEDULING_ASSESSMENT_MIGRATION_VERSION,
   WORKFORCE_MEMBER_ORG_REFERENCES_MIGRATION_VERSION,
   WORKFORCE_DEPARTMENT_MIGRATION_VERSION,
   WORKFORCE_POSITION_MIGRATION_VERSION,
@@ -247,6 +249,15 @@ try {
   db.prepare(`INSERT INTO workforce_absences
     (id,organization_id,tenant_id,chat_id,member_id,absence_type,starts_at,ends_at,timezone,reason,recorded_by,idempotency_key,request_hash,created_at,updated_at)
     VALUES ('absence-a','org-a','tenant-a','chat-a','member-a','SICKNESS','2026-04-04T00:00:00.000Z','2026-04-04T08:00:00.000Z','Africa/Addis_Ababa','Unplanned sickness','user-a','absence-key-a','hash-absence-a','2026-01-01','2026-01-01')`).run();
+  const shiftAssessmentMigration = runWorkforceShiftSchedulingAssessmentMigration(db);
+  const shiftAssessmentReplay = runWorkforceShiftSchedulingAssessmentMigration(db);
+  assert.deepEqual(shiftAssessmentMigration, { applied: true, version: WORKFORCE_SHIFT_SCHEDULING_ASSESSMENT_MIGRATION_VERSION });
+  assert.deepEqual(shiftAssessmentReplay, { applied: false, version: WORKFORCE_SHIFT_SCHEDULING_ASSESSMENT_MIGRATION_VERSION });
+  const shiftColumns = db.prepare('PRAGMA table_info(workforce_shifts)').all().map(column => column.name);
+  for (const column of ['constraint_policy_id','constraint_policy_version','constraint_state','constraint_findings_json']) {
+    assert.ok(shiftColumns.includes(column), 'shift scheduling provenance column missing: ' + column);
+  }
+  assert.ok(db.prepare('PRAGMA index_list(workforce_shifts)').all().some(index => index.name === 'idx_workforce_shifts_constraint_policy'));
   assert.throws(() => db.prepare(`INSERT INTO workforce_leave_requests
     (id,organization_id,tenant_id,chat_id,member_id,leave_category,starts_at,ends_at,timezone,reason,requested_by,idempotency_key,request_hash,created_at,updated_at)
     VALUES ('leave-cross','org-b','tenant-b','chat-b','member-a','ANNUAL','2026-04-01T00:00:00.000Z','2026-04-03T00:00:00.000Z','Africa/Addis_Ababa','Cross scope','user-b','leave-key-cross','hash-cross','2026-01-01','2026-01-01')`).run());
@@ -337,7 +348,7 @@ try {
     WORKFORCE_SHIFT_INSTANCE_PROVENANCE_MIGRATION_VERSION,
   ]) assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?').get(version).count, 1);
 
-  console.log('PASS Workforce SQLite migrations 86-98: external professionals, employee numbers, departments, positions, reporting references, shift templates, rollback, idempotency, and foreign-key integrity');
+  console.log('PASS Workforce SQLite migrations 86-99: external professionals, employee numbers, departments, positions, reporting references, shift templates, rollback, idempotency, and foreign-key integrity');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
