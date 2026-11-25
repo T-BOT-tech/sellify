@@ -423,7 +423,7 @@ try {
   assert.throws(() => deniedRepository.summarizeUtilization(scopeA),
     error => error.code === 'WORKFORCE_FORBIDDEN');
   assert.throws(() => repository.update('member', created.record.id, {
-    expected_version: 3, user_id: 'user-b',
+    expected_version: 5, user_id: 'user-b',
   }, scopeA), error => error.code === 'WORKFORCE_UPDATE_EMPTY');
 
   const suspendedMember = repository.suspend('member', created.record.id, { expected_version: 5 }, scopeA);
