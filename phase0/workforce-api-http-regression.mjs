@@ -408,6 +408,52 @@ try {
   assert.equal(generatedReplay.response.status, 200, JSON.stringify(generatedReplay.payload));
   assert.equal(generatedReplay.payload.created_count, 0);
   assert.equal(generatedReplay.payload.existing_count, 1, 'repeated generation must return the existing dated shift');
+  const replacementMember = await createWorkforceRecord(baseUrl, ownerSession.token, collection,
+    'workforce-http-reassignment-member-' + suffix, {
+      member_type: 'EMPLOYEE', display_name: 'Replacement HTTP Professional',
+      primary_location_id: primaryLocation.id, department_id: department.id, position_id: position.id,
+    });
+  const activeReplacementMember = await lifecycle('members', replacementMember, 'activate', 1, 'ACTIVE');
+  const replacementEngagement = await createWorkforceRecord(baseUrl, ownerSession.token,
+    '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/engagements',
+    'workforce-http-reassignment-engagement-' + suffix, {
+      member_id: activeReplacementMember.id, engagement_type: 'EMPLOYMENT',
+      starts_at: '2026-11-25T00:00:00.000Z', ends_at: '2026-12-26T08:00:00.000Z',
+    });
+  let replacementEngagementLifecycle = await lifecycle('engagements', replacementEngagement, 'submit', 1, 'PENDING_APPROVAL');
+  replacementEngagementLifecycle = await lifecycle('engagements', replacementEngagementLifecycle, 'activate', 2, 'ACTIVE');
+  const generatedShift = generated.payload.created_records[0];
+  const shiftsPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/shifts';
+  const reassignShift = await jsonRequest(baseUrl, shiftsPath + '/' + encodeURIComponent(generatedShift.id) + '/reassign', {
+    token: ownerSession.token, method: 'POST',
+    body: { expected_version: generatedShift.version, member_id: activeReplacementMember.id, reason: 'Coverage transfer' },
+  });
+  assert.equal(reassignShift.response.status, 200, JSON.stringify(reassignShift.payload));
+  assert.equal(reassignShift.payload.record?.member_id, activeReplacementMember.id);
+  assert.equal(reassignShift.payload.record?.version, 2);
+  const shiftHistory = await jsonRequest(baseUrl, shiftsPath + '/' + encodeURIComponent(generatedShift.id) + '/history', { token: ownerSession.token });
+  assert.equal(shiftHistory.response.status, 200, JSON.stringify(shiftHistory.payload));
+  assert.ok(shiftHistory.payload.records?.some(event => event.action === 'workforce.shift.reassigned' && event.metadata?.reason === 'Coverage transfer'));
+  const staleReassignment = await jsonRequest(baseUrl, shiftsPath + '/' + encodeURIComponent(generatedShift.id) + '/reassign', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 1, member_id: memberId, reason: 'Stale reassignment attempt' },
+  });
+  assert.equal(staleReassignment.response.status, 409, 'reassignment must enforce optimistic concurrency');
+  const cancellationShift = await createWorkforceRecord(baseUrl, ownerSession.token, shiftsPath,
+    'workforce-http-cancellation-shift-' + suffix, {
+      member_id: memberId, starts_at: '2026-11-26T15:00:00.000Z', ends_at: '2026-11-26T16:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa', break_rules: [],
+    });
+  const missingCancellationReason = await jsonRequest(baseUrl, shiftsPath + '/' + encodeURIComponent(cancellationShift.id) + '/cancel', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 1 },
+  });
+  assert.equal(missingCancellationReason.response.status, 400);
+  const cancelledShift = await jsonRequest(baseUrl, shiftsPath + '/' + encodeURIComponent(cancellationShift.id) + '/cancel', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 1, reason: 'Branch closed for maintenance' },
+  });
+  assert.equal(cancelledShift.response.status, 200, JSON.stringify(cancelledShift.payload));
+  assert.equal(cancelledShift.payload.record?.status, 'CANCELLED');
+  const cancellationHistory = await jsonRequest(baseUrl, shiftsPath + '/' + encodeURIComponent(cancellationShift.id) + '/history', { token: ownerSession.token });
+  assert.ok(cancellationHistory.payload.records?.some(event => event.action === 'workforce.shift.cancel' && event.metadata?.reason === 'Branch closed for maintenance'));
   engagement = await lifecycle('engagements', engagement, 'suspend', 3, 'SUSPENDED');
   engagement = await lifecycle('engagements', engagement, 'activate', 4, 'ACTIVE');
   await lifecycle('engagements', engagement, 'end', 5, 'ENDED');

@@ -39,6 +39,14 @@ assert.ok(ui.includes('workforceShiftTemplateForm') && ui.includes('saveShiftTem
 assert.ok(ui.includes('workforce-shift-generation-form') && ui.includes('generateTemplateShifts')
   && ui.includes("'/generate'") && ui.includes('expected_version'),
   'active templates must generate dated shifts through the versioned canonical API');
+assert.ok(ui.includes("optionalRecords('shifts')") && ui.includes('renderDatedShiftAdmin')
+  && ui.includes('workforce-dated-shift-row'),
+  'the manager workspace must list dated shifts from the canonical Workforce API');
+assert.ok(ui.includes('reassignDatedShift') && ui.includes('loadDatedShiftHistory')
+  && ui.includes("'/reassign'") && ui.includes("'/history'"),
+  'dated shifts must expose reassignment with reason and immutable history');
+assert.ok(ui.includes('cancelDatedShift') && ui.includes('Cancellation reason'),
+  'dated shift cancellation must capture a reason');
 assert.ok(ui.includes('validLocalDate') && ui.includes('work_days') && ui.includes('break_rules'),
   'template creation and roster generation must validate dates, weekdays and break rules');
 assert.ok(ui.includes('workforceProfileForm') && ui.includes('saveProfile'),

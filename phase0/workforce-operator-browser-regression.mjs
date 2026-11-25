@@ -87,6 +87,11 @@ try {
     id: 'member-synthetic-1', display_name: 'Synthetic Workforce Member',
     member_type: 'PROVIDER', status: 'ACTIVE', version: 1,
   };
+  const replacementMember = {
+    id: 'member-synthetic-2', display_name: 'Replacement Workforce Member',
+    member_type: 'EMPLOYEE', status: 'ACTIVE', version: 1,
+  };
+  let shiftHistory = [];
   let engagement = null;
   let shiftTemplate = null;
   let generatedShift = null;
@@ -140,7 +145,7 @@ try {
       return;
     }
     if (pathname.endsWith('/members') && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: [member] }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: [member, replacementMember] }) });
       return;
     }
     if (pathname.endsWith('/profiles') && method === 'GET') {
@@ -211,6 +216,14 @@ try {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: engagement ? [engagement] : [] }) });
       return;
     }
+    if (pathname.endsWith('/shifts') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: generatedShift ? [generatedShift] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/history') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: shiftHistory }) });
+      return;
+    }
     if (pathname.endsWith('/shift-templates') && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: shiftTemplate ? [shiftTemplate] : [] }) });
       return;
@@ -241,12 +254,33 @@ try {
       assert.equal(body.to_date, '2026-11-26');
       assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
       generatedShift = { id: 'generated-shift-synthetic-1', member_id: member.id, shift_template_id: shiftTemplate.id,
-        generated_local_date: body.from_date, timezone: shiftTemplate.timezone, status: 'DRAFT', version: 1 };
+        generated_local_date: body.from_date, starts_at: '2026-11-26T05:00:00.000Z', ends_at: '2026-11-26T13:30:00.000Z',
+        timezone: shiftTemplate.timezone, status: 'PLANNED', version: 1 };
       await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
         created_count: 1, existing_count: 0, conflict_count: 0, skipped_count: 0,
         created_records: [generatedShift], existing_records: [], conflicts: [], skipped: [],
       }) });
       return;
+    }
+    if (pathname.endsWith('/generated-shift-synthetic-1/reassign') && method === 'POST') {
+      assert.equal(body.expected_version, generatedShift.version);
+      assert.equal(body.member_id, replacementMember.id);
+      assert.equal(body.reason, 'Coverage transfer');
+      generatedShift = { ...generatedShift, member_id: body.member_id, version: generatedShift.version + 1 };
+      shiftHistory.push({ action: 'workforce.shift.reassigned', created_at: '2026-11-25T12:00:00.000Z',
+        metadata: { from_member_id: member.id, to_member_id: replacementMember.id, reason: body.reason } });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: generatedShift }) });
+      return;
+    }
+    for (const [action, from, to] of [['confirm','PLANNED','CONFIRMED'],['start','CONFIRMED','IN_PROGRESS'],['complete','IN_PROGRESS','COMPLETED']]) {
+      if (pathname.endsWith('/generated-shift-synthetic-1/' + action) && method === 'POST') {
+        assert.equal(body.expected_version, generatedShift.version);
+        assert.equal(generatedShift.status, from);
+        generatedShift = { ...generatedShift, status: to, version: generatedShift.version + 1 };
+        shiftHistory.push({ action: 'workforce.shift.' + action, created_at: '2026-11-25T12:05:00.000Z', metadata: { from, to, version: generatedShift.version } });
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: generatedShift }) });
+        return;
+      }
     }
     if (pathname.endsWith('/engagements') && method === 'POST') {
       assert.equal(body.member_id, member.id, 'engagement must belong to the selected Workforce member');
@@ -335,7 +369,7 @@ try {
   );
   await page.locator('#workforceMembers').getByText('Synthetic Workforce Member').waitFor({ timeout: 10000 });
   await page.getByText('Planned', { exact: true }).waitFor();
-  await page.locator('.workforce-member-card').getByRole('button', { name: 'Open member' }).click();
+  await page.locator('.workforce-member-card').first().getByRole('button', { name: 'Open member' }).click();
   await page.locator('#workforceMemberDetails').waitFor({ state: 'visible' });
   await page.locator('#workforceAvailabilityForm').waitFor({ state: 'visible' });
   const memberAssignmentForm = page.locator('#workforceMemberProfileForm');
@@ -442,6 +476,23 @@ try {
   await generationForm.locator('[name="to_date"]').fill('2026-11-26');
   await generationForm.getByRole('button', { name: 'Generate dated shifts' }).click();
   await page.getByText('Created 1, already existed 0, conflicts 0, skipped 0.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-dated-shift-row').waitFor({ timeout: 10000 });
+  const reassignForm = page.locator('.workforce-shift-reassign-form');
+  await reassignForm.locator('[name="member_id"]').selectOption('member-synthetic-2');
+  await reassignForm.locator('[name="reason"]').fill('Coverage transfer');
+  await reassignForm.getByRole('button', { name: 'Reassign shift' }).click();
+  await page.getByText('Shift reassigned.').waitFor({ timeout: 10000 });
+  const reassignCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/generated-shift-synthetic-1/reassign'));
+  assert.equal(reassignCall?.body.expected_version, 1);
+  assert.equal(reassignCall?.body.member_id, replacementMember.id);
+  await page.getByRole('button', { name: 'View history' }).click();
+  await page.getByText('reassigned', { exact: true }).waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Confirm shift' }).click();
+  await page.getByRole('button', { name: 'Start shift' }).waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Start shift' }).click();
+  await page.getByRole('button', { name: 'Complete shift' }).waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Complete shift' }).click();
+  await page.getByText('Shift complete recorded.').waitFor({ timeout: 10000 });
   const generationCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/shift-template-synthetic-1/generate'));
   assert.equal(generationCall?.body.expected_version, 1, 'generation must use the active template version');
   assert.equal(generationCall?.body.member_id, member.id);
@@ -464,7 +515,7 @@ try {
   assert.match(availabilityCall.idempotencyKey, /^workforce-ui-/);
   assert.equal(availabilityCall.body.timezone, browserTimezone);
 
-  await page.locator('.workforce-member-card').getByRole('button', { name: 'Suspend' }).click();
+  await page.locator('.workforce-member-card').first().getByRole('button', { name: 'Suspend' }).click();
   await page.waitForFunction(() => {
     const status = document.querySelector('.workforce-member-card .logistics-status');
     return status?.textContent?.trim() === 'SUSPENDED';
@@ -479,7 +530,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, primary location editing, account link/unlink, location assignment lifecycle, structured profile create/update, engagement lifecycle, shift-template creation and roster generation, availability, and optimistic concurrency: VERIFIED');
+  console.log('Mobile workspace, primary location editing, account link/unlink, location assignment lifecycle, structured profile create/update, engagement lifecycle, shift-template creation, dated shift reassignment/history/lifecycle, availability, and optimistic concurrency: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));

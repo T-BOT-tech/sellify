@@ -343,6 +343,18 @@ try {
   }, scopeA);
   const submittedEngagement = repository.submit('engagement', engagement.record.id, { expected_version: 1 }, scopeA);
   const activeEngagement = repository.activate('engagement', engagement.record.id, { expected_version: 2 }, scopeA);
+  const replacementProfessional = repository.create('member', {
+    idempotency_key: 'member-shift-reassignment', member_type: 'EMPLOYEE',
+    display_name: 'Replacement Professional', primary_location_id: 'location-a',
+    department_id: department.record.id, position_id: position.record.id,
+  }, scopeA);
+  const activeReplacementProfessional = repository.activate('member', replacementProfessional.record.id, { expected_version: 1 }, scopeA);
+  const replacementEngagement = repository.create('engagement', {
+    idempotency_key: 'engagement-shift-reassignment', member_id: replacementProfessional.record.id,
+    engagement_type: 'EMPLOYMENT', starts_at: '2026-11-25T00:00:00.000Z', ends_at: '2026-12-25T15:00:00.000Z',
+  }, scopeA);
+  const submittedReplacementEngagement = repository.submit('engagement', replacementEngagement.record.id, { expected_version: 1 }, scopeA);
+  repository.activate('engagement', replacementEngagement.record.id, { expected_version: submittedReplacementEngagement.version }, scopeA);
   const generatedShifts = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
     expected_version: activeTemplate.version,
     member_id: created.record.id,
@@ -365,6 +377,43 @@ try {
   }, scopeA);
   assert.equal(generatedReplay.created_count, 0);
   assert.equal(generatedReplay.existing_count, 2, 'repeated generation must not duplicate dated shifts');
+  const reassignmentConflict = repository.create('shift', {
+    idempotency_key: 'shift-reassignment-overlap', member_id: activeReplacementProfessional.id,
+    location_id: 'location-a', starts_at: generatedShifts.created_records[0].starts_at,
+    ends_at: generatedShifts.created_records[0].ends_at, timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, scopeA);
+  assert.throws(() => repository.reassignShift('shift', generatedShifts.created_records[0].id, {
+    expected_version: 1, member_id: activeReplacementProfessional.id, reason: 'Coverage transfer',
+  }, scopeA), error => error.code === 'WORKFORCE_CONSTRAINT_CONFLICT',
+  'reassignment must reject an overlapping shift for the replacement professional');
+  const cancelledConflictFixture = repository.cancel('shift', reassignmentConflict.record.id, {
+    expected_version: 1, reason: 'Regression fixture cleanup',
+  }, scopeA);
+  assert.equal(cancelledConflictFixture.status, 'CANCELLED');
+  const reassignedShift = repository.reassignShift('shift', generatedShifts.created_records[0].id, {
+    expected_version: 1, member_id: activeReplacementProfessional.id, reason: 'Coverage transfer',
+  }, scopeA);
+  assert.equal(reassignedShift.member_id, activeReplacementProfessional.id);
+  assert.equal(reassignedShift.version, 2);
+  assert.throws(() => repository.reassignShift('shift', reassignedShift.id, {
+    expected_version: 1, member_id: created.record.id, reason: 'Stale manager screen',
+  }, scopeA), error => error.code === 'WORKFORCE_VERSION_CONFLICT');
+  const shiftHistory = repository.listShiftHistory('shift', reassignedShift.id, scopeA);
+  const reassignmentEvent = shiftHistory.find(event => event.action === 'workforce.shift.reassigned');
+  assert.equal(reassignmentEvent?.metadata.from_member_id, created.record.id);
+  assert.equal(reassignmentEvent?.metadata.to_member_id, activeReplacementProfessional.id);
+  assert.equal(reassignmentEvent?.metadata.reason, 'Coverage transfer');
+  assert.throws(() => repository.listShiftHistory('shift', reassignedShift.id, scopeB),
+    error => error.code === 'WORKFORCE_SCOPE_NOT_FOUND', 'shift history must remain tenant-scoped');
+  assert.throws(() => repository.cancel('shift', generatedShifts.created_records[1].id, { expected_version: 1 }, scopeA),
+    error => error.code === 'WORKFORCE_SHIFT_CANCELLATION_REASON_REQUIRED');
+  const cancelledGeneratedShift = repository.cancel('shift', generatedShifts.created_records[1].id, {
+    expected_version: 1, reason: 'Branch closed for maintenance',
+  }, scopeA);
+  assert.equal(cancelledGeneratedShift.status, 'CANCELLED');
+  const cancellationEvent = repository.listShiftHistory('shift', cancelledGeneratedShift.id, scopeA)
+    .find(event => event.action === 'workforce.shift.cancel');
+  assert.equal(cancellationEvent?.metadata.reason, 'Branch closed for maintenance');
   const templateAfterGeneration = repository.update('shift_template', shiftTemplate.record.id, {
     expected_version: activeTemplate.version, start_local_time: '09:00',
   }, scopeA);

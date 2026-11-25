@@ -38,6 +38,12 @@ function dateLabel(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
+function shiftTimeLabel(value, timezone) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value ? String(value) : '—';
+  try { return new Intl.DateTimeFormat(undefined, { timeZone: timezone || undefined, dateStyle: 'medium', timeStyle: 'short' }).format(date); }
+  catch { return dateLabel(value); }
+}
 function validLocalDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(value + 'T00:00:00.000Z');
@@ -202,7 +208,7 @@ export function workforceWorkspaceShell() {
     + '<form id="workforcePositionForm" class="settings-form workforce-admin-form"><label>Code<input name="code" maxlength="40" required></label><label>Name<input name="name" maxlength="120" required></label><label>Department<select name="department_id"><option value="">No department</option></select></label><label>Classification<input name="classification" maxlength="80"></label><button type="submit" class="btn-primary">Add position</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div></div></section>'
     + '<section id="workforceShiftTemplateAdmin" hidden><h3>Shift templates and roster generation</h3>'
     + '<p class="logistics-meta">Templates are reusable local-time definitions. Generation creates dated shifts for eligible members; existing shifts are never silently rewritten.</p>'
-    + '<div id="workforceShiftTemplates"></div>'
+    + '<div id="workforceShiftTemplates"></div><h4>Dated shifts</h4><div id="workforceDatedShifts"></div>'
     + '<form id="workforceShiftTemplateForm" class="settings-form workforce-admin-form">'
     + '<h4>Create shift template</h4><label>Name<input name="name" maxlength="120" required></label>'
     + '<label>Start (local time)<input name="start_local_time" type="time" required></label><label>End (local time)<input name="end_local_time" type="time" required></label>'
@@ -333,6 +339,44 @@ function renderShiftTemplateAdmin(workspace, templates, departments, positions, 
   section.querySelector('#workforceShiftTemplates').innerHTML = rows || '<p class="logistics-meta">No shift templates yet.</p>';
 }
 
+function renderDatedShiftAdmin(workspace, shifts, members) {
+  const host = workspace.querySelector('#workforceDatedShifts');
+  if (!host) return;
+  if (!canManageMembers()) { host.replaceChildren(); return; }
+  const activeMembers = members.filter(member => member.status === 'ACTIVE');
+  const rows = [...shifts].sort((a, b) => String(a.starts_at || '').localeCompare(String(b.starts_at || ''))).map(shift => {
+    const state = String(shift.status || 'UNKNOWN').toUpperCase();
+    const member = members.find(item => String(item.id) === String(shift.member_id));
+    const memberLabel = member?.display_name || shift.member_id || 'Unassigned';
+    const transition = state === 'PLANNED' ? 'confirm' : state === 'CONFIRMED' ? 'start' : state === 'IN_PROGRESS' ? 'complete' : '';
+    const transitionButton = transition
+      ? '<button type="button" class="btn-secondary workforce-shift-transition" data-shift-id="' + escapeAttr(shift.id)
+        + '" data-action="' + transition + '" data-version="' + Number(shift.version || 1) + '">'
+        + (transition === 'confirm' ? 'Confirm shift' : transition === 'start' ? 'Start shift' : 'Complete shift') + '</button>' : '';
+    const reassignForm = ['PLANNED','CONFIRMED'].includes(state) && activeMembers.some(item => String(item.id) !== String(shift.member_id))
+      ? '<form class="settings-form workforce-shift-reassign-form" data-shift-id="' + escapeAttr(shift.id)
+        + '" data-version="' + Number(shift.version || 1) + '"><label>Reassign to<select name="member_id" required><option value="">Choose an active professional</option>'
+        + activeMembers.filter(item => String(item.id) !== String(shift.member_id)).map(item =>
+          '<option value="' + escapeAttr(item.id) + '">' + escapeHtml(item.display_name || item.id) + '</option>').join('')
+        + '</select></label><label>Reason<input name="reason" maxlength="500" required></label>'
+        + '<button type="submit" class="btn-secondary">Reassign shift</button><p class="logistics-meta workforce-form-status" role="status"></p></form>' : '';
+    const cancelForm = ['PLANNED','CONFIRMED','IN_PROGRESS'].includes(state)
+      ? '<form class="settings-form workforce-shift-cancel-form" data-shift-id="' + escapeAttr(shift.id)
+        + '" data-version="' + Number(shift.version || 1) + '"><label>Cancellation reason<input name="reason" maxlength="500" required></label>'
+        + '<button type="submit" class="btn-secondary">Cancel shift</button><p class="logistics-meta workforce-form-status" role="status"></p></form>' : '';
+    return '<article class="workforce-record-row workforce-dated-shift-row" data-shift-id="' + escapeAttr(shift.id) + '">'
+      + '<div><strong>' + escapeHtml(memberLabel) + '</strong><span class="logistics-status">' + escapeHtml(state.replaceAll('_',' ')) + '</span>'
+      + '<div class="logistics-meta">' + escapeHtml(shiftTimeLabel(shift.starts_at, shift.timezone)) + ' – '
+      + escapeHtml(shiftTimeLabel(shift.ends_at, shift.timezone)) + ' · ' + escapeHtml(shift.timezone || 'Timezone not set') + '</div>'
+      + '<div class="logistics-meta">' + (shift.generated_local_date ? 'Generated for ' + escapeHtml(shift.generated_local_date) : 'Manual dated shift')
+      + ' · v' + Number(shift.version || 1) + '</div></div>'
+      + '<div class="workforce-member-controls">' + transitionButton
+      + '<button type="button" class="btn-secondary workforce-shift-history-button" data-shift-id="' + escapeAttr(shift.id) + '">View history</button></div>'
+      + reassignForm + cancelForm + '<div class="workforce-shift-history" hidden></div></article>';
+  }).join('');
+  host.innerHTML = rows || '<p class="logistics-meta">No dated shifts yet. Generate shifts from an active template above.</p>';
+}
+
 function renderOrganizationAdmin(workspace, departments, positions) {
   const section = workspace.querySelector('#workforceOrganizationAdmin');
   const createSection = workspace.querySelector('#workforceMemberCreateSection');
@@ -395,22 +439,23 @@ async function refreshWorkspace(root) {
   const tenantId = String(config.chatId), token = String(config.sessionToken);
   status.textContent = 'Loading Workforce records…'; status.dataset.state = 'LOADING';
   try {
-    const [membersData, summaryData, departments, positions, engagements, locations, shiftTemplates] = await Promise.all([
+    const [membersData, summaryData, departments, positions, engagements, locations, shiftTemplates, shifts] = await Promise.all([
       request(endpoint('members') + '?limit=100'),
       request(endpoint('utilization', '/summary')),
       optionalRecords('departments'), optionalRecords('positions'), optionalRecords('engagements'),
-      optionalOrganizationLocations(), optionalRecords('shift-templates'),
+      optionalOrganizationLocations(), optionalRecords('shift-templates'), optionalRecords('shifts'),
     ]);
     if (!workspace.isConnected || workspace.dataset.refreshSequence !== String(seq)
       || String(config.chatId) !== tenantId || String(config.sessionToken) !== token) return;
     const members = Array.isArray(membersData.records) ? membersData.records : [];
-    workspaceData.set(workspace, { members, departments, positions, engagements, locations, shiftTemplates });
+    workspaceData.set(workspace, { members, departments, positions, engagements, locations, shiftTemplates, shifts });
     workspace.querySelector('#workforceOverviewMetrics').innerHTML =
       renderOverviewMetrics(members, departments, positions, engagements);
     summaryNode.innerHTML = renderSummary(summaryData.summary || {});
     renderMemberDirectory(root);
     renderOrganizationAdmin(workspace, departments, positions);
     renderShiftTemplateAdmin(workspace, shiftTemplates, departments, positions, locations, members);
+    renderDatedShiftAdmin(workspace, shifts, members);
     status.textContent = members.length + ' Workforce member' + (members.length === 1 ? '' : 's') + ' loaded.';
     status.dataset.state = 'READY';
     const selected = workspace.dataset.selectedMemberId;
@@ -865,6 +910,93 @@ async function generateTemplateShifts(form, root) {
   finally { submit.disabled = false; }
 }
 
+async function transitionDatedShift(button, root) {
+  const shiftId = button.dataset.shiftId, action = button.dataset.action, version = Number(button.dataset.version);
+  if (!shiftId || !['confirm','start','complete'].includes(action) || !Number.isInteger(version) || version < 1) return;
+  button.disabled = true;
+  try {
+    await request(endpoint('shifts', '/' + encodeURIComponent(shiftId) + '/' + action), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_version: version }),
+    });
+    await refreshWorkspace(root);
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = 'Shift ' + action + ' recorded.';
+  } catch (error) {
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = error.message || 'Shift lifecycle action could not be completed.';
+    button.disabled = false;
+  }
+}
+
+async function reassignDatedShift(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const shiftId = form.dataset.shiftId, version = Number(form.dataset.version);
+  const memberId = String(values.get('member_id') || '').trim();
+  const reason = String(values.get('reason') || '').trim();
+  if (!shiftId || !memberId || !reason || reason.length > 500 || !Number.isInteger(version) || version < 1) {
+    status.textContent = 'Choose an active professional and provide a reassignment reason.'; return;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Reassigning shift…';
+  try {
+    await request(endpoint('shifts', '/' + encodeURIComponent(shiftId) + '/reassign'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_version: version, member_id: memberId, reason }),
+    });
+    await refreshWorkspace(root);
+    const workspaceStatus = root.querySelector('#workforceStatus');
+    if (workspaceStatus) workspaceStatus.textContent = 'Shift reassigned.';
+  } catch (error) { status.textContent = error.message || 'Shift could not be reassigned.'; }
+  finally { submit.disabled = false; }
+}
+
+async function cancelDatedShift(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const shiftId = form.dataset.shiftId, version = Number(form.dataset.version);
+  const reason = String(new FormData(form).get('reason') || '').trim();
+  if (!shiftId || !reason || reason.length > 500 || !Number.isInteger(version) || version < 1) {
+    status.textContent = 'Provide a cancellation reason of no more than 500 characters.'; return;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Cancelling shift…';
+  try {
+    await request(endpoint('shifts', '/' + encodeURIComponent(shiftId) + '/cancel'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_version: version, reason }),
+    });
+    await refreshWorkspace(root);
+    const workspaceStatus = root.querySelector('#workforceStatus');
+    if (workspaceStatus) workspaceStatus.textContent = 'Shift cancelled.';
+  } catch (error) { status.textContent = error.message || 'Shift could not be cancelled.'; }
+  finally { submit.disabled = false; }
+}
+
+async function loadDatedShiftHistory(button, root) {
+  const shiftId = button.dataset.shiftId;
+  const row = button.closest('.workforce-dated-shift-row');
+  const host = row?.querySelector('.workforce-shift-history');
+  if (!shiftId || !host) return;
+  if (!host.hidden) { host.hidden = true; return; }
+  host.hidden = false; host.innerHTML = '<p class="logistics-meta">Loading shift history…</p>';
+  try {
+    const data = await request(endpoint('shifts', '/' + encodeURIComponent(shiftId) + '/history'));
+    const members = workspaceData.get(root.querySelector('#workforceWorkspace'))?.members || [];
+    const rows = (Array.isArray(data.records) ? data.records : []).map(event => {
+      const action = String(event.action || '').split('.').pop().replaceAll('_',' ');
+      const from = members.find(member => String(member.id) === String(event.metadata?.from_member_id));
+      const to = members.find(member => String(member.id) === String(event.metadata?.to_member_id));
+      const reassignment = event.metadata?.from_member_id
+        ? ' · ' + escapeHtml(from?.display_name || event.metadata.from_member_id) + ' → ' + escapeHtml(to?.display_name || event.metadata.to_member_id) : '';
+      const reason = event.metadata?.reason ? ' · ' + escapeHtml(event.metadata.reason) : '';
+      return '<li><strong>' + escapeHtml(action) + '</strong><span class="logistics-meta"> · '
+        + escapeHtml(dateLabel(event.created_at)) + reassignment + reason + '</span></li>';
+    }).join('');
+    host.innerHTML = rows ? '<ul>' + rows + '</ul>' : '<p class="logistics-meta">No shift history is available.</p>';
+  } catch (error) { host.innerHTML = '<p class="logistics-meta">' + escapeHtml(error.message || 'Shift history could not be loaded.') + '</p>'; }
+}
+
 async function saveEngagement(form, root) {
   const status = form.querySelector('.workforce-form-status');
   const values = new FormData(form);
@@ -957,6 +1089,8 @@ export function mountWorkforceWorkspace(root = document) {
       const structureAction = event.target.closest('.workforce-structure-action');
       const engagementButton = event.target.closest('.workforce-engagement-action');
       const assignmentButton = event.target.closest('.workforce-assignment-action');
+      const shiftTransitionButton = event.target.closest('.workforce-shift-transition');
+      const shiftHistoryButton = event.target.closest('.workforce-shift-history-button');
       const page = event.target.closest('[data-member-page]');
       const clear = event.target.closest('#workforceClearMember');
       if (refresh) refreshWorkspace(root);
@@ -965,6 +1099,8 @@ export function mountWorkforceWorkspace(root = document) {
       if (structureAction) organizationAction(structureAction, root);
       if (engagementButton) engagementAction(engagementButton, root);
       if (assignmentButton) assignmentAction(assignmentButton, root);
+      if (shiftTransitionButton) transitionDatedShift(shiftTransitionButton, root);
+      if (shiftHistoryButton) loadDatedShiftHistory(shiftHistoryButton, root);
       if (page) {
         const current = Number(workspace.dataset.memberPage || 0);
         workspace.dataset.memberPage = String(Math.max(0, current + (page.dataset.memberPage === 'next' ? 1 : -1)));
@@ -994,12 +1130,14 @@ export function mountWorkforceWorkspace(root = document) {
     root.addEventListener('submit', event => {
       const id = event.target?.id;
       if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm'].includes(id)
-        && !event.target?.classList?.contains('workforce-shift-generation-form')) return;
+        && !['workforce-shift-generation-form','workforce-shift-reassign-form','workforce-shift-cancel-form'].some(name => event.target?.classList?.contains(name))) return;
       event.preventDefault();
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
       if (id === 'workforceEngagementForm') saveEngagement(event.target, root);
       if (id === 'workforceShiftTemplateForm') saveShiftTemplate(event.target, root);
       if (event.target?.classList?.contains('workforce-shift-generation-form')) generateTemplateShifts(event.target, root);
+      if (event.target?.classList?.contains('workforce-shift-reassign-form')) reassignDatedShift(event.target, root);
+      if (event.target?.classList?.contains('workforce-shift-cancel-form')) cancelDatedShift(event.target, root);
       if (id === 'workforceProfileForm') saveProfile(event.target, root);
       if (id === 'workforceLocationAssignmentForm') saveLocationAssignment(event.target, root);
       if (id === 'workforceMemberCreateForm') saveMemberCreate(event.target, root);
