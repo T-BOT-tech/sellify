@@ -2,9 +2,9 @@
 
 ## Status
 
-Persistence, repository, central authorization, API registration, Service Booking linkage, authenticated operator workspace, and regression coverage are implemented on feature/workforce-capability-20261124.
+Persistence, repository, central authorization, API registration, Service Booking linkage, authenticated operator workspace, and regression coverage originated on `feature/workforce-capability-20261124` and are being selectively extracted onto `integration/workforce-capability-20261126`, based on current `main`.
 
-The Node 24 Workforce verification workflow runs only for this branch. It does not merge or deploy the capability.
+The integration branch excludes unrelated B2B, onboarding, preview-workflow, and preview-profile changes. The Node 24 Workforce verification workflow runs on the integration branch and on pull requests targeting `main`; it does not merge or deploy the capability. Final integration certification remains pending.
 
 ## Phase 1: Design and contracts — complete
 
@@ -19,7 +19,8 @@ The Node 24 Workforce verification workflow runs only for this branch. It does n
 
 - Migration 86: runWorkforceSqliteMigrations.
 - Migration 87: runWorkforceServiceBookingMigration.
-- Ten Workforce tables.
+- Ten initial core Workforce tables.
+- Follow-on additive migrations 88–100 add external-member identity support, employee numbers, departments, positions, reporting structure, shift templates, leave/absence, scheduling policies, persisted assessment evidence, and authorized override metadata.
 - Organization, tenant, member, user, location, resource, and booking references.
 - Version, idempotency, audit provenance, and scoped indexes.
 - Additive migrations only; no canonical table is dropped or rebuilt.
@@ -73,6 +74,8 @@ The Node 24 Workforce verification workflow runs only for this branch. It does n
 
 - Allocation create/get/list/update.
 - Submit, approve, release, and cancel.
+- Approval re-reads the pending allocation and re-assesses member, engagement, calendar, leave/absence, shifts, availability, scheduling policy, Service Booking and Logistics evidence inside the SQLite write transaction; UNKNOWN or conflict cannot commit.
+- Generic updates are restricted to DRAFT allocations; committed/pending allocations cannot bypass lifecycle protection.
 - Utilization create/get/list/update.
 - Start, complete, and cancel.
 - Planned and actual timestamps are distinct.
@@ -211,7 +214,9 @@ The existing eight contract regressions are also run directly by the Workforce c
 
 ## Remaining work
 
-1. Perform a manual browser/mobile usability review of the operator workspace against a test tenant. The CI regression verifies the integration contract but does not replace visual and interaction testing on a real browser/device.
+1. Complete the final Node 24 integration workflow and the remaining cross-pack/cumulative verification against the latest `main`.
+2. Rehearse additive migrations on a production-like database with backup/restore and foreign-key validation.
+3. Perform a manual browser/mobile usability review of the operator workspace against a test tenant. CI verifies the integration contract but does not replace visual and interaction testing on a real browser/device.
 
 ## Known limitations
 
