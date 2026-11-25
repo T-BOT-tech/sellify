@@ -201,6 +201,7 @@ The route inventory script is scripts/perplexity-server-route-inventory.mjs. The
 - node phase0/workforce-api-regression.mjs
 - node phase0/workforce-api-http-regression.mjs
 - node phase0/workforce-service-booking-integration-regression.mjs
+- node scripts/perplexity-server-route-inventory.mjs
 - node phase0/workforce-route-inventory-regression.mjs
 
 The existing eight contract regressions are also run directly by the Workforce capability workflow.
