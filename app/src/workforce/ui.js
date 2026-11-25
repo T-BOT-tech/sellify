@@ -211,6 +211,16 @@ function renderOrganizationAdmin(workspace, departments, positions) {
 }
 
 
+async function optionalRecords(entity) {
+  try {
+    const data = await request(endpoint(entity) + '?limit=100');
+    return Array.isArray(data.records) ? data.records : [];
+  } catch (error) {
+    if ([403,404].includes(error.status)) return [];
+    throw error;
+  }
+}
+
 async function refreshWorkspace(root) {
   const workspace = root.querySelector('#workforceWorkspace');
   if (!workspace) return;
@@ -227,15 +237,20 @@ async function refreshWorkspace(root) {
   const tenantId = String(config.chatId), token = String(config.sessionToken);
   status.textContent = 'Loading Workforce records…'; status.dataset.state = 'LOADING';
   try {
-    const [membersData, summaryData] = await Promise.all([
-      request(endpoint('members') + '?limit=100'), request(endpoint('utilization', '/summary')),
+    const [membersData, summaryData, departments, positions, engagements] = await Promise.all([
+      request(endpoint('members') + '?limit=100'),
+      request(endpoint('utilization', '/summary')),
+      optionalRecords('departments'), optionalRecords('positions'), optionalRecords('engagements'),
     ]);
     if (!workspace.isConnected || workspace.dataset.refreshSequence !== String(seq)
       || String(config.chatId) !== tenantId || String(config.sessionToken) !== token) return;
     const members = Array.isArray(membersData.records) ? membersData.records : [];
-    membersNode.innerHTML = members.length ? members.map(renderMember).join('')
-      : '<p class="logistics-meta">No Workforce members are registered yet. Link an existing tenant member through the authorized Workforce API.</p>';
+    workspaceData.set(workspace, { members, departments, positions, engagements });
+    workspace.querySelector('#workforceOverviewMetrics').innerHTML =
+      renderOverviewMetrics(members, departments, positions, engagements);
     summaryNode.innerHTML = renderSummary(summaryData.summary || {});
+    renderMemberDirectory(root);
+    renderOrganizationAdmin(workspace, departments, positions);
     status.textContent = members.length + ' Workforce member' + (members.length === 1 ? '' : 's') + ' loaded.';
     status.dataset.state = 'READY';
     const selected = workspace.dataset.selectedMemberId;
@@ -253,7 +268,6 @@ async function refreshWorkspace(root) {
     membersNode.replaceChildren(); summaryNode.replaceChildren();
   }
 }
-
 async function refreshMember(root, memberId, member = null) {
   const workspace = root.querySelector('#workforceWorkspace');
   const details = workspace?.querySelector('#workforceMemberDetails');
@@ -283,9 +297,9 @@ async function refreshMember(root, memberId, member = null) {
 }
 
 async function memberAction(button, root) {
-  const { memberId, action } = { memberId: button.dataset.memberId, action: button.dataset.action };
+  const memberId = button.dataset.memberId, action = button.dataset.action;
   const version = Number(button.dataset.version);
-  if (!memberId || !['activate', 'suspend'].includes(action) || !Number.isInteger(version)) return;
+  if (!memberId || !['activate','suspend','deactivate'].includes(action) || !Number.isInteger(version)) return;
   button.disabled = true;
   try {
     await request(endpoint('members', '/' + encodeURIComponent(memberId) + '/' + action), {
@@ -300,6 +314,93 @@ async function memberAction(button, root) {
   }
 }
 
+async function saveMemberCreate(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const payload = {
+    member_type: String(values.get('member_type') || ''),
+    display_name: String(values.get('display_name') || '').trim(),
+  };
+  for (const field of ['employee_number','department_id','position_id','supervisor_member_id']) {
+    const value = String(values.get(field) || '').trim();
+    if (value) payload[field] = value;
+  }
+  const workspace = root.querySelector('#workforceWorkspace');
+  const data = workspaceData.get(workspace) || { positions: [] };
+  const selectedPosition = data.positions.find(item => String(item.id) === String(payload.position_id || ''));
+  if (selectedPosition?.department_id) {
+    if (payload.department_id && payload.department_id !== selectedPosition.department_id) {
+      status.textContent = 'Choose a position from the selected department.'; return;
+    }
+    payload.department_id = selectedPosition.department_id;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Creating professional record…';
+  try {
+    await request(endpoint('members'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify(payload),
+    });
+    form.reset(); status.textContent = 'Professional record created. No Sellify login was created.';
+    await refreshWorkspace(root);
+  } catch (error) { status.textContent = error.message || 'Professional record could not be created.'; }
+  finally { submit.disabled = false; }
+}
+
+async function saveDepartment(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const payload = { code: String(values.get('code') || '').trim(), name: String(values.get('name') || '').trim(),
+    description: String(values.get('description') || '').trim() };
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Creating department…';
+  try {
+    await request(endpoint('departments'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify(payload),
+    });
+    form.reset(); status.textContent = 'Department created.'; await refreshWorkspace(root);
+  } catch (error) { status.textContent = error.message || 'Department could not be created.'; }
+  finally { submit.disabled = false; }
+}
+
+async function savePosition(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const payload = { code: String(values.get('code') || '').trim(), name: String(values.get('name') || '').trim() };
+  for (const field of ['department_id','classification']) {
+    const value = String(values.get(field) || '').trim();
+    if (value) payload[field] = value;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Creating position…';
+  try {
+    await request(endpoint('positions'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify(payload),
+    });
+    form.reset(); status.textContent = 'Position created.'; await refreshWorkspace(root);
+  } catch (error) { status.textContent = error.message || 'Position could not be created.'; }
+  finally { submit.disabled = false; }
+}
+
+async function organizationAction(button, root) {
+  const entity = button.dataset.entity, id = button.dataset.id, action = button.dataset.action;
+  const version = Number(button.dataset.version);
+  if (!['departments','positions'].includes(entity) || !id || !['activate','deactivate'].includes(action) || !Number.isInteger(version)) return;
+  button.disabled = true;
+  try {
+    await request(endpoint(entity, '/' + encodeURIComponent(id) + '/' + action), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_version: version }),
+    });
+    await refreshWorkspace(root);
+  } catch (error) {
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = error.message || 'Organization structure status could not be changed.';
+    button.disabled = false;
+  }
+}
 async function saveAvailability(form, root) {
   const status = form.querySelector('.workforce-form-status');
   const values = new FormData(form);
