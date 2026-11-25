@@ -422,12 +422,14 @@ try {
     error => error.code === 'WORKFORCE_FORBIDDEN');
   assert.throws(() => deniedRepository.summarizeUtilization(scopeA),
     error => error.code === 'WORKFORCE_FORBIDDEN');
+  const beforeNoopUpdate = repository.get('member', created.record.id, scopeA);
   assert.throws(() => repository.update('member', created.record.id, {
-    expected_version: 5, user_id: 'user-b',
+    expected_version: beforeNoopUpdate.version, user_id: 'user-b',
   }, scopeA), error => error.code === 'WORKFORCE_UPDATE_EMPTY');
 
-  const suspendedMember = repository.suspend('member', created.record.id, { expected_version: 5 }, scopeA);
-  const deactivatedMember = repository.deactivate('member', created.record.id, { expected_version: 6 }, scopeA);
+  const beforeSuspend = repository.get('member', created.record.id, scopeA);
+  const suspendedMember = repository.suspend('member', created.record.id, { expected_version: beforeSuspend.version }, scopeA);
+  const deactivatedMember = repository.deactivate('member', created.record.id, { expected_version: suspendedMember.version }, scopeA);
   assert.equal(suspendedMember.status, 'SUSPENDED');
   assert.equal(deactivatedMember.status, 'INACTIVE');
 
