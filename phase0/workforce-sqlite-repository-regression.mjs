@@ -426,6 +426,14 @@ try {
   }, managerScopeA);
   assert.equal(shiftAfterAbsenceCorrection.record.status, 'PLANNED');
 
+  const legacyLongShift = repository.create('shift', {
+    idempotency_key: 'shift-created-before-policy-long', member_id: created.record.id,
+    starts_at: '2026-12-21T06:00:00.000Z', ends_at: '2026-12-21T16:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, managerScopeA);
+  assert.equal(legacyLongShift.record.constraint_policy_id, null);
+  assert.equal(legacyLongShift.record.constraint_state, 'UNKNOWN');
+
   const schedulingPolicy = repository.create('scheduling_policy', {
     idempotency_key: 'scheduling-policy-org-a',
     name: 'Operations scheduling policy',
@@ -443,8 +451,8 @@ try {
   assert.equal(activeSchedulingPolicy.status, 'ACTIVE');
   assert.equal(activeSchedulingPolicy.version, 2);
   const updatedSchedulingPolicy = repository.update('scheduling_policy', activeSchedulingPolicy.id, {
-    expected_version: 2, rules: { max_shift_minutes: 540, max_daily_minutes: 540,
-      enforcement: { max_daily_minutes: 'BLOCK' } },
+    expected_version: 2, rules: { max_shift_minutes: 540, max_daily_minutes: 540, allow_overrides: true,
+      allow_unknown_overrides: false, enforcement: { max_daily_minutes: 'BLOCK' } },
   }, managerScopeA);
   assert.equal(updatedSchedulingPolicy.version, 3);
   assert.equal(updatedSchedulingPolicy.rules.max_shift_minutes, 540);
@@ -501,6 +509,28 @@ try {
   }, scopeA);
   const submittedReplacementEngagement = repository.submit('engagement', replacementEngagement.record.id, { expected_version: 1 }, scopeA);
   repository.activate('engagement', replacementEngagement.record.id, { expected_version: submittedReplacementEngagement.version }, scopeA);
+  const reassignedWithOverride = repository.reassignShift('shift', legacyLongShift.record.id, {
+    expected_version: 1, member_id: activeReplacementProfessional.id,
+    reason: 'Emergency coverage transfer',
+    override_reason: 'Emergency coverage approved by manager',
+  }, managerScopeA);
+  assert.equal(reassignedWithOverride.constraint_state, 'BLOCKING_CONFLICT');
+  assert.equal(reassignedWithOverride.constraint_policy_version, 3);
+  assert.equal(reassignedWithOverride.constraint_override_reason, 'Emergency coverage approved by manager');
+  assert.equal(reassignedWithOverride.constraint_override_by, managerScopeA.actor_id);
+  assert.ok(reassignedWithOverride.constraint_override_at);
+  const overrideHistory = repository.listEntityHistory('shift', legacyLongShift.record.id, managerScopeA);
+  const overrideEvent = overrideHistory.find(event => event.action === 'workforce.shift.reassigned');
+  assert.equal(overrideEvent?.metadata.constraint_state, 'BLOCKING_CONFLICT');
+  assert.equal(overrideEvent?.metadata.constraint_override_reason, 'Emergency coverage approved by manager');
+  assert.equal(overrideEvent?.metadata.constraint_policy_version, 3);
+  assert.throws(() => repository.create('shift', {
+    idempotency_key: 'shift-unauthorized-override', member_id: created.record.id,
+    starts_at: '2026-12-22T06:00:00.000Z', ends_at: '2026-12-22T16:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+    override_reason: 'Emergency manager override requested',
+  }, employeeScopeA), error => error.code === 'WORKFORCE_SCHEDULING_OVERRIDE_UNAUTHORIZED');
+
   const generatedShifts = repository.generateShiftsFromTemplate(shiftTemplate.record.id, {
     expected_version: activeTemplate.version,
     member_id: created.record.id,
