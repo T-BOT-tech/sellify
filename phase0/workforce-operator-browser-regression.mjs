@@ -550,7 +550,7 @@ try {
   const cancelForm = page.locator('.workforce-leave-action-form[data-action="cancel"]');
   await cancelForm.locator('[name="reason"]').fill('Coverage changed');
   await cancelForm.getByRole('button', { name: 'Cancel approval' }).click();
-  await page.getByText('Leave request canceld.').waitFor({ timeout: 10000 });
+  await page.getByText('Leave request cancelled.').waitFor({ timeout: 10000 });
   await page.locator('.workforce-leave-row .logistics-status').filter({ hasText: 'CANCELLED' }).waitFor();
   const leaveCancelCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/leave-synthetic-1/cancel'));
   assert.equal(leaveCancelCall?.body.expected_version, 3);
