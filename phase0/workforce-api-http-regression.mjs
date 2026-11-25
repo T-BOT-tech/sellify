@@ -278,6 +278,12 @@ try {
       member_id: memberId, engagement_type: 'EMPLOYMENT',
       starts_at: '2026-11-26T08:00:00.000Z', ends_at: '2026-12-26T08:00:00.000Z',
     }],
+    ['shift-templates', {
+      name: 'Morning Shift', start_local_time: '08:00', end_local_time: '16:30',
+      timezone: 'Africa/Addis_Ababa', break_rules: [{ start_local_time: '12:00', end_local_time: '12:30' }],
+      work_days: [1,2,3,4,5], department_id: department.id, position_id: position.id,
+      location_id: primaryLocation.id, effective_from: '2026-11-25',
+    }],
     ['calendars', {
       member_id: memberId, timezone: 'Africa/Addis_Ababa',
       effective_from: '2026-11-24T00:00:00.000Z',
@@ -376,6 +382,8 @@ try {
     return result.payload.record;
   }
 
+  let shiftTemplate = await lifecycle('shift-templates', createdEntities['shift-templates'], 'deactivate', 1, 'INACTIVE');
+  await lifecycle('shift-templates', shiftTemplate, 'activate', 2, 'ACTIVE');
   let engagement = await lifecycle('engagements', createdEntities.engagements, 'submit', 1, 'PENDING_APPROVAL');
   engagement = await lifecycle('engagements', engagement, 'activate', 2, 'ACTIVE');
   engagement = await lifecycle('engagements', engagement, 'suspend', 3, 'SUSPENDED');
@@ -393,6 +401,14 @@ try {
   await lifecycle('allocations', allocation, 'release', 3, 'RELEASED', 'state');
   let utilization = await lifecycle('utilization', createdEntities.utilization, 'start', 1, 'IN_PROGRESS');
   await lifecycle('utilization', utilization, 'complete', 2, 'COMPLETED');
+
+  const crossTenantTemplateRead = await jsonRequest(
+    baseUrl,
+    '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/shift-templates',
+    { token: otherSession.token },
+  );
+  assert.equal(crossTenantTemplateRead.response.status, 403,
+    'a session from another tenant must not read shift templates');
 
   const crossTenantRead = await jsonRequest(
     baseUrl,
@@ -416,7 +432,7 @@ try {
     'a session from another tenant must not create Workforce records');
 
   console.log('Workforce authenticated HTTP API regression: PASS');
-  console.log('Session authentication, all Workforce entity CRUD routes, entity-specific lifecycle, idempotency, optimistic concurrency, and tenant isolation: VERIFIED');
+  console.log('Session authentication, Workforce entity CRUD routes including shift templates, entity-specific lifecycle, idempotency, optimistic concurrency, and tenant isolation: VERIFIED');
 } catch (error) {
   console.error(error);
   if (output) console.error('Backend output:\n' + output);
