@@ -160,15 +160,6 @@ function normalizeRepositoryValue(field, value) {
       return value.trim();
     } catch { throw fail('WORKFORCE_TIMEZONE_INVALID', 'timezone must be a valid IANA timezone'); }
   }
-  if (field === 'effective_from' || field === 'effective_until') {
-    if (value == null && field === 'effective_until') return null;
-    if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)
-      || !Number.isFinite(Date.parse(value + 'T00:00:00Z'))
-      || new Date(value + 'T00:00:00Z').toISOString().slice(0,10) !== value) {
-      throw fail('WORKFORCE_EFFECTIVE_DATE_INVALID', field + ' must be a valid YYYY-MM-DD date');
-    }
-    return value;
-  }
   if (field === 'work_days_json') {
     if (!Array.isArray(value) || value.some(day => !Number.isInteger(day) || day < 1 || day > 7)
       || new Set(value).size !== value.length || value.length === 0) {
@@ -322,6 +313,32 @@ export class WorkforceSqliteRepository {
       if (!calendar) throw fail('WORKFORCE_CALENDAR_SCOPE_INVALID', 'Calendar does not belong to the active organization and tenant', 422);
     }
     if (entity === 'shift_template') {
+      const validDate = value => typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+        && Number.isFinite(Date.parse(value + 'T00:00:00Z'))
+        && new Date(value + 'T00:00:00Z').toISOString().slice(0,10) === value;
+      if (!validDate(data.effective_from) || (data.effective_until != null && !validDate(data.effective_until))
+        || (data.effective_until && data.effective_until < data.effective_from)) {
+        throw fail('WORKFORCE_TEMPLATE_EFFECTIVE_DATE_INVALID', 'Template effective dates must be valid YYYY-MM-DD dates in ascending order');
+      }
+      const minute = value => Number(value.slice(0,2)) * 60 + Number(value.slice(3,5));
+      const startMinute = minute(data.start_local_time);
+      const endMinute = minute(data.end_local_time);
+      const duration = (endMinute - startMinute + 1440) % 1440;
+      if (!duration) throw fail('WORKFORCE_TEMPLATE_DURATION_INVALID', 'A shift template must have a non-zero local-time duration');
+      const breaks = data.break_rules_json ?? data.break_rules ?? [];
+      const normalizedBreaks = breaks.map(rule => {
+        const offset = (minute(rule.start_local_time) - startMinute + 1440) % 1440;
+        const breakDuration = (minute(rule.end_local_time) - minute(rule.start_local_time) + 1440) % 1440;
+        if (!breakDuration || offset + breakDuration > duration) {
+          throw fail('WORKFORCE_BREAK_RULES_INVALID', 'Each break interval must fit inside the template shift');
+        }
+        return { offset, end: offset + breakDuration };
+      }).sort((a,b) => a.offset - b.offset);
+      for (let index = 1; index < normalizedBreaks.length; index++) {
+        if (normalizedBreaks[index].offset < normalizedBreaks[index - 1].end) {
+          throw fail('WORKFORCE_BREAK_RULES_INVALID', 'Break intervals must not overlap');
+        }
+      }
       if (data.department_id) {
         const department = this.db.prepare("SELECT id FROM workforce_departments WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
           .get(String(data.department_id), scope.organization_id, scope.tenant_id, scope.chat_id);
