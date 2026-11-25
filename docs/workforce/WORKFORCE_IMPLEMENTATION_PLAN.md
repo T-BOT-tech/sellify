@@ -194,14 +194,14 @@ The route inventory script is scripts/perplexity-server-route-inventory.mjs. The
 
 ## Verification commands
 
-- npm run test:workforce-repository-contract
-- npm run test:workforce-sqlite-migration
-- npm run test:workforce-sqlite-repository
-- npm run test:workforce-authorization-adapter
-- npm run test:workforce-api
-- npm run test:workforce-api-http
-- npm run test:workforce-service-booking
-- npm run test:workforce-route-inventory
+- node phase0/workforce-repository-contract-regression.mjs
+- node phase0/workforce-sqlite-migration-regression.mjs
+- node phase0/workforce-sqlite-repository-regression.mjs
+- node phase0/workforce-authorization-adapter-regression.mjs
+- node phase0/workforce-api-regression.mjs
+- node phase0/workforce-api-http-regression.mjs
+- node phase0/workforce-service-booking-integration-regression.mjs
+- node phase0/workforce-route-inventory-regression.mjs
 
 The existing eight contract regressions are also run directly by the Workforce capability workflow.
 
