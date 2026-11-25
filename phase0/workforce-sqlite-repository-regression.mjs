@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration, runWorkforceLeaveAbsenceMigration, runWorkforceSchedulingPolicyMigration, runWorkforceShiftSchedulingAssessmentMigration } from '../backend/lib/workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration, runWorkforceOrganizationStructureMigration, runWorkforceShiftTemplateMigration, runWorkforceShiftTemplateReferenceGuardMigration, runWorkforceShiftInstanceProvenanceMigration, runWorkforceLeaveAbsenceMigration, runWorkforceSchedulingPolicyMigration, runWorkforceShiftSchedulingAssessmentMigration, runWorkforceShiftSchedulingOverrideMigration } from '../backend/lib/workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from '../backend/lib/workforce-sqlite-repository.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-repository-'));
@@ -68,6 +68,7 @@ try {
   runWorkforceLeaveAbsenceMigration(db);
   runWorkforceSchedulingPolicyMigration(db);
   runWorkforceShiftSchedulingAssessmentMigration(db);
+  runWorkforceShiftSchedulingOverrideMigration(db);
 
   const department = repository.create('department', { idempotency_key: 'department-ops', code: 'ops', name: 'Operations' }, scopeA);
   assert.equal(department.record.code, 'OPS');
