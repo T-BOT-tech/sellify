@@ -35,6 +35,21 @@ const validLocationAssignment = validateWorkforceApiPayload('assignment', 'creat
 });
 assert.equal(validLocationAssignment.valid, true);
 
+const validShiftTemplate = validateWorkforceApiPayload('shift_template', 'create', {
+  name: 'Morning Shift', start_local_time: '08:00', end_local_time: '16:30',
+  timezone: 'Africa/Addis_Ababa', break_rules: [{ start_local_time: '12:00', end_local_time: '12:30' }],
+  work_days: [1,2,3,4,5], effective_from: '2026-01-01',
+});
+assert.equal(validShiftTemplate.valid, true);
+const invalidShiftTemplate = validateWorkforceApiPayload('shift_template', 'create', {
+  name: 'Invalid Shift', start_local_time: '25:00', end_local_time: '16:30',
+  timezone: 'Africa/Addis_Ababa', work_days: [1,1,8], effective_from: '2026-02-31',
+});
+assert.equal(invalidShiftTemplate.valid, false);
+assert.ok(invalidShiftTemplate.errors.some(error => error.includes('start_local_time')));
+assert.ok(invalidShiftTemplate.errors.some(error => error.includes('work_days')));
+assert.ok(invalidShiftTemplate.errors.some(error => error.includes('effective_from')));
+
 const validDepartment = validateWorkforceApiPayload('department', 'create', { code: 'OPS', name: 'Operations' });
 assert.equal(validDepartment.valid, true);
 const invalidPosition = validateWorkforceApiPayload('position', 'create', { code: 'bad code', name: '' });
@@ -107,7 +122,7 @@ assert.ok(server.includes('IDEMPOTENCY_KEY_REQUIRED'));
 
 assert.ok(server.includes('\\/workforce\\/([a-z-]+)'));
 for (const routeKey of [
-  "departments: 'department'", "positions: 'position'",
+  "departments: 'department'", "positions: 'position'", "'shift-templates': 'shift_template'",
   "members: 'member'", "profiles: 'profile'", "engagements: 'engagement'",
   "calendars: 'calendar'", "'calendar-exceptions': 'calendar_exception'",
   "availability: 'availability'", "assignments: 'assignment'", "shifts: 'shift'",
