@@ -269,14 +269,14 @@ try {
   const memberAssignmentForm = page.locator('#workforceMemberProfileForm');
   await memberAssignmentForm.locator('[name="primary_location_id"]').selectOption('location-synthetic-1');
   await memberAssignmentForm.getByRole('button', { name: 'Save profile and assignments' }).click();
-  await page.getByText('Profile and assignments saved.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-profile-summary').getByText('Addis Ababa Branch', { exact: true }).waitFor({ timeout: 10000 });
   const memberLocationCall = apiCalls.find(call => call.method === 'PATCH' && call.pathname.endsWith('/members/member-synthetic-1'));
   assert.equal(memberLocationCall?.body.expected_version, 1);
   assert.equal(memberLocationCall?.body.primary_location_id, 'location-synthetic-1');
   const accountLinkForm = page.locator('#workforceAccountLinkForm');
   await accountLinkForm.locator('[name="user_id"]').fill('synthetic-existing-user');
   await accountLinkForm.getByRole('button', { name: 'Link existing account' }).click();
-  await page.getByText('Existing account linked.').waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Unlink account' }).waitFor({ state: 'visible', timeout: 10000 });
   const accountLinkCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/link-account'));
   assert.equal(accountLinkCall?.body.expected_version, 2);
   assert.equal(accountLinkCall?.body.user_id, 'synthetic-existing-user');
