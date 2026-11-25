@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { validateWorkforceRecurrenceRule, workforceAvailabilityCoversBooking } from '../backend/lib/workforce-recurrence-contract.js';
+import { validateWorkforceRecurrenceRule, workforceAvailabilityCoversBooking, workforceAvailabilityOccurrencesInRange } from '../backend/lib/workforce-recurrence-contract.js';
 import {
   WORKFORCE_BOOKING_INTEGRATION_VERSION,
   workforceBookingIntegrationContract,
@@ -31,6 +31,21 @@ assert.equal(workforceAvailabilityCoversBooking(recurringAvailability, {
   requested_start: '2026-11-27T07:00:00.000Z',
   requested_end: '2026-11-27T08:00:00.000Z',
 }), false, 'a non-matching weekday must not be treated as available');
+const matchingOccurrences = workforceAvailabilityOccurrencesInRange(
+  recurringAvailability, '2026-11-26T07:00:00.000Z', '2026-11-26T08:00:00.000Z');
+assert.equal(matchingOccurrences.valid, true);
+assert.equal(matchingOccurrences.occurrences.length, 1);
+assert.equal(matchingOccurrences.occurrences[0].starts_at, '2026-11-26T06:00:00.000Z');
+assert.equal(matchingOccurrences.occurrences[0].ends_at, '2026-11-26T15:00:00.000Z');
+const partialOccurrence = workforceAvailabilityOccurrencesInRange(
+  recurringAvailability, '2026-11-26T05:30:00.000Z', '2026-11-26T06:30:00.000Z');
+assert.equal(partialOccurrence.valid, true);
+assert.equal(partialOccurrence.occurrences.length, 1,
+  'occurrence enumeration must retain partial overlaps for blocking-window assessment');
+assert.equal(workforceAvailabilityCoversBooking(recurringAvailability, {
+  requested_start: '2026-11-26T05:30:00.000Z',
+  requested_end: '2026-11-26T06:30:00.000Z',
+}), false, 'partial occurrence overlap is not complete availability coverage');
 assert.equal(workforceAvailabilityCoversBooking(recurringAvailability, {
   requested_start: '2026-12-17T07:00:00.000Z',
   requested_end: '2026-12-17T08:00:00.000Z',
