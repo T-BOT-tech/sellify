@@ -146,5 +146,10 @@ export function workforceRepositoryCapability() {
     supports_optimistic_concurrency: true,
     supports_authorization: true,
     supports_audit_provenance: true,
+    supports_leave_request_approval: true,
+    supports_unplanned_absence_recording: true,
+    pending_leave_blocks_availability: false,
+    approved_leave_blocks_availability: true,
+    recorded_absence_blocks_availability: true,
   });
 }
