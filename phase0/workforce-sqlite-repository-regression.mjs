@@ -446,6 +446,30 @@ try {
   }, managerScopeA);
   assert.equal(updatedSchedulingPolicy.version, 3);
   assert.equal(updatedSchedulingPolicy.rules.max_shift_minutes, 540);
+
+  assert.throws(() => repository.create('shift', {
+    idempotency_key: 'shift-policy-max-duration-a', member_id: created.record.id,
+    starts_at: '2026-12-20T06:00:00.000Z', ends_at: '2026-12-20T16:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, managerScopeA), error => error.code === 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT'
+    && error.details?.assessment?.policy_version === 3
+    && error.details?.assessment?.findings?.some(item => item.code === 'MAX_SHIFT_DURATION'));
+  const policyCompliantShift = repository.create('shift', {
+    idempotency_key: 'shift-policy-compliant-a', member_id: created.record.id,
+    starts_at: '2026-12-20T06:00:00.000Z', ends_at: '2026-12-20T14:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, managerScopeA);
+  assert.equal(policyCompliantShift.record.constraint_state, 'PASS');
+  assert.equal(policyCompliantShift.record.constraint_policy_id, activeSchedulingPolicy.id);
+  assert.equal(policyCompliantShift.record.constraint_policy_version, 3);
+  assert.deepEqual(policyCompliantShift.record.constraint_findings, []);
+  assert.throws(() => repository.create('shift', {
+    idempotency_key: 'shift-policy-max-daily-a', member_id: created.record.id,
+    starts_at: '2026-12-20T15:00:00.000Z', ends_at: '2026-12-20T17:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa', break_rules: [],
+  }, managerScopeA), error => error.code === 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT'
+    && error.details?.assessment?.findings?.some(item => item.code === 'MAX_DAILY_HOURS'));
+
   assert.throws(() => repository.update('scheduling_policy', activeSchedulingPolicy.id, {
     expected_version: 2, name: 'Stale policy update',
   }, managerScopeA), error => error.code === 'WORKFORCE_VERSION_CONFLICT');
