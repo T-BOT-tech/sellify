@@ -931,6 +931,19 @@ export class WorkforceSqliteRepository {
     const applicableCalendars = activeCalendars.filter(item =>
       workforceCalendarCoversEffectiveRange(item, start, end));
     const calendar = applicableCalendars.length === 1 ? applicableCalendars[0] : null;
+    const logisticsAssignmentTable = this.db.prepare(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name='delivery_assignments'
+    `).get();
+    const logisticsAssignments = member.user_id && logisticsAssignmentTable
+      ? this.db.prepare(`
+        SELECT id, status, fulfillment_id, assigned_at, updated_at
+        FROM delivery_assignments
+        WHERE organization_id=? AND courier_user_id=?
+          AND status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
+        ORDER BY assigned_at LIMIT 250
+      `).all(scope.organization_id, String(member.user_id))
+      : [];
+
     const calendarAssessment = applicableCalendars.length === 1
       ? assessWeeklyCalendarCoverage(calendar, start, end)
       : { complete: false, covered: false, reason: activeCalendars.length === 0
@@ -981,6 +994,12 @@ export class WorkforceSqliteRepository {
         ? 'A linked Service Booking is not yet in a confirmed operational state'
         : 'A confirmed or in-progress Service Booking overlaps the requested interval',
       record_id: item.id,
+    });
+
+    for (const item of logisticsAssignments) findings.push({
+      code:'LOGISTICS_DELIVERY_WINDOW_UNKNOWN', state:'UNKNOWN', source:'operational_commitments',
+      message:'The member has an active Logistics delivery assignment, but Logistics does not expose a bounded work interval for conflict assessment',
+      record_id:item.id,
     });
     if (policy.state === 'BLOCKING_CONFLICT') findings.push({ code:'SCHEDULING_POLICY_BLOCK', state:'CONFLICT', source:'scheduling_policy', message:'The active scheduling policy blocks this candidate' });
     if (policy.state === 'UNKNOWN') findings.push({ code:'SCHEDULING_POLICY_UNKNOWN', state:'UNKNOWN', source:'scheduling_policy', message:'Scheduling policy evidence is incomplete' });
@@ -1046,8 +1065,15 @@ export class WorkforceSqliteRepository {
       scheduling_policy: evidence(policy.state === 'UNKNOWN' ? 'MISSING' : 'COMPLETE', policy.policy_id ? { version: policy.policy_version || 1 } : member,
         policy.state === 'UNKNOWN' ? 'Scheduling policy evaluation is unknown' : null),
       operational_commitments: {
-        status:'MISSING',
-        reason:'Service Booking overlaps were checked; authoritative Logistics-to-Workforce identity and time-window linkage is not yet verified',
+        status: !member.user_id ? 'NOT_APPLICABLE'
+          : !logisticsAssignmentTable ? 'MISSING'
+            : logisticsAssignments.length ? 'MISSING' : 'COMPLETE',
+        ...(!member.user_id
+          ? { reason: 'This Workforce member has no linked Identity user; the current Logistics delivery-assignment schema requires courier_user_id referencing users' }
+          : !logisticsAssignmentTable
+            ? { reason: 'The canonical Logistics delivery-assignment table is not available to this repository connection' }
+            : logisticsAssignments.length
+              ? { reason: 'Active Logistics assignments exist but do not expose a bounded work interval' } : {}),
         evaluated_at: this.clock(),
       },
     };
