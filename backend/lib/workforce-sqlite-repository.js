@@ -771,13 +771,7 @@ export class WorkforceSqliteRepository {
     for (const key of ['organization_id','tenant_id','chat_id']) {
       if (String(candidate[key]) !== String(scope[key])) throw scopedError();
     }
-    const member = this.db.prepare(`
-      SELECT id, status, primary_location_id, version, updated_at
-      FROM workforce_members
-      WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=?
-    `).get(String(candidate.member_id), scope.organization_id, scope.tenant_id, scope.chat_id);
-    if (!member) throw scopedError();
-    this.assertAuthorized(context, 'member', 'get', member);
+    const member = this.get('member', String(candidate.member_id), context);
 
     const start = new Date(candidate.starts_at).toISOString();
     const end = new Date(candidate.ends_at).toISOString();
