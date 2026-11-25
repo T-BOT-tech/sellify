@@ -26,6 +26,11 @@ assert.ok(ui.includes('employee_number') && ui.includes('department_id') && ui.i
   'member creation must support employee numbers and organizational references');
 assert.ok(ui.includes('saveMemberCreate') && ui.includes('saveDepartment') && ui.includes('savePosition'),
   'authorized operators must be able to create member, department and position records');
+assert.ok(ui.includes('async function refreshWorkspaceWithStatus')
+  && ui.includes("refreshWorkspaceWithStatus(root, '#workforceMemberProfileForm'")
+  && ui.includes("refreshWorkspaceWithStatus(root, '#workforceProfileForm'")
+  && ui.includes("refreshWorkspaceWithStatus(root, '#workforceEngagementForm'"),
+  'successful form feedback must remain visible after the workspace refreshes and re-renders the member profile');
 assert.ok(ui.includes('workforceEngagementForm') && ui.includes('saveEngagement'),
   'authorized managers must be able to create member-scoped engagements');
 assert.ok(ui.includes('workforceProfileForm') && ui.includes('saveProfile'),
