@@ -643,8 +643,8 @@ try {
     idempotency_key: 'shift-update-candidate',
     member_id: created.record.id,
     location_id: 'location-a',
-    starts_at: '2026-11-25T05:00:00.000Z',
-    ends_at: '2026-11-25T06:00:00.000Z',
+    starts_at: '2026-12-01T05:00:00.000Z',
+    ends_at: '2026-12-01T06:00:00.000Z',
     timezone: 'Africa/Addis_Ababa',
   }, scopeA);
   assert.throws(() => repository.update('shift', shiftUpdateCandidate.record.id, {
