@@ -12,6 +12,8 @@ import {
   WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION,
   runWorkforceEmployeeNumberMigration,
   WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION,
+  runWorkforceOrganizationStructureMigration,
+  WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION,
 } from '../backend/lib/workforce-sqlite-migrations.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-migration-'));
@@ -175,6 +177,22 @@ try {
   db.prepare('UPDATE workforce_members SET employee_number = ? WHERE id = ?').run('EMP-001', 'member-b');
   assert.throws(() => db.prepare('UPDATE workforce_members SET employee_number = ? WHERE id = ?').run('emp-001', 'member-external'));
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+  const structureMigration = runWorkforceOrganizationStructureMigration(db);
+  const structureReplay = runWorkforceOrganizationStructureMigration(db);
+  assert.deepEqual(structureMigration, { applied: true, version: WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION });
+  assert.deepEqual(structureReplay, { applied: false, version: WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION });
+  for (const field of ['department_id','position_id','supervisor_member_id']) {
+    assert.ok(db.prepare('PRAGMA table_info(workforce_members)').all().some(column => column.name === field));
+  }
+  assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workforce_departments'").get());
+  assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workforce_positions'").get());
+  db.prepare("INSERT INTO workforce_departments (id,organization_id,tenant_id,chat_id,code,name,created_at,updated_at) VALUES ('dept-a','org-a','tenant-a','chat-a','OPS','Operations','2026-01-01','2026-01-01')").run();
+  db.prepare("INSERT INTO workforce_positions (id,organization_id,tenant_id,chat_id,code,name,department_id,created_at,updated_at) VALUES ('position-a','org-a','tenant-a','chat-a','LEAD','Team Lead','dept-a','2026-01-01','2026-01-01')").run();
+  db.prepare('UPDATE workforce_members SET department_id = ?, position_id = ? WHERE id = ?').run('dept-a','position-a','member-a');
+  assert.throws(() => db.prepare("INSERT INTO workforce_positions (id,organization_id,tenant_id,chat_id,code,name,department_id,created_at,updated_at) VALUES ('position-cross','org-b','tenant-b','chat-b','CROSS','Cross Scope','dept-a','2026-01-01','2026-01-01')").run());
+  assert.throws(() => db.prepare('UPDATE workforce_members SET department_id = ? WHERE id = ?').run('dept-a','member-b'));
+  assert.throws(() => db.prepare('UPDATE workforce_members SET supervisor_member_id = id WHERE id = ?').run('member-a'));
+  assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   const preservedMemberIndexes = new Set(db.prepare('PRAGMA index_list(workforce_members)').all().map(index => index.name));
   for (const name of ['idx_workforce_members_org_status','idx_workforce_members_tenant_status','idx_workforce_members_user','idx_workforce_members_location']) {
     assert.ok(preservedMemberIndexes.has(name), 'migration must preserve ' + name);
@@ -186,8 +204,10 @@ try {
     .get(WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION).count, 1);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?')
     .get(WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION).count, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?')
+    .get(WORKFORCE_ORGANIZATION_STRUCTURE_MIGRATION_VERSION).count, 1);
 
-  console.log('PASS Workforce SQLite migrations 86-89: external professionals, employee numbers, all dependent records, Service Booking references, rollback, idempotency, and foreign-key integrity');
+  console.log('PASS Workforce SQLite migrations 86-90: external professionals, employee numbers, departments, positions, reporting references, rollback, idempotency, and foreign-key integrity');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
