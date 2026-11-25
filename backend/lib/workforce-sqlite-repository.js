@@ -357,6 +357,20 @@ export class WorkforceSqliteRepository {
         if (!engagement) throw fail('WORKFORCE_ACTIVE_ENGAGEMENT_REQUIRED', 'Leave request dates must be covered by an active engagement', 409);
       }
     }
+    if (entity === 'shift' && data.member_id && data.starts_at && data.ends_at) {
+      const approvedLeave = this.db.prepare(`
+        SELECT id FROM workforce_leave_requests
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='APPROVED'
+          AND starts_at < ? AND ends_at > ? LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(data.member_id), data.ends_at, data.starts_at);
+      if (approvedLeave) throw fail('WORKFORCE_LEAVE_AVAILABILITY_CONFLICT', 'An approved leave request blocks this shift period', 409);
+      const recordedAbsence = this.db.prepare(`
+        SELECT id FROM workforce_absences
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='RECORDED'
+          AND starts_at < ? AND ends_at > ? LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(data.member_id), data.ends_at, data.starts_at);
+      if (recordedAbsence) throw fail('WORKFORCE_ABSENCE_AVAILABILITY_CONFLICT', 'A recorded absence blocks this shift period', 409);
+    }
     if (data.calendar_id) {
       const calendar = this.db.prepare(`
         SELECT id FROM workforce_calendars
@@ -820,6 +834,24 @@ export class WorkforceSqliteRepository {
         skipped.push({ local_date: localDate, reason: 'ACTIVE_ENGAGEMENT_REQUIRED' });
         continue;
       }
+      const approvedLeave = this.db.prepare(`
+        SELECT id FROM workforce_leave_requests
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='APPROVED'
+          AND starts_at < ? AND ends_at > ? LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, window.ends_at, window.starts_at);
+      if (approvedLeave) {
+        conflicts.push({ local_date: localDate, reason: 'APPROVED_LEAVE', leave_request_id: approvedLeave.id });
+        continue;
+      }
+      const recordedAbsence = this.db.prepare(`
+        SELECT id FROM workforce_absences
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='RECORDED'
+          AND starts_at < ? AND ends_at > ? LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, window.ends_at, window.starts_at);
+      if (recordedAbsence) {
+        conflicts.push({ local_date: localDate, reason: 'RECORDED_ABSENCE', absence_id: recordedAbsence.id });
+        continue;
+      }
       const overlapping = this.db.prepare(`
         SELECT id, starts_at, ends_at, status FROM workforce_shifts
         WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
@@ -1232,6 +1264,18 @@ export class WorkforceSqliteRepository {
       `).all(scope.organization_id, scope.tenant_id, scope.chat_id, memberId,
         String(id), current.ends_at, current.starts_at);
       if (overlapping.length) throw fail('WORKFORCE_CONSTRAINT_CONFLICT', 'Replacement professional has an overlapping dated shift', 409);
+      const approvedLeave = this.db.prepare(`
+        SELECT id FROM workforce_leave_requests
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='APPROVED'
+          AND starts_at < ? AND ends_at > ? LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, current.ends_at, current.starts_at);
+      if (approvedLeave) throw fail('WORKFORCE_LEAVE_AVAILABILITY_CONFLICT', 'Replacement professional has approved leave during this shift', 409);
+      const recordedAbsence = this.db.prepare(`
+        SELECT id FROM workforce_absences
+        WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=? AND status='RECORDED'
+          AND starts_at < ? AND ends_at > ? LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, current.ends_at, current.starts_at);
+      if (recordedAbsence) throw fail('WORKFORCE_ABSENCE_AVAILABILITY_CONFLICT', 'Replacement professional has a recorded absence during this shift', 409);
       const now = this.clock();
       const result = this.db.prepare(`
         UPDATE workforce_shifts SET member_id = ?, updated_by = ?, updated_at = ?, version = version + 1
