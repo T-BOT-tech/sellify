@@ -266,7 +266,7 @@ export class WorkforceSqliteRepository {
     if (allowed !== true) throw fail('WORKFORCE_FORBIDDEN', 'Workforce permission denied', 403);
   }
 
-  assertReferences(entity, data, scope) {
+  assertReferences(entity, data, scope, recordId = null) {
     if (data.member_id) {
       const member = this.db.prepare(`
         SELECT id FROM workforce_members
@@ -280,6 +280,42 @@ export class WorkforceSqliteRepository {
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
       `).get(String(data.calendar_id), scope.organization_id, scope.tenant_id, scope.chat_id);
       if (!calendar) throw fail('WORKFORCE_CALENDAR_SCOPE_INVALID', 'Calendar does not belong to the active organization and tenant', 422);
+    }
+    if (entity === 'position' && data.department_id) {
+      const department = this.db.prepare("SELECT id FROM workforce_departments WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
+        .get(String(data.department_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+      if (!department) throw fail('WORKFORCE_DEPARTMENT_SCOPE_INVALID', 'Department is outside the active scope or inactive', 422);
+    }
+    if (entity === 'member') {
+      if (data.department_id) {
+        const department = this.db.prepare("SELECT id FROM workforce_departments WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
+          .get(String(data.department_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!department) throw fail('WORKFORCE_DEPARTMENT_SCOPE_INVALID', 'Department is outside the active scope or inactive', 422);
+      }
+      if (data.position_id) {
+        const position = this.db.prepare("SELECT id, department_id FROM workforce_positions WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
+          .get(String(data.position_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!position) throw fail('WORKFORCE_POSITION_SCOPE_INVALID', 'Position is outside the active scope or inactive', 422);
+        if (position.department_id && String(position.department_id) !== String(data.department_id || '')) {
+          throw fail('WORKFORCE_POSITION_DEPARTMENT_MISMATCH', 'Member department must match the position department', 422);
+        }
+      }
+      if (data.supervisor_member_id) {
+        const supervisorId = String(data.supervisor_member_id);
+        if (recordId && supervisorId === String(recordId)) throw fail('WORKFORCE_SUPERVISOR_SELF_INVALID', 'A member cannot supervise themselves', 422);
+        const supervisor = this.db.prepare("SELECT id FROM workforce_members WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'")
+          .get(supervisorId, scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!supervisor) throw fail('WORKFORCE_SUPERVISOR_SCOPE_INVALID', 'Supervisor must be active in the same organization and tenant', 422);
+        const visited = new Set(recordId ? [String(recordId)] : []);
+        let cursor = supervisorId;
+        while (cursor) {
+          if (visited.has(cursor)) throw fail('WORKFORCE_REPORTING_CYCLE_INVALID', 'Reporting relationship would create a cycle', 409);
+          visited.add(cursor);
+          const parent = this.db.prepare('SELECT supervisor_member_id FROM workforce_members WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=?')
+            .get(cursor, scope.organization_id, scope.tenant_id, scope.chat_id);
+          cursor = parent?.supervisor_member_id ? String(parent.supervisor_member_id) : null;
+        }
+      }
     }
     if (Object.hasOwn(data, 'user_id')) {
       const userId = data.user_id == null ? null : String(data.user_id).trim();
