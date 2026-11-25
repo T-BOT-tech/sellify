@@ -44,6 +44,8 @@ const ROLE_PERMISSIONS = Object.freeze({
     'service:service_booking:view',
     'service:service_booking:request', 'service:service_booking:manage',
     'service:service_booking:confirm', 'service:service_booking:cancel',
+    'workforce:department:view', 'workforce:department:manage',
+    'workforce:position:view', 'workforce:position:manage',
     'workforce:member:view', 'workforce:member:manage', 'workforce:member:activate', 'workforce:member:suspend',
     'workforce:profile:view', 'workforce:profile:manage',
     'workforce:engagement:view', 'workforce:engagement:manage',
