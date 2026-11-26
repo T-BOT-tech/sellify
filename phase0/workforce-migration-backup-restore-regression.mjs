@@ -108,10 +108,15 @@ try {
     const bookingTriggers = legacy.prepare(
       "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'service_bookings' AND sql IS NOT NULL"
     ).all().map(row => row.sql);
-    const legacyBookingDdl = bookingDdl
-      .replace(/^CREATE TABLE service_bookings/i, 'CREATE TABLE service_bookings_preworkforce')
-      .replace(/,\\s*workforce_member_id\\s+TEXT\\s+REFERENCES\\s+workforce_members\\(id\\)\\s+ON DELETE SET NULL/i, '');
-    assert.notEqual(legacyBookingDdl, bookingDdl, 'legacy Service Booking DDL must remove the Workforce-only column');
+    const workforceColumnPosition = bookingDdl.indexOf('workforce_member_id');
+    const workforceColumnStart = bookingDdl.lastIndexOf(',', workforceColumnPosition);
+    const tableDefinitionEnd = bookingDdl.lastIndexOf(')');
+    assert.ok(workforceColumnPosition >= 0 && workforceColumnStart >= 0 && tableDefinitionEnd > workforceColumnPosition,
+      'Workforce member reference must be an appended Service Booking column');
+    const legacyBookingDdl = (bookingDdl.slice(0, workforceColumnStart) + bookingDdl.slice(tableDefinitionEnd))
+      .replace(/^CREATE TABLE service_bookings/i, 'CREATE TABLE service_bookings_preworkforce');
+    assert.ok(!legacyBookingDdl.includes('workforce_member_id'),
+      'legacy Service Booking DDL must remove the Workforce-only column');
     legacy.exec(legacyBookingDdl);
     const bookingColumns = legacy.prepare('PRAGMA table_info(service_bookings_preworkforce)').all()
       .filter(column => column.name !== 'workforce_member_id')
