@@ -133,29 +133,30 @@ function localParts(value, timeZone) {
 function localDateTimeToUtc(parts, timeZone) {
   const target = Date.UTC(parts.year, parts.month - 1, parts.day,
     parts.hour, parts.minute, parts.second, parts.millisecond || 0);
-  let guess = target;
-  let formatter;
+  const offsets = new Set();
   try {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-    });
+    // Sample both sides of nearby timezone transitions. A single iterative
+    // guess can silently choose one side of a repeated fall-back wall time.
+    for (let hours = -48; hours <= 48; hours += 6) {
+      const sample = target + hours * 3600000;
+      const represented = localParts(new Date(sample).toISOString(), timeZone);
+      if (!represented) return null;
+      offsets.add(Date.UTC(represented.year, represented.month - 1, represented.day,
+        represented.hour, represented.minute, represented.second, represented.millisecond) - sample);
+    }
   } catch {
     return null;
   }
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const actual = Object.fromEntries(formatter.formatToParts(new Date(guess))
-      .filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
-    const represented = Date.UTC(actual.year, actual.month - 1, actual.day,
-      actual.hour, actual.minute, actual.second, parts.millisecond || 0);
-    const delta = target - represented;
-    if (delta === 0) break;
-    guess += delta;
-  }
-  const check = localParts(new Date(guess).toISOString(), timeZone);
-  if (!check || check.date !== dateKey(parts.year, parts.month, parts.day)
-    || check.hour !== parts.hour || check.minute !== parts.minute || check.second !== parts.second) return null;
-  return guess;
+  const matches = [...offsets].map(offset => target - offset).filter(epoch => {
+    const check = localParts(new Date(epoch).toISOString(), timeZone);
+    return check && check.date === dateKey(parts.year, parts.month, parts.day)
+      && check.hour === parts.hour && check.minute === parts.minute
+      && check.second === parts.second && check.millisecond === (parts.millisecond || 0);
+  });
+  const unique = [...new Set(matches)];
+  // Exactly one UTC instant must represent a local boundary. Zero means a
+  // spring-forward gap; more than one means a fall-back ambiguity.
+  return unique.length === 1 ? unique[0] : null;
 }
 
 function dayNumber(date) {
