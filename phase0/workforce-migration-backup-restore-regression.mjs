@@ -113,7 +113,7 @@ try {
       .replace(/,\\s*workforce_member_id\\s+TEXT\\s+REFERENCES\\s+workforce_members\\(id\\)\\s+ON DELETE SET NULL/i, '');
     assert.notEqual(legacyBookingDdl, bookingDdl, 'legacy Service Booking DDL must remove the Workforce-only column');
     legacy.exec(legacyBookingDdl);
-    const bookingColumns = legacy.prepare('PRAGMA table_info(service_bookings)').all()
+    const bookingColumns = legacy.prepare('PRAGMA table_info(service_bookings_preworkforce)').all()
       .filter(column => column.name !== 'workforce_member_id')
       .map(column => '"' + String(column.name).replaceAll('"', '""') + '"');
     const bookingColumnSql = bookingColumns.join(', ');
