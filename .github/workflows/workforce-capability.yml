@@ -60,6 +60,7 @@ jobs:
         run: |
           node phase0/workforce-repository-contract-regression.mjs
           node phase0/workforce-sqlite-migration-regression.mjs
+          node phase0/workforce-migration-backup-restore-regression.mjs
           node phase0/workforce-sqlite-repository-regression.mjs
 
       - name: Authorization and authenticated API
