@@ -230,3 +230,31 @@ The existing eight contract regressions are also run directly by the Node 24 Wor
 - Service Booking confirmation creates the canonical Service Resource Commitment; it does not create a second Workforce allocation.
 - Operator workspace browser behavior has not yet been visually smoke-tested on a real mobile device; API and source-level integration are covered by CI.
 - No payroll, HRIS, supplier-capacity, inventory, payment, fulfillment, catalog, or logistics-task authority is introduced.
+
+
+## Follow-up audit — 2026-11-26
+
+### Recurrence daylight-saving ambiguity
+
+A deeper audit found that the earlier recurrence resolver could silently select one UTC instant for a repeated fall-back local wall time. The recurrence resolver now enumerates nearby timezone offsets and accepts a local boundary only when it maps to exactly one UTC instant. Nonexistent spring-forward times and ambiguous fall-back times both fail closed.
+
+- Fix commit: `422d3e78639cb95d9f382550861b04faa6d01933`
+- Regression commit: `273f483c87dc6a5c005f31540a9a75a12ee69916`
+- New regression: `phase0/workforce-booking-integration-regression.mjs` verifies a weekly America/New_York fall-back occurrence is rejected when its local start time repeats.
+- Node 24 Workforce workflow on the regression commit passed: [run 45839096746](https://github.com/T-BOT-tech/sellify/actions/runs/45839096746).
+
+### Utilization runtime validation gap
+
+The utilization contract declares `planned_starts_at`, `planned_ends_at`, and `evidence_source` as required fields. However, the current API payload validator checks supplied utilization date pairs but does not require those fields on create. The repository create path normalizes fields that are present but does not call `validateWorkforceUtilization`; the SQLite schema also permits the planned timestamps and evidence source to be NULL.
+
+Consequently, a PLANNED utilization event may be persisted without a bounded planned interval or evidence source, despite the contract's required-field declaration. Analytics will count the event while its planned duration contributes zero. This is a concrete contract/runtime mismatch, not a claim that invalid data has already been found in production.
+
+Classification: **partially implemented; validation gap confirmed by source inspection**.
+
+Required follow-up:
+1. Reconcile the utilization contract's create-time required fields with versioned update/lifecycle requirements.
+2. Enforce the same rules at both API and repository boundaries.
+3. Add repository and authenticated HTTP regressions for missing planned interval/evidence source and invalid actual-time ordering.
+4. Preserve the current explicit `completed_missing_actual_events` metric; do not silently fabricate actual work times or require them on completion until the evidence and completion semantics are agreed.
+
+The utilization validator's `expected_version` requirement is also currently grouped with entity data requirements, although create operations use idempotency and lifecycle/update operations use optimistic concurrency. Separate operation-specific requirements before wiring that validator into persistence.
