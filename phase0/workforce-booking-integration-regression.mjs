@@ -118,6 +118,22 @@ assert.equal(workforceAvailabilityCoversBooking(dstAvailability, {
   requested_end: '2026-03-08T14:30:00.000Z',
 }), true, 'recurrence must preserve local wall-clock time across daylight-saving changes');
 
+const fallBackAmbiguousAvailability = {
+  starts_at: '2026-10-25T05:30:00.000Z',
+  ends_at: '2026-10-25T06:30:00.000Z',
+  timezone: 'America/New_York',
+  effective_from: '2026-10-25',
+  recurrence_rule: 'FREQ=WEEKLY;BYDAY=SU;COUNT=2',
+};
+const fallBackAmbiguousOccurrence = workforceAvailabilityOccurrencesInRange(
+  fallBackAmbiguousAvailability, '2026-11-01T06:30:00.000Z', '2026-11-01T07:00:00.000Z');
+assert.equal(fallBackAmbiguousOccurrence.valid, false,
+  'a repeated fall-back local boundary must not be silently resolved to one UTC instant');
+assert.equal(workforceAvailabilityCoversBooking(fallBackAmbiguousAvailability, {
+  requested_start: '2026-11-01T06:30:00.000Z',
+  requested_end: '2026-11-01T07:00:00.000Z',
+}), false, 'an ambiguous fall-back recurrence must fail closed');
+
 const contract = workforceBookingIntegrationContract();
 
 assert.equal(contract.contract_version, WORKFORCE_BOOKING_INTEGRATION_VERSION);
