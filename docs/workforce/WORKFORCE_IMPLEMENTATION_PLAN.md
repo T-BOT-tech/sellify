@@ -258,3 +258,8 @@ Required follow-up:
 4. Preserve the current explicit `completed_missing_actual_events` metric; do not silently fabricate actual work times or require them on completion until the evidence and completion semantics are agreed.
 
 The utilization validator's `expected_version` requirement is also currently grouped with entity data requirements, although create operations use idempotency and lifecycle/update operations use optimistic concurrency. Separate operation-specific requirements before wiring that validator into persistence.
+
+
+### Provider utilization summary scope regression
+
+The complete repository query was rechecked after an initially incomplete inspection. It already applies `resource_id`, `member_id`, `member_user_id`, and `provider_user_id` context predicates before aggregation. No production authorization defect was confirmed and no runtime code change was made. Added repository regression coverage seeds same-tenant events across two resources and linked/unlinked members, then verifies resource-only, provider-only, and combined provider/resource summary scopes. The regression is on commit `9a4fddc96bfac0a4d630c68d06bdd750aa66e488` and awaits its Node 24 workflow result.
