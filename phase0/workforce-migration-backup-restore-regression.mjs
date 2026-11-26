@@ -93,13 +93,42 @@ try {
   try {
     legacy.exec('PRAGMA foreign_keys = OFF');
     legacy.exec('DROP INDEX IF EXISTS idx_service_bookings_workforce_member');
+
+    // Rebuild only the existing Service Booking table from its own SQLite DDL,
+    // excluding the one additive Workforce reference. This keeps every
+    // pre-existing Service Booking column, constraint, row, and index intact.
+    const bookingDdl = legacy.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'service_bookings'"
+    ).get()?.sql;
+    assert.ok(bookingDdl, 'legacy fixture must contain the canonical Service Booking table');
+    assert.match(bookingDdl, /workforce_member_id/i, 'source snapshot must include the additive Workforce member reference');
+    const bookingIndexes = legacy.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'service_bookings' AND sql IS NOT NULL"
+    ).all().map(row => row.sql);
+    const bookingTriggers = legacy.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'service_bookings' AND sql IS NOT NULL"
+    ).all().map(row => row.sql);
+    const legacyBookingDdl = bookingDdl
+      .replace(/^CREATE TABLE service_bookings/i, 'CREATE TABLE service_bookings_preworkforce')
+      .replace(/,\\s*workforce_member_id\\s+TEXT\\s+REFERENCES\\s+workforce_members\\(id\\)\\s+ON DELETE SET NULL/i, '');
+    assert.notEqual(legacyBookingDdl, bookingDdl, 'legacy Service Booking DDL must remove the Workforce-only column');
+    legacy.exec(legacyBookingDdl);
+    const bookingColumns = legacy.prepare('PRAGMA table_info(service_bookings)').all()
+      .filter(column => column.name !== 'workforce_member_id')
+      .map(column => '"' + String(column.name).replaceAll('"', '""') + '"');
+    const bookingColumnSql = bookingColumns.join(', ');
+    legacy.exec('INSERT INTO service_bookings_preworkforce (' + bookingColumnSql + ') SELECT ' + bookingColumnSql + ' FROM service_bookings');
+    legacy.exec('DROP TABLE service_bookings');
+    legacy.exec('ALTER TABLE service_bookings_preworkforce RENAME TO service_bookings');
+    for (const sql of bookingIndexes) legacy.exec(sql);
+    for (const sql of bookingTriggers) legacy.exec(sql);
+
     const workforceTables = legacy.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'workforce_%' ORDER BY name DESC"
     ).all().map(row => String(row.name));
     for (const table of workforceTables) {
       legacy.exec('DROP TABLE IF EXISTS "' + table.replaceAll('"', '""') + '"');
     }
-    legacy.exec('ALTER TABLE service_bookings DROP COLUMN workforce_member_id');
     legacy.prepare('DELETE FROM schema_migrations WHERE version BETWEEN 86 AND 100').run();
     assert.equal(legacy.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version, 85,
       'simulated legacy database must be at the pre-Workforce migration version');
