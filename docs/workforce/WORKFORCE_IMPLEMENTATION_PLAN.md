@@ -2,9 +2,11 @@
 
 ## Status
 
-Persistence, repository, central authorization, API registration, Service Booking linkage, authenticated operator workspace, and regression coverage originated on `feature/workforce-capability-20261124` and are being selectively extracted onto `integration/workforce-capability-20261126`, based on current `main`.
+Persistence, repository, central authorization, API registration, Service Booking linkage, authenticated operator workspace, and regression coverage originated on `feature/workforce-capability-20261124` and have been selectively extracted onto `integration/workforce-capability-20261126`, based on `main` at `b377b662c460cc2df59abaf3de6db8e1b393769a`.
 
-The integration branch excludes unrelated B2B, onboarding, preview-workflow, and preview-profile changes. The Node 24 Workforce verification workflow runs on the integration branch and on pull requests targeting `main`; it does not merge or deploy the capability. Final integration certification remains pending.
+The integration branch excludes unrelated B2B, onboarding, preview-workflow, and preview-profile changes. At integration head `165047832e5c30df601d45904bd83c77687d5bd6`, the Workforce Node 24 workflow, full Sellify CI, Repository Security Checks, Perplexity audit inventory, and listed Supplier Network regression workflows completed successfully. The full CI run included baseline, Phase 13.10.24, Phase 21, Logistics L18, and Logistics exit certification. This verifies the tested commit; it does not merge or deploy the capability.
+
+The branch remains a draft PR for review. Final integration certification remains pending production-like migration backup/restore rehearsal, foreign-key validation, and manual browser/mobile usability review. These operational checks are not replaced by passing CI.
 
 ## Phase 1: Design and contracts — complete
 
@@ -48,7 +50,7 @@ The integration branch excludes unrelated B2B, onboarding, preview-workflow, and
 - Availability window create/get/list/update.
 - IANA timezone validation and explicit timezone requirements for appointment windows.
 - Availability values remain AVAILABLE, UNAVAILABLE, TENTATIVE, or BLACKOUT.
-- Bounded DAILY/WEEKLY recurrence rules are evaluated against concrete booking windows in the declared IANA timezone.
+- Bounded DAILY/WEEKLY recurrence rules are evaluated against concrete booking windows in the declared IANA timezone; unsupported rules fail closed.
 
 ## Phase 6: Assignment and shifts — implemented and verified
 
@@ -65,6 +67,7 @@ The integration branch excludes unrelated B2B, onboarding, preview-workflow, and
 - Member linkage is accepted only during authorized Service Booking confirmation.
 - Member must be ACTIVE and retain an active canonical tenant membership.
 - An ACTIVE assignment and AVAILABLE window must cover the full booking interval and match the selected resource/location.
+- Recurring Workforce availability is evaluated using the bounded DAILY/WEEKLY recurrence contract in the declared IANA timezone.
 - Existing Service Booking lifecycle and authorization remain in force.
 - Existing Service Resource Commitment creates the canonical resource commitment.
 - Provider appointment reads are filtered by Workforce member identity.
@@ -204,7 +207,7 @@ The route inventory script is scripts/perplexity-server-route-inventory.mjs. The
 - node scripts/perplexity-server-route-inventory.mjs
 - node phase0/workforce-route-inventory-regression.mjs
 
-The existing eight contract regressions are also run directly by the Workforce capability workflow.
+The existing eight contract regressions are also run directly by the Node 24 Workforce capability workflow.
 
 ## Completed follow-on increments
 
@@ -215,9 +218,8 @@ The existing eight contract regressions are also run directly by the Workforce c
 
 ## Remaining work
 
-1. Complete the final Node 24 integration workflow and the remaining cross-pack/cumulative verification against the latest `main`.
-2. Rehearse additive migrations on a production-like database with backup/restore and foreign-key validation.
-3. Perform a manual browser/mobile usability review of the operator workspace against a test tenant. CI verifies the integration contract but does not replace visual and interaction testing on a real browser/device.
+1. Rehearse additive migrations on a production-like database with backup/restore and foreign-key validation.
+2. Perform a manual browser/mobile usability review of the operator workspace against a test tenant. CI verifies the integration contract but does not replace visual and interaction testing on a real browser/device.
 
 ## Known limitations
 
