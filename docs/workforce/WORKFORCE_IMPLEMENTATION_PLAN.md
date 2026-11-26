@@ -4,9 +4,9 @@
 
 Persistence, repository, central authorization, API registration, Service Booking linkage, authenticated operator workspace, and regression coverage originated on `feature/workforce-capability-20261124` and have been selectively extracted onto `integration/workforce-capability-20261126`, based on `main` at `b377b662c460cc2df59abaf3de6db8e1b393769a`.
 
-The integration branch excludes unrelated B2B, onboarding, preview-workflow, and preview-profile changes. At integration head `165047832e5c30df601d45904bd83c77687d5bd6`, the Workforce Node 24 workflow, full Sellify CI, Repository Security Checks, Perplexity audit inventory, and listed Supplier Network regression workflows completed successfully. The full CI run included baseline, Phase 13.10.24, Phase 21, Logistics L18, and Logistics exit certification. This verifies the tested commit; it does not merge or deploy the capability.
+The integration branch excludes unrelated B2B, onboarding, preview-workflow, and preview-profile changes. The current branch head is `727d1aeefd4d89970a2d991e348bb18e332ef499` (PR #322, draft and unmerged). On this exact head, the Node 24 Workforce capability workflow, full Sellify CI (baseline, Phase 13.10.24, Phase 21, Logistics L18, and Logistics exit certification), Repository Security Checks, Perplexity audit inventory, and the listed Supplier Network regression workflows all completed successfully. The Workforce workflow uses `.nvmrc` (Node 24); the backend package declares `node >=24`. These results verify automated checks on this commit; they do not merge, deploy, or certify production recovery and usability.
 
-At integration head `b051cd41185a330a25a7ed0da615070d71c77f37`, the Node 24 Workforce capability workflow passed, including the isolated migration/backup/restore regression, SQLite integrity checks, and foreign-key validation. The full Sellify CI for this head is still running; its result must be recorded separately. The branch remains a draft PR for review. Final integration certification remains pending a production-derived sanitized database migration/backup/restore rehearsal, recovery-timing evidence, and manual browser/mobile usability review. The isolated CI fixture does not establish production recovery readiness.
+The migration/backup/restore regression passes on the current head. It upgrades an isolated synthetic pre-Workforce schema fixture through the normal application startup path, checks canonical-data preservation, then exercises backup/restore and SQLite integrity/foreign-key validation. It is not a production-derived sanitized database rehearsal and provides no production recovery-timing evidence. The branch remains a draft PR for review. Production-derived migration/restore rehearsal and manual browser/mobile usability review remain outstanding.
 
 ## Phase 1: Design and contracts — complete
 
@@ -193,6 +193,7 @@ New regressions:
 - phase0/workforce-service-booking-integration-regression.mjs
 - phase0/workforce-route-inventory-regression.mjs
 - phase0/workforce-operator-workspace-regression.mjs — navigation, authenticated API client, tenant/session race protection, and UI/backend authority boundary.
+- phase0/workforce-operator-browser-regression.mjs — Playwright interaction regression at a 390px viewport with mocked API responses; useful responsive/UI contract coverage, not a real-device or live-backend usability certification.
 
 The route inventory script is scripts/perplexity-server-route-inventory.mjs. The workflow runs it and validates the generated JSON inventory.
 
