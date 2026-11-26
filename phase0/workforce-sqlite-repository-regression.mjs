@@ -68,7 +68,8 @@ try {
       VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active'), ('membership-c','user-c','chat-a','active'), ('membership-d','user-d','chat-a','inactive'), ('membership-e','user-e','chat-a','active');
     INSERT INTO locations(id,organization_id) VALUES ('location-a','org-a'), ('location-b','org-b');
     INSERT INTO service_resources(id,organization_id,chat_id)
-      VALUES ('resource-a','org-a','chat-a'), ('resource-b','org-b','chat-b');
+      VALUES ('resource-a','org-a','chat-a'), ('resource-b','org-b','chat-b'),
+        ('resource-c','org-a','chat-a');
     INSERT INTO service_bookings(id,organization_id,chat_id)
       VALUES ('booking-a','org-a','chat-a'), ('booking-b','org-b','chat-b');
   `);
@@ -1115,6 +1116,42 @@ try {
   assert.equal(repository.summarizeUtilization(scopeA, {
     from: '2026-11-26T00:00:00.000Z',
   }).event_count, 0, 'planned start date filters must be applied');
+
+  repository.create('utilization', {
+    idempotency_key: 'utilization-other-resource-a',
+    member_id: created.record.id,
+    resource_id: 'resource-c',
+    planned_starts_at: '2026-11-25T06:00:00.000Z',
+    planned_ends_at: '2026-11-25T15:00:00.000Z',
+    evidence_source: 'REGRESSION_TEST',
+  }, scopeA);
+  repository.create('utilization', {
+    idempotency_key: 'utilization-unlinked-provider-a',
+    member_id: externalMember.record.id,
+    resource_id: 'resource-a',
+    planned_starts_at: '2026-11-25T06:00:00.000Z',
+    planned_ends_at: '2026-11-25T15:00:00.000Z',
+    evidence_source: 'REGRESSION_TEST',
+  }, scopeA);
+  const resourceScopedSummary = repository.summarizeUtilization({
+    ...scopeA, resource_id: 'resource-a',
+  });
+  assert.equal(resourceScopedSummary.event_count, 2,
+    'resource-scoped summaries must exclude events belonging to other resources');
+  assert.ok(resourceScopedSummary.by_resource.every(item => item.resource_id === 'resource-a'));
+  const providerScopedSummary = repository.summarizeUtilization({
+    ...scopeA, provider_user_id: 'user-a',
+  });
+  assert.equal(providerScopedSummary.event_count, 2,
+    'provider-scoped summaries must exclude utilization for unlinked or other members');
+  assert.ok(providerScopedSummary.by_member.every(item => item.member_id === created.record.id));
+  const combinedProviderSummary = repository.summarizeUtilization({
+    ...scopeA, resource_id: 'resource-a', provider_user_id: 'user-a',
+  });
+  assert.equal(combinedProviderSummary.event_count, 1,
+    'provider summary must enforce both assigned-resource and linked-member scope');
+  assert.equal(combinedProviderSummary.by_resource[0].resource_id, 'resource-a');
+  assert.equal(combinedProviderSummary.by_member[0].member_id, created.record.id);
   assert.equal(repository.summarizeUtilization(scopeB).event_count, 0,
     'utilization analytics must remain tenant-scoped');
   assert.throws(() => repository.summarizeUtilization(scopeA, {
