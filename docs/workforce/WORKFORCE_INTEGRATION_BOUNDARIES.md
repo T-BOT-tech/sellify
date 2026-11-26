@@ -11,7 +11,7 @@ A Service Booking may reference a Workforce member only during the existing auth
 3. The member has an ACTIVE assignment to the selected Service Resource.
 4. The assignment covers the complete requested appointment interval and, when specified, matches the resource location.
 5. The member has an ACTIVE availability window whose availability value is AVAILABLE.
-6. The availability window covers the complete requested appointment interval and is compatible with the selected resource and location.
+6. The availability window covers the complete requested appointment interval and is compatible with the selected resource and location. One-time windows are checked as concrete intervals; recurring windows are evaluated using the bounded DAILY/WEEKLY Workforce recurrence contract in the window's IANA timezone. Unsupported rules, invalid local times, and intervals not fully covered by a matching occurrence fail closed.
 7. The booking passes the existing Service Booking authorization and lifecycle checks.
 8. The existing Service Resource Commitment model creates the canonical resource commitment.
 
@@ -27,7 +27,7 @@ The existing Service Availability contract remains configuration-only. It does n
 
 Workforce availability is potential member capacity. Service Booking confirmation checks both the existing Service Resource availability and the member's Workforce availability/assignment evidence. Neither availability record is itself a booking or commitment.
 
-The current booking eligibility check requires concrete, timezone-aware start and end timestamps. Stored recurrence rules are not expanded or evaluated by this integration.
+The recurrence evaluator is limited to Workforce member availability. It does not expand or replace Service Resource Availability rules, create bookings, or create commitments.
 
 ## Service Resource Commitment
 
