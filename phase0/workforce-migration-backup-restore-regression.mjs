@@ -24,7 +24,7 @@ process.env.SELLIFY_BACKUP_RETENTION = '7';
 function assertDatabaseIntegrity(databasePath, label) {
   const check = new DatabaseSync(databasePath);
   try {
-    const integrity = check.prepare('PRAGMA integrity_check').all();
+    const integrity = check.prepare('PRAGMA integrity_check').all().map(row => ({ ...row }));
     assert.deepEqual(integrity, [{ integrity_check: 'ok' }], label + ' SQLite integrity');
     check.exec('PRAGMA foreign_keys = ON');
     assert.deepEqual(check.prepare('PRAGMA foreign_key_check').all(), [], label + ' foreign-key integrity');
