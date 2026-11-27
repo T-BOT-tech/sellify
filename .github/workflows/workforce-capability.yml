@@ -5,6 +5,7 @@ on:
     branches:
       - integration/workforce-capability-20261126
       - fix/workforce-utilization-repository-contract-20261127
+      - integration/workforce-capability-reconciled-20261127
   pull_request:
     branches:
       - main
