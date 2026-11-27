@@ -2626,6 +2626,45 @@ try {
     headers: authHeaders,
     body: JSON.stringify({ orders: [order] }),
   });
+
+  // Order sync must enforce the same central action policy as other
+  // authenticated write routes, not merely validate the tenant session.
+  for (const role of ['staff', 'viewer']) {
+    const deniedUser = await store.getOrCreateUserByTelegram(
+      'order-sync-denied-' + role + '-' + Date.now(), 'Order Sync ' + role);
+    await store.ensureMembership(deniedUser.id, tenant.chatId, role);
+    const deniedSession = await store.createSession({
+      userId: deniedUser.id, chatId: tenant.chatId, deviceName: 'Order Sync ' + role,
+    });
+    const deniedResponse = await fetch(syncUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + deniedSession.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ orders: [{ ...order, id: 'denied-' + role }] }),
+    });
+    assert.equal(deniedResponse.status, 403, role + ' must not create orders through sync');
+    const deniedBody = await deniedResponse.json();
+    assert.equal(deniedBody.error.code, 'AUTHORIZATION_DENIED');
+  }
+
+  const cashierUser = await store.getOrCreateUserByTelegram(
+    'order-sync-cashier-' + Date.now(), 'Order Sync Cashier');
+  await store.ensureMembership(cashierUser.id, tenant.chatId, 'cashier');
+  const cashierSession = await store.createSession({
+    userId: cashierUser.id, chatId: tenant.chatId, deviceName: 'Order Sync Cashier',
+  });
+  const cashierResponse = await fetch(syncUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + cashierSession.token,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ ...{ orders: [{ ...order, id: 'service-http-cashier-order' }] } }),
+  });
+  assert.equal(cashierResponse.status, 200, 'cashier with orders:create must sync orders');
+
   const firstResponse = await submitOrder();
   assert.equal(firstResponse.status, 200, 'authenticated order sync should succeed');
   const firstBody = await firstResponse.json();
