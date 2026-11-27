@@ -4,6 +4,7 @@ import { WORKFORCE_LEAVE_TRANSITIONS, WORKFORCE_ABSENCE_TRANSITIONS, validateWor
 import { validateWorkforceSchedulingPolicy, validateWorkforceSchedulingPolicyRules, evaluateWorkforceSchedulingConstraints } from './workforce-scheduling-constraints-contract.js';
 import { buildShiftWindowFromTemplate, isoWeekday, localDateTimeToUtc } from './workforce-shift-time.js';
 import { assessWorkforceAvailability, validateWorkforceAvailabilityAssessmentCandidate } from './workforce-availability-assessment-contract.js';
+import { validateWorkforceUtilization } from './workforce-utilization-contract.js';
 import {
   WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
   validateWorkforceRepositoryOperation,
@@ -1400,6 +1401,12 @@ export class WorkforceSqliteRepository {
     const data = {};
     for (const field of [...(spec.createOnlyFields || []), ...spec.fields]) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), payload[field]);
     if (entity === 'scheduling_policy' && !Object.hasOwn(data, 'rules_json')) data.rules_json = {};
+    if (entity === 'utilization') {
+      const result = validateWorkforceUtilization({
+        ...scope, ...data, status: INITIAL_STATES.utilization,
+      });
+      if (!result.valid) throw fail('WORKFORCE_UTILIZATION_INVALID', result.errors.join('; '));
+    }
     if (entity === 'leave_request') {
       const result = validateWorkforceLeaveRequest(data);
       if (!result.valid) throw fail('WORKFORCE_LEAVE_REQUEST_INVALID', result.errors.join('; '));
@@ -1581,6 +1588,10 @@ export class WorkforceSqliteRepository {
     if (Object.keys(data).length === 0) throw fail('WORKFORCE_UPDATE_EMPTY', 'At least one mutable Workforce field is required');
     const referenceData = { ...existing, ...data };
     if (entity === 'member' && !Object.hasOwn(data, 'user_id')) delete referenceData.user_id;
+    if (entity === 'utilization') {
+      const result = validateWorkforceUtilization(referenceData);
+      if (!result.valid) throw fail('WORKFORCE_UTILIZATION_INVALID', result.errors.join('; '));
+    }
     if (entity === 'leave_request') {
       const result = validateWorkforceLeaveRequest(referenceData);
       if (!result.valid) throw fail('WORKFORCE_LEAVE_REQUEST_INVALID', result.errors.join('; '));
