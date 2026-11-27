@@ -2629,7 +2629,7 @@ try {
 
   // Order sync must enforce the same central action policy as other
   // authenticated write routes, not merely validate the tenant session.
-  for (const role of ['staff', 'viewer']) {
+  for (const role of ['staff', 'viewer', 'retail_stock_staff']) {
     const deniedUser = await store.getOrCreateUserByTelegram(
       'order-sync-denied-' + role + '-' + Date.now(), 'Order Sync ' + role);
     await store.ensureMembership(deniedUser.id, tenant.chatId, role);
