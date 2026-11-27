@@ -1079,6 +1079,21 @@ try {
   assert.equal(approvedAllocation.state, 'COMMITTED');
   assert.equal(releasedAllocation.state, 'RELEASED');
 
+  assert.throws(() => repository.create('utilization', {
+    idempotency_key: 'utilization-missing-planned-end',
+    member_id: created.record.id,
+    planned_starts_at: '2026-11-25T06:00:00.000Z',
+    evidence_source: 'REGRESSION_TEST',
+  }, scopeA), error => error.code === 'WORKFORCE_UTILIZATION_INVALID',
+  'repository creation must reject utilization events without planned end time');
+  assert.throws(() => repository.create('utilization', {
+    idempotency_key: 'utilization-missing-evidence',
+    member_id: created.record.id,
+    planned_starts_at: '2026-11-25T06:00:00.000Z',
+    planned_ends_at: '2026-11-25T15:00:00.000Z',
+  }, scopeA), error => error.code === 'WORKFORCE_UTILIZATION_INVALID',
+  'repository creation must reject utilization events without evidence source');
+
   const utilization = repository.create('utilization', {
     idempotency_key: 'utilization-create-a',
     member_id: created.record.id,
@@ -1088,6 +1103,10 @@ try {
     planned_ends_at: '2026-11-25T15:00:00.000Z',
     evidence_source: 'REGRESSION_TEST',
   }, scopeA);
+  assert.throws(() => repository.update('utilization', utilization.record.id, {
+    expected_version: 1, evidence_source: '',
+  }, scopeA), error => error.code === 'WORKFORCE_UTILIZATION_INVALID',
+  'repository updates must preserve a non-empty utilization evidence source');
   const startedUtilization = repository.start('utilization', utilization.record.id, { expected_version: 1 }, scopeA);
   const updatedUtilization = repository.update('utilization', utilization.record.id, {
     expected_version: 2,
