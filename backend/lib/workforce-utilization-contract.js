@@ -52,6 +52,14 @@ export function isValidWorkforceUtilizationStatus(value) {
   return WORKFORCE_UTILIZATION_STATUSES.includes(value);
 }
 
+function isValidIsoTimestamp(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/i.exec(value);
+  if (!match || !Number.isFinite(Date.parse(value))) return false;
+  const date = new Date(`${match[1]}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === match[1];
+}
+
 export function validateWorkforceUtilization(input = {}) {
   const errors = [];
 
@@ -73,18 +81,14 @@ export function validateWorkforceUtilization(input = {}) {
   ]) {
     const value = input[field];
     if (value === undefined || value === null) continue;
-    if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
-      errors.push(`${field} must be a valid ISO-8601 timestamp`);
-      continue;
-    }
-    if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
-      errors.push(`${field} must include an explicit timezone`);
+    if (!isValidIsoTimestamp(value)) {
+      errors.push(`${field} must be a valid ISO-8601 timestamp with an explicit timezone`);
     }
   }
 
   if (
-    Number.isFinite(Date.parse(input.planned_starts_at)) &&
-    Number.isFinite(Date.parse(input.planned_ends_at)) &&
+    isValidIsoTimestamp(input.planned_starts_at) &&
+    isValidIsoTimestamp(input.planned_ends_at) &&
     Date.parse(input.planned_starts_at) >= Date.parse(input.planned_ends_at)
   ) {
     errors.push('planned_starts_at must be before planned_ends_at');
@@ -95,8 +99,8 @@ export function validateWorkforceUtilization(input = {}) {
     input.actual_starts_at !== null &&
     input.actual_ends_at !== undefined &&
     input.actual_ends_at !== null &&
-    Number.isFinite(Date.parse(input.actual_starts_at)) &&
-    Number.isFinite(Date.parse(input.actual_ends_at)) &&
+    isValidIsoTimestamp(input.actual_starts_at) &&
+    isValidIsoTimestamp(input.actual_ends_at) &&
     Date.parse(input.actual_starts_at) >= Date.parse(input.actual_ends_at)
   ) {
     errors.push('actual_starts_at must be before actual_ends_at');
