@@ -165,6 +165,8 @@ jobs:
         run: npm run test:first-merchant-to-first-checkout
       - name: First-experience tenant isolation HTTP regression
         run: npm run test:first-experience-tenant-isolation-http
+      - name: First-experience service catalog HTTP authorization regression
+        run: npm run test:service-catalog-http
       - name: Customer HTTP authorization, tenant isolation, and audit provenance regression
         run: node phase0/customer-http-audit-provenance-regression.mjs
       - name: Marketplace order Payment Core bootstrap regression

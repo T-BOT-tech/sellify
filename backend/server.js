@@ -1225,7 +1225,12 @@ async function handleSync(req, res, chatId) {
   const existing = await getTenant(chatId);
   if (!existing) return sendJSON(res, 404, { error: { message: 'Unknown store; complete onboarding first', status: 404 } }, req);
   const tenant = existing;
-  await requireSession(req, chatId);
+  const session = await requireSession(req, chatId);
+  if (queued.length) {
+    await requireAuthorization(session, tenant, 'orders', 'orders:create', {
+      deniedMessage: 'Order creation permission required',
+    });
+  }
 
   const results = queued.length ? await saveQueuedOrders(chatId, queued) : [];
 
