@@ -27,7 +27,6 @@ export const WORKFORCE_UTILIZATION_REQUIRED_FIELDS = Object.freeze([
   'planned_ends_at',
   'status',
   'evidence_source',
-  'expected_version',
 ]);
 
 export function workforceUtilizationContract() {
@@ -69,20 +68,42 @@ export function validateWorkforceUtilization(input = {}) {
     errors.push(`Invalid status: ${input.status}`);
   }
 
+  for (const field of [
+    'planned_starts_at', 'planned_ends_at', 'actual_starts_at', 'actual_ends_at',
+  ]) {
+    const value = input[field];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
+      errors.push(`${field} must be a valid ISO-8601 timestamp`);
+      continue;
+    }
+    if (!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(value)) {
+      errors.push(`${field} must include an explicit timezone`);
+    }
+  }
+
   if (
-    input.planned_starts_at !== undefined &&
-    input.planned_ends_at !== undefined &&
-    new Date(input.planned_starts_at).getTime() >= new Date(input.planned_ends_at).getTime()
+    Number.isFinite(Date.parse(input.planned_starts_at)) &&
+    Number.isFinite(Date.parse(input.planned_ends_at)) &&
+    Date.parse(input.planned_starts_at) >= Date.parse(input.planned_ends_at)
   ) {
     errors.push('planned_starts_at must be before planned_ends_at');
   }
 
   if (
     input.actual_starts_at !== undefined &&
+    input.actual_starts_at !== null &&
     input.actual_ends_at !== undefined &&
-    new Date(input.actual_starts_at).getTime() >= new Date(input.actual_ends_at).getTime()
+    input.actual_ends_at !== null &&
+    Number.isFinite(Date.parse(input.actual_starts_at)) &&
+    Number.isFinite(Date.parse(input.actual_ends_at)) &&
+    Date.parse(input.actual_starts_at) >= Date.parse(input.actual_ends_at)
   ) {
     errors.push('actual_starts_at must be before actual_ends_at');
+  }
+
+  if (typeof input.evidence_source !== 'string' || !input.evidence_source.trim()) {
+    errors.push('evidence_source must be a non-empty string');
   }
 
   if (
