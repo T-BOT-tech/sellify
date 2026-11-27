@@ -77,7 +77,7 @@ export function validateWorkforceUtilization(input = {}) {
       errors.push(`${field} must be a valid ISO-8601 timestamp`);
       continue;
     }
-    if (!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(value)) {
+    if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
       errors.push(`${field} must include an explicit timezone`);
     }
   }
