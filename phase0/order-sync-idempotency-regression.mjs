@@ -265,25 +265,59 @@ try {
   const nestedIdentityOrder = {
     ...structuredClone(original),
     id: 'local-order-stable-nested-identity',
-    service_delivery_request: {
-      destination_details: 'CMC',
-      pickup_details: 'Bole',
-      contact: { name: 'Buyer', phone: '+251900000000' },
+    payment_proof: {
+      path: 'opfs://proof/stable.webp',
+      metadata: { fileName: 'stable.webp', sizeBytes: 100 },
     },
   };
   const [nestedFirst] = await store.saveQueuedOrders(tenant.chatId, [nestedIdentityOrder]);
   const nestedRetry = {
     ...structuredClone(nestedIdentityOrder),
-    service_delivery_request: {
-      contact: { phone: '+251900000000', name: 'Buyer' },
-      pickup_details: 'Bole',
-      destination_details: 'CMC',
+    payment_proof: {
+      metadata: { sizeBytes: 100, fileName: 'stable.webp' },
+      path: 'opfs://proof/stable.webp',
     },
   };
   const [nestedRetried] = await store.saveQueuedOrders(tenant.chatId, [nestedRetry]);
   assert.equal(nestedRetried.status, 'synced');
   assert.equal(nestedRetried.order_id, nestedFirst.order_id);
   assert.equal(nestedRetried.payment_id, nestedFirst.payment_id);
+
+  // Service assessment/assignment is a later server-owned lifecycle projection.
+  // It must not rewrite the original customer's service-delivery command identity.
+  const serviceRequestOrder = {
+    ...structuredClone(original),
+    id: 'local-order-service-request-projection',
+    service_delivery_request: {
+      pickup_details: 'Bole, Addis Ababa',
+      destination_details: 'CMC, Addis Ababa',
+      customer_note: 'Call on arrival',
+    },
+  };
+  const [serviceRequestFirst] = await store.saveQueuedOrders(tenant.chatId, [serviceRequestOrder]);
+  assert.equal(serviceRequestFirst.status, 'synced');
+  const db = store.getDatabaseForTests();
+  const serviceRequestRow = db.prepare(
+    'SELECT order_json FROM orders WHERE chat_id = ? AND local_id = ?'
+  ).get(tenant.chatId, serviceRequestOrder.id);
+  const serviceRequestStored = JSON.parse(serviceRequestRow.order_json);
+  serviceRequestStored.service_delivery_request = {
+    ...serviceRequestStored.service_delivery_request,
+    assessment_status: 'READY_FOR_FULFILLMENT',
+    assignment_status: 'ASSIGNED',
+    assessment: {
+      outcome: 'ELIGIBLE',
+      assessed_at: '2026-11-27T12:00:00.000Z',
+      command_key: 'service-assessment-projection',
+    },
+  };
+  db.prepare('UPDATE orders SET order_json = ? WHERE chat_id = ? AND local_id = ?')
+    .run(JSON.stringify(serviceRequestStored), tenant.chatId, serviceRequestOrder.id);
+  const [serviceRequestRetry] = await store.saveQueuedOrders(tenant.chatId, [structuredClone(serviceRequestOrder)]);
+  assert.equal(serviceRequestRetry.status, 'synced',
+    'server-owned assessment/assignment projections must not conflict with the original sync retry');
+  assert.equal(serviceRequestRetry.order_id, serviceRequestFirst.order_id);
+  assert.equal(serviceRequestRetry.payment_id, serviceRequestFirst.payment_id);
 
   console.log('Order sync idempotency regression: PASS');
 } finally {
