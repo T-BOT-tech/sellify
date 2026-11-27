@@ -1,0 +1,83 @@
+name: Workforce capability verification
+
+on:
+  push:
+    branches:
+      - integration/workforce-capability-20261126
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/workforce-capability.yml'
+      - 'backend/lib/workforce-*.js'
+      - 'backend/lib/store-sqlite.js'
+      - 'backend/lib/authorization.js'
+      - 'backend/server.js'
+      - 'app/src/workforce/**'
+      - 'app/src/ui/tabs.js'
+      - 'app/index.html'
+      - 'app/styles.css'
+      - 'phase0/workforce-*.mjs'
+      - 'docs/workforce/**'
+      - 'scripts/perplexity-server-route-inventory.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workforce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Workforce contract and lifecycle regressions
+        run: |
+          node phase0/workforce-contract-regression.mjs
+          node phase0/workforce-member-contract-regression.mjs
+          node phase0/workforce-profile-engagement-regression.mjs
+          node phase0/workforce-calendar-availability-regression.mjs
+          node phase0/workforce-availability-assessment-regression.mjs
+          node phase0/workforce-assignment-shift-regression.mjs
+          node phase0/workforce-allocation-utilization-regression.mjs
+          node phase0/workforce-scheduling-constraints-regression.mjs
+
+      - name: Repository and SQLite persistence
+        run: |
+          node phase0/workforce-repository-contract-regression.mjs
+          node phase0/workforce-sqlite-migration-regression.mjs
+          node phase0/workforce-migration-backup-restore-regression.mjs
+          node phase0/workforce-sqlite-repository-regression.mjs
+
+      - name: Authorization and authenticated API
+        run: |
+          node phase0/workforce-authorization-adapter-regression.mjs
+          node phase0/workforce-api-regression.mjs
+          node phase0/workforce-api-http-regression.mjs
+
+      - name: Operator workspace
+        run: |
+          node phase0/workforce-operator-workspace-regression.mjs
+          node phase0/workforce-operator-browser-regression.mjs
+
+      - name: Service Booking integration and provider isolation
+        run: node phase0/workforce-service-booking-integration-regression.mjs
+
+      - name: Backend route inventory
+        run: |
+          node scripts/perplexity-server-route-inventory.mjs
+          node phase0/workforce-route-inventory-regression.mjs
