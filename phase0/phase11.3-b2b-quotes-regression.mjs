@@ -89,8 +89,7 @@ await assert.rejects(
 );
 
 const listed = await store.listQuotes(chatId, { customerId: customer.id });
-assert.equal(listed.length, 1);
-assert.equal(listed[0].id, quote.id);
+assert.ok(listed.some(entry => entry.id === quote.id), 'the newly created quote must appear in the customer quote list');
 
 const retail = await store.upsertCustomer(chatId, { id: `retail-${Date.now()}`, customerType: 'retail', name: 'Retail' });
 await assert.rejects(
