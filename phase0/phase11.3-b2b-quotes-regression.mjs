@@ -14,7 +14,46 @@ const chatId = tenant.chatId;
 
 const customer = await store.upsertCustomer(chatId, { id: `customer-${Date.now()}`, customerType: 'business', name: 'Acme Ltd' });
 await store.saveCatalog(chatId, [{ id: 'cement', name: 'Cement', price: 12500, currency: 'ETB', stock: 100 }]);
-const rule = await store.upsertCustomerPricing(chatId, { customerId: customer.id, productId: 'cement', priceMinor: 11000, currency: 'ETB' }, { userId: user.id });
+const futureRule = await store.upsertCustomerPricing(chatId, {
+  customerId: customer.id, productId: 'cement', priceMinor: 9000, currency: 'ETB',
+  effectiveFrom: '2999-01-01T00:00:00.000Z',
+}, { userId: user.id });
+const futureRuleQuote = await store.createQuote(chatId, {
+  customerId: customer.id, items: [{ productId: 'cement', quantity: 1 }],
+}, { userId: user.id });
+assert.equal(futureRuleQuote.items[0].unitPriceMinor, 12500);
+assert.equal(futureRuleQuote.items[0].pricingRuleId, null);
+
+const expiredRule = await store.upsertCustomerPricing(chatId, {
+  customerId: customer.id, productId: 'cement', priceMinor: 8000, currency: 'ETB',
+  effectiveFrom: '2000-01-01T00:00:00.000Z',
+  effectiveTo: '2000-01-02T00:00:00.000Z',
+}, { userId: user.id });
+const expiredRuleQuote = await store.createQuote(chatId, {
+  customerId: customer.id, items: [{ productId: 'cement', quantity: 1 }],
+}, { userId: user.id });
+assert.equal(expiredRuleQuote.items[0].unitPriceMinor, 12500);
+assert.equal(expiredRuleQuote.items[0].pricingRuleId, null);
+
+await assert.rejects(
+  () => store.upsertCustomerPricing(chatId, {
+    customerId: customer.id, productId: 'cement', priceMinor: 7000,
+    effectiveFrom: 'not-a-date',
+  }, { userId: user.id }),
+  error => error?.code === 'INVALID_CUSTOM_PRICING_EFFECTIVE_DATE' && error?.statusCode === 400
+);
+await assert.rejects(
+  () => store.upsertCustomerPricing(chatId, {
+    customerId: customer.id, productId: 'cement', priceMinor: 7000,
+    effectiveFrom: '2027-02-01T00:00:00.000Z',
+    effectiveTo: '2027-01-01T00:00:00.000Z',
+  }, { userId: user.id }),
+  error => error?.code === 'INVALID_CUSTOM_PRICING_EFFECTIVE_RANGE' && error?.statusCode === 400
+);
+
+const rule = await store.upsertCustomerPricing(chatId, {
+  customerId: customer.id, productId: 'cement', priceMinor: 11000, currency: 'ETB',
+}, { userId: user.id });
 
 const quote = await store.createQuote(chatId, {
   customerId: customer.id,
