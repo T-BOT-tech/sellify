@@ -129,6 +129,23 @@ const invalidActualUtilization = validateWorkforceUtilization({
 });
 assert.equal(invalidActualUtilization.valid, false);
 
+const invalidCalendarTimestamp = validateWorkforceUtilization({
+  organization_id: 'org-a', chat_id: 'chat-a', member_id: 'member-a',
+  planned_starts_at: '2026-02-30T06:00:00.000Z',
+  planned_ends_at: '2026-03-01T15:00:00.000Z',
+  status: 'PLANNED', evidence_source: 'REGRESSION_TEST',
+});
+assert.equal(invalidCalendarTimestamp.valid, false,
+  'normalized impossible calendar dates must be rejected');
+const nonIsoTimestamp = validateWorkforceUtilization({
+  organization_id: 'org-a', chat_id: 'chat-a', member_id: 'member-a',
+  planned_starts_at: '2026-11-25 06:00:00Z',
+  planned_ends_at: '2026-11-25T15:00:00.000Z',
+  status: 'PLANNED', evidence_source: 'REGRESSION_TEST',
+});
+assert.equal(nonIsoTimestamp.valid, false,
+  'timestamps must use the ISO-8601 date-time separator');
+
 const validLeaveRequest = validateWorkforceApiPayload('leave_request','create', {
   leave_category: 'ANNUAL', starts_at: '2026-12-01T00:00:00.000Z', ends_at: '2026-12-03T00:00:00.000Z',
   timezone: 'Africa/Addis_Ababa', reason: 'Planned annual leave', all_day: true,
