@@ -5120,7 +5120,36 @@ export async function getCustomerPricing(chatId, pricingId) {
   return customerPricingFromRow(db.prepare('SELECT * FROM customer_pricing_rules WHERE id = ? AND organization_id = ?').get(String(pricingId), organizationId));
 }
 
-export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
+export function normaliseCustomerPricingEffectiveDate(value, fieldName) {
+  if (value === null || value === undefined || value === '') return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw Object.assign(new Error(`${fieldName} must be a valid date/time`), {
+      statusCode: 400,
+      code: 'INVALID_CUSTOM_PRICING_EFFECTIVE_DATE',
+    });
+  }
+  return date.toISOString();
+}
+
+function isCustomerPricingRuleEffective(rule, at) {
+  if (!rule) return false;
+  const atTime = new Date(at).getTime();
+  if (!Number.isFinite(atTime)) return false;
+  for (const [field, boundary, inclusive] of [
+    ['effective_from', 'start', true],
+    ['effective_to', 'end', true],
+  ]) {
+    if (!rule[field]) continue;
+    const boundaryTime = new Date(rule[field]).getTime();
+    if (!Number.isFinite(boundaryTime)) return false;
+    if (boundary === 'start' && atTime < boundaryTime) return false;
+    if (boundary === 'end' && atTime > boundaryTime) return false;
+  }
+  return true;
+}
+
+async function upsertCustomerPricing(chatId, input = {}, actor = null) {
   input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const organizationId = await tenantOrganizationId(chatId);
   const customerId = String(input.customerId ?? input.customer_id ?? '').trim();
@@ -5134,6 +5163,14 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
   const currency = normaliseCurrency(input.currency, product.currency || tenantCurrency(chatId));
   if (currency !== normaliseCurrency(product.currency, tenantCurrency(chatId))) {
     throw Object.assign(new Error('Custom price currency must match the product currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+  }
+  const effectiveFrom = normaliseCustomerPricingEffectiveDate(input.effectiveFrom ?? input.effective_from ?? null, 'effectiveFrom');
+  const effectiveTo = normaliseCustomerPricingEffectiveDate(input.effectiveTo ?? input.effective_to ?? null, 'effectiveTo');
+  if (effectiveFrom && effectiveTo && new Date(effectiveFrom).getTime() > new Date(effectiveTo).getTime()) {
+    throw Object.assign(new Error('effectiveFrom must be earlier than or equal to effectiveTo'), {
+      statusCode: 400,
+      code: 'INVALID_CUSTOM_PRICING_EFFECTIVE_RANGE',
+    });
   }
   const id = String(input.id || crypto.randomUUID());
   const now = nowIso();
@@ -5155,8 +5192,8 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
         updated_at = excluded.updated_at
     `).run(id, organizationId, customerId, productId, priceMinor, currency,
       ['active','inactive'].includes(String(input.status)) ? String(input.status) : 'active',
-      input.effectiveFrom ?? input.effective_from ?? null,
-      input.effectiveTo ?? input.effective_to ?? null,
+      effectiveFrom,
+      effectiveTo,
       String(input.reason || ''), actor?.userId || null, now, now);
     // Resolve by the unique business key: on conflict SQLite retains the
     // existing row ID, which may differ from the newly generated candidate ID.
@@ -5255,8 +5292,9 @@ export async function createQuote(chatId, input = {}, actor = null) {
     let pricingRuleId = null;
     if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) {
       const rule = db.prepare(`SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ? AND status = 'active' LIMIT 1`).get(organizationId, customerId, productId);
-      unitPriceMinor = rule ? Number(rule.price_minor) : Number(product.price_minor);
-      pricingRuleId = rule?.id || null;
+      const effectiveRule = isCustomerPricingRuleEffective(rule, nowIso()) ? rule : null;
+      unitPriceMinor = effectiveRule ? Number(effectiveRule.price_minor) : Number(product.price_minor);
+      pricingRuleId = effectiveRule?.id || null;
     }
     if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) throw Object.assign(new Error('Quote unit price must be a non-negative integer minor amount'), { statusCode: 400, code: 'INVALID_QUOTE_PRICE' });
     items.push({ id: crypto.randomUUID(), productId, description: String(raw.description ?? parseJSON(product.product_json, {}).name ?? productId), quantity, unitPriceMinor, currency, lineTotalMinor: quantity * unitPriceMinor, pricingRuleId });
