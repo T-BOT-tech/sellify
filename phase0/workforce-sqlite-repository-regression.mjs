@@ -1103,6 +1103,10 @@ try {
     planned_ends_at: '2026-11-25T15:00:00.000Z',
     evidence_source: 'REGRESSION_TEST',
   }, scopeA);
+  assert.throws(() => repository.update('utilization', utilization.record.id, {
+    expected_version: 1, evidence_source: '',
+  }, scopeA), error => error.code === 'WORKFORCE_UTILIZATION_INVALID',
+  'repository updates must preserve a non-empty utilization evidence source');
   const startedUtilization = repository.start('utilization', utilization.record.id, { expected_version: 1 }, scopeA);
   const updatedUtilization = repository.update('utilization', utilization.record.id, {
     expected_version: 2,
