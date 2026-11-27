@@ -35,6 +35,17 @@ const expiredRuleQuote = await store.createQuote(chatId, {
 assert.equal(expiredRuleQuote.items[0].unitPriceMinor, 12500);
 assert.equal(expiredRuleQuote.items[0].pricingRuleId, null);
 
+const currentRule = await store.upsertCustomerPricing(chatId, {
+  customerId: customer.id, productId: 'cement', priceMinor: 10500, currency: 'ETB',
+  effectiveFrom: '2000-01-01T00:00:00.000Z',
+  effectiveTo: '2999-01-01T00:00:00.000Z',
+}, { userId: user.id });
+const currentRuleQuote = await store.createQuote(chatId, {
+  customerId: customer.id, items: [{ productId: 'cement', quantity: 1 }],
+}, { userId: user.id });
+assert.equal(currentRuleQuote.items[0].unitPriceMinor, 10500);
+assert.equal(currentRuleQuote.items[0].pricingRuleId, currentRule.id);
+
 await assert.rejects(
   () => store.upsertCustomerPricing(chatId, {
     customerId: customer.id, productId: 'cement', priceMinor: 7000,
