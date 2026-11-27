@@ -5120,7 +5120,7 @@ export async function getCustomerPricing(chatId, pricingId) {
   return customerPricingFromRow(db.prepare('SELECT * FROM customer_pricing_rules WHERE id = ? AND organization_id = ?').get(String(pricingId), organizationId));
 }
 
-export function normaliseCustomerPricingEffectiveDate(value, fieldName) {
+function normaliseCustomerPricingEffectiveDate(value, fieldName) {
   if (value === null || value === undefined || value === '') return null;
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) {
@@ -5136,9 +5136,9 @@ function isCustomerPricingRuleEffective(rule, at) {
   if (!rule) return false;
   const atTime = new Date(at).getTime();
   if (!Number.isFinite(atTime)) return false;
-  for (const [field, boundary, inclusive] of [
-    ['effective_from', 'start', true],
-    ['effective_to', 'end', true],
+  for (const [field, boundary] of [
+    ['effective_from', 'start'],
+    ['effective_to', 'end'],
   ]) {
     if (!rule[field]) continue;
     const boundaryTime = new Date(rule[field]).getTime();
@@ -5149,7 +5149,7 @@ function isCustomerPricingRuleEffective(rule, at) {
   return true;
 }
 
-async function upsertCustomerPricing(chatId, input = {}, actor = null) {
+export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
   input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const organizationId = await tenantOrganizationId(chatId);
   const customerId = String(input.customerId ?? input.customer_id ?? '').trim();
