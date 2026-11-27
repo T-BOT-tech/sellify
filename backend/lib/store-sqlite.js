@@ -233,9 +233,18 @@ function queuedOrderIdentityHash(order, expectedCurrency, storedOrder = false) {
     deliveryAddress: String(order?.delivery_address ?? order?.deliveryAddress ?? ''),
     pickupLocation: String(order?.pickup_location ?? order?.pickupLocation ?? ''),
     scheduledTime: String(order?.scheduled_time ?? order?.scheduledTime ?? ''),
-    serviceDeliveryRequest: JSON.stringify(stableOrderIdentityValue(
-      order?.service_delivery_request ?? order?.serviceDeliveryRequest ?? null
-    )),
+    // The service request's customer-authored details are immutable order
+    // inputs. Assessment/assignment state is a separate server-owned lifecycle
+    // projection and must not change the original sync command identity.
+    serviceDeliveryRequest: (() => {
+      const request = order?.service_delivery_request ?? order?.serviceDeliveryRequest ?? null;
+      if (!request || typeof request !== 'object' || Array.isArray(request)) return '';
+      return JSON.stringify({
+        pickupDetails: String(request.pickup_details ?? request.pickupDetails ?? ''),
+        destinationDetails: String(request.destination_details ?? request.destinationDetails ?? ''),
+        customerNote: String(request.customer_note ?? request.customerNote ?? ''),
+      });
+    })(),
     // Tender and proof are captured with the order today. Until a separate
     // authorized evidence-update contract exists, changed values must conflict
     // rather than be silently accepted as an unchanged retry.
