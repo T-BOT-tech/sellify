@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { validateWorkforceApiPayload } from '../backend/lib/workforce-api-validation.js';
+import { validateWorkforceUtilization } from '../backend/lib/workforce-utilization-contract.js';
 
 const validMember = validateWorkforceApiPayload('member', 'create', {
   member_type: 'PROVIDER', employee_number: 'EMP-001', primary_location_id: 'location-a', department_id: 'dept-a', position_id: 'position-a',
@@ -101,6 +102,49 @@ const invalidUtilization = validateWorkforceApiPayload('utilization', 'create', 
   status: 'COMPLETED',
 });
 assert.equal(invalidUtilization.valid, false);
+
+const validUtilizationRecord = validateWorkforceUtilization({
+  organization_id: 'org-a', chat_id: 'chat-a', member_id: 'member-a',
+  planned_starts_at: '2026-11-25T06:00:00.000Z',
+  planned_ends_at: '2026-11-25T15:00:00.000Z',
+  status: 'PLANNED', evidence_source: 'REGRESSION_TEST',
+});
+assert.equal(validUtilizationRecord.valid, true,
+  'record validation must not require expected_version at creation');
+const validInProgressUtilization = validateWorkforceUtilization({
+  organization_id: 'org-a', chat_id: 'chat-a', member_id: 'member-a',
+  planned_starts_at: '2026-11-25T06:00:00.000Z',
+  planned_ends_at: '2026-11-25T15:00:00.000Z',
+  actual_starts_at: '2026-11-25T06:05:00.000Z',
+  status: 'IN_PROGRESS', evidence_source: 'REGRESSION_TEST',
+});
+assert.equal(validInProgressUtilization.valid, true,
+  'an in-progress event may have an actual start without an actual end');
+const invalidActualUtilization = validateWorkforceUtilization({
+  organization_id: 'org-a', chat_id: 'chat-a', member_id: 'member-a',
+  planned_starts_at: '2026-11-25T06:00:00.000Z',
+  planned_ends_at: '2026-11-25T15:00:00.000Z',
+  actual_starts_at: 'not-a-timestamp',
+  status: 'IN_PROGRESS', evidence_source: 'REGRESSION_TEST',
+});
+assert.equal(invalidActualUtilization.valid, false);
+
+const invalidCalendarTimestamp = validateWorkforceUtilization({
+  organization_id: 'org-a', chat_id: 'chat-a', member_id: 'member-a',
+  planned_starts_at: '2026-02-30T06:00:00.000Z',
+  planned_ends_at: '2026-03-01T15:00:00.000Z',
+  status: 'PLANNED', evidence_source: 'REGRESSION_TEST',
+});
+assert.equal(invalidCalendarTimestamp.valid, false,
+  'normalized impossible calendar dates must be rejected');
+const nonIsoTimestamp = validateWorkforceUtilization({
+  organization_id: 'org-a', chat_id: 'chat-a', member_id: 'member-a',
+  planned_starts_at: '2026-11-25 06:00:00Z',
+  planned_ends_at: '2026-11-25T15:00:00.000Z',
+  status: 'PLANNED', evidence_source: 'REGRESSION_TEST',
+});
+assert.equal(nonIsoTimestamp.valid, false,
+  'timestamps must use the ISO-8601 date-time separator');
 
 const validLeaveRequest = validateWorkforceApiPayload('leave_request','create', {
   leave_category: 'ANNUAL', starts_at: '2026-12-01T00:00:00.000Z', ends_at: '2026-12-03T00:00:00.000Z',
