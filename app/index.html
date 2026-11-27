@@ -10,6 +10,17 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="stylesheet" href="styles.css">
 <style>
+  .workforce-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .workforce-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:10px 0; }
+  .workforce-metric { display:grid; gap:5px; }
+  .workforce-metric strong { font-size:20px; }
+  .workforce-member-controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .workforce-data-section { margin:12px 0; }
+  .workforce-record-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .workforce-availability-form { display:grid; gap:9px; margin:14px 0; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+  .workforce-availability-form label { display:grid; gap:5px; }
+  .workforce-availability-form input, .workforce-availability-form select { width:100%; min-height:42px; box-sizing:border-box; }
+  @media (min-width:640px) { .workforce-metrics { grid-template-columns:repeat(4,minmax(0,1fr)); } }
   #tab-sourcing .card { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--surface); }
   #tab-sourcing .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin-bottom:8px; }
   #tab-sourcing .card input, #tab-sourcing .card textarea { box-sizing:border-box; }
@@ -747,6 +758,10 @@
     </div>
   </section>
 
+  <section id="tab-workforce" style="display:none;">
+    <div id="workforceWorkspaceHost"></div>
+  </section>
+
   <section id="tab-appointments" style="display:none;">
     <div id="appointmentsWorkspace"></div>
   </section>
@@ -814,6 +829,9 @@
       </button>
       <button id="navSourcing" class="btn-ghost more-sheet-item" onclick="switchTab('sourcing'); closeMoreSheet();">
         <svg class="icon"><use href="#i-search"/></svg><span data-i18n="sourcingNav">Sourcing</span>
+      </button>
+      <button id="navWorkforce" class="btn-ghost more-sheet-item" onclick="switchTab('workforce'); closeMoreSheet();">
+        <svg class="icon"><use href="#i-user"/></svg><span>Workforce</span>
       </button>
     </div>
     <button type="button" class="btn-secondary" onclick="closeMoreSheet()" data-i18n="cancel">Cancel</button>
