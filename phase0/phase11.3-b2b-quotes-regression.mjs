@@ -9,7 +9,7 @@ process.env.SELLIFY_DB_PATH = path.join(tmp, 'test.sqlite');
 
 const store = await import('../backend/lib/store-sqlite.js');
 const user = await store.getOrCreateUserByTelegram(`tg-${Date.now()}`, 'Quote Test');
-const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'Quote Test', currency: 'ETB' });
+const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'Quote Test', businessType: 'retail', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa' });
 const chatId = tenant.chatId;
 
 const customer = await store.upsertCustomer(chatId, { id: `customer-${Date.now()}`, customerType: 'business', name: 'Acme Ltd' });
