@@ -2661,7 +2661,7 @@ try {
       Authorization: 'Bearer ' + cashierSession.token,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ...{ orders: [{ ...order, id: 'service-http-cashier-order' }] } }),
+    body: JSON.stringify({ orders: [{ ...order, id: 'service-http-cashier-order' }] }),
   });
   assert.equal(cashierResponse.status, 200, 'cashier with orders:create must sync orders');
 
