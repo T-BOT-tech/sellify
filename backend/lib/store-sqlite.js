@@ -5970,6 +5970,12 @@ export async function allocatePaymentToReceivable(chatId, receivableId, input = 
   const paymentId = String(input.paymentId || input.payment_id || '');
   const payment = await getPayment(chatId, paymentId);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  if (String(payment.customerId || '') !== String(receivable.customerId || '')) {
+    throw Object.assign(new Error('Payment customer does not match receivable customer'), { statusCode: 409, code: 'PAYMENT_CUSTOMER_MISMATCH' });
+  }
+  if (receivable.sourceType === 'order' && String(payment.orderId || '') !== String(receivable.sourceId || '')) {
+    throw Object.assign(new Error('Payment order does not match the receivable source order'), { statusCode: 409, code: 'PAYMENT_ORDER_MISMATCH' });
+  }
   if (!['VERIFIED','RECONCILED'].includes(payment.state)) throw Object.assign(new Error('Only verified or reconciled payments can be allocated to receivables'), { statusCode: 409, code: 'PAYMENT_NOT_VERIFIED' });
   if (payment.currency !== receivable.currency) throw Object.assign(new Error('Payment currency does not match receivable currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
   const amountMinor = Number(input.amountMinor ?? input.amount_minor ?? payment.amountMinor);
