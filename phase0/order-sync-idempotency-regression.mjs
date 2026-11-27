@@ -260,6 +260,31 @@ try {
     assert.equal(conflict.code, 'ORDER_IDEMPOTENCY_CONFLICT', identityCase.name + ' change must return idempotency conflict');
   }
 
+  // Object key ordering inside a structured service request is not a business
+  // change and must not turn an otherwise exact retry into a conflict.
+  const nestedIdentityOrder = {
+    ...structuredClone(original),
+    id: 'local-order-stable-nested-identity',
+    service_delivery_request: {
+      destination_details: 'CMC',
+      pickup_details: 'Bole',
+      contact: { name: 'Buyer', phone: '+251900000000' },
+    },
+  };
+  const [nestedFirst] = await store.saveQueuedOrders(tenant.chatId, [nestedIdentityOrder]);
+  const nestedRetry = {
+    ...structuredClone(nestedIdentityOrder),
+    service_delivery_request: {
+      contact: { phone: '+251900000000', name: 'Buyer' },
+      pickup_details: 'Bole',
+      destination_details: 'CMC',
+    },
+  };
+  const [nestedRetried] = await store.saveQueuedOrders(tenant.chatId, [nestedRetry]);
+  assert.equal(nestedRetried.status, 'synced');
+  assert.equal(nestedRetried.order_id, nestedFirst.order_id);
+  assert.equal(nestedRetried.payment_id, nestedFirst.payment_id);
+
   console.log('Order sync idempotency regression: PASS');
 } finally {
   await rm(dir, { recursive: true, force: true });
