@@ -139,6 +139,8 @@ jobs:
         run: npm run test:order-sync-idempotency
       - name: B2B invoice transition concurrency regression
         run: npm run phase11.3:invoice-test
+      - name: B2B quote lifecycle concurrency expiry and audit atomicity regression
+        run: npm run phase11.3:quotes-test
       - name: Authorization location capability projection regression
         run: node phase0/p1-05-scope-context-regression.mjs
       - name: Location scope gate regression
