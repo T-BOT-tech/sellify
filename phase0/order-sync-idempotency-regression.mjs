@@ -211,6 +211,55 @@ try {
   assert.equal(recoveredAfterLostResponse[0].payment_id,
     (await store.saveQueuedOrders(tenant.chatId, [structuredClone(lostResponseOrder)]))[0].payment_id);
 
+  // A reused local ID must conflict when checkout/fulfillment inputs change,
+  // even if item totals and customer identity remain identical.
+  const identityCases = [
+    {
+      name: 'item-type',
+      initial: { items: [{ id: 'coffee', name: 'Coffee', price: 100, qty: 2, item_type: 'product' }] },
+      changed: { items: [{ id: 'coffee', name: 'Coffee', price: 100, qty: 2, item_type: 'service' }] },
+    },
+    {
+      name: 'line-modifiers',
+      initial: { items: [{ id: 'coffee', name: 'Coffee', price: 100, qty: 2, modifiers: ['oat milk'] }] },
+      changed: { items: [{ id: 'coffee', name: 'Coffee', price: 100, qty: 2, modifiers: ['soy milk'] }] },
+    },
+    { name: 'table-id', initial: { table_id: 'table-1' }, changed: { table_id: 'table-2' } },
+    { name: 'table-number', initial: { table_number: 'A1' }, changed: { table_number: 'A2' } },
+    { name: 'course', initial: { course: 'starter' }, changed: { course: 'main' } },
+    { name: 'priority', initial: { priority: 'normal' }, changed: { priority: 'urgent' } },
+    { name: 'b2b-account', initial: { b2b_account_id: 'account-1' }, changed: { b2b_account_id: 'account-2' } },
+    { name: 'pricing-tier', initial: { pricing_tier_id: 'tier-1' }, changed: { pricing_tier_id: 'tier-2' } },
+    { name: 'delivery-address', initial: { delivery_address: 'Address 1' }, changed: { delivery_address: 'Address 2' } },
+    { name: 'pickup-location', initial: { pickup_location: 'Counter 1' }, changed: { pickup_location: 'Counter 2' } },
+    { name: 'scheduled-time', initial: { scheduled_time: '2026-12-01T10:00:00+03:00' }, changed: { scheduled_time: '2026-12-01T11:00:00+03:00' } },
+    {
+      name: 'service-delivery-request',
+      initial: { service_delivery_request: { destination_details: 'CMC', pickup_details: 'Bole' } },
+      changed: { service_delivery_request: { destination_details: 'Kazanchis', pickup_details: 'Bole' } },
+    },
+    { name: 'cash-tendered', initial: { cash_tendered: 200 }, changed: { cash_tendered: 250 } },
+    { name: 'change-due', initial: { cash_tendered: 200, change_due: 0 }, changed: { cash_tendered: 200, change_due: 25 } },
+    {
+      name: 'payment-proof',
+      initial: { payment_proof: { path: 'opfs://proof/one.webp', fileName: 'one.webp', sizeBytes: 100 } },
+      changed: { payment_proof: { path: 'opfs://proof/two.webp', fileName: 'two.webp', sizeBytes: 100 } },
+    },
+  ];
+  for (const identityCase of identityCases) {
+    const baseOrder = {
+      ...structuredClone(original),
+      id: 'local-order-identity-' + identityCase.name,
+      ...structuredClone(identityCase.initial),
+    };
+    const [created] = await store.saveQueuedOrders(tenant.chatId, [baseOrder]);
+    assert.equal(created.status, 'synced', identityCase.name + ' baseline order should sync');
+    const changedOrder = { ...structuredClone(baseOrder), ...structuredClone(identityCase.changed) };
+    const [conflict] = await store.saveQueuedOrders(tenant.chatId, [changedOrder]);
+    assert.equal(conflict.status, 'rejected', identityCase.name + ' change must not be acknowledged as retry');
+    assert.equal(conflict.code, 'ORDER_IDEMPOTENCY_CONFLICT', identityCase.name + ' change must return idempotency conflict');
+  }
+
   console.log('Order sync idempotency regression: PASS');
 } finally {
   await rm(dir, { recursive: true, force: true });
