@@ -5280,6 +5280,9 @@ export async function createQuote(chatId, input = {}, actor = null) {
   const rawItems = Array.isArray(input.items) ? input.items : [];
   if (!rawItems.length) throw Object.assign(new Error('At least one quote item is required'), { statusCode: 400, code: 'QUOTE_ITEMS_REQUIRED' });
   const currency = tenantCurrency(chatId);
+  // Resolve every line against one quote-creation instant so a boundary
+  // crossing cannot produce mixed pricing-rule decisions within one quote.
+  const now = nowIso();
   const items = [];
   for (const raw of rawItems) {
     const productId = String(raw.productId ?? raw.product_id ?? '').trim();
@@ -5292,7 +5295,7 @@ export async function createQuote(chatId, input = {}, actor = null) {
     let pricingRuleId = null;
     if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) {
       const rule = db.prepare(`SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ? AND status = 'active' LIMIT 1`).get(organizationId, customerId, productId);
-      const effectiveRule = isCustomerPricingRuleEffective(rule, nowIso()) ? rule : null;
+      const effectiveRule = isCustomerPricingRuleEffective(rule, now) ? rule : null;
       unitPriceMinor = effectiveRule ? Number(effectiveRule.price_minor) : Number(product.price_minor);
       pricingRuleId = effectiveRule?.id || null;
     }
@@ -5303,7 +5306,6 @@ export async function createQuote(chatId, input = {}, actor = null) {
   const totalMinor = subtotalMinor;
   const id = String(input.id || crypto.randomUUID());
   const quoteNumber = String(input.quoteNumber ?? input.quote_number ?? '').trim() || nextQuoteNumber(organizationId);
-  const now = nowIso();
   const status = String(input.status || 'DRAFT').toUpperCase();
   if (status !== 'DRAFT') throw Object.assign(new Error('New quotes must start in DRAFT state'), { statusCode: 409, code: 'INVALID_QUOTE_STATE' });
   db.exec('BEGIN');
