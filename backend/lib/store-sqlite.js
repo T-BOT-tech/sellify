@@ -5104,6 +5104,36 @@ export async function transitionProcurementAward(chatId, awardId, targetStatus, 
   return getProcurementAwardById(organizationId,awardId);
 }
 
+function normalizeCustomerPricingEffectiveAt(value, field) {
+  if (value == null || String(value).trim() === '') return null;
+  const raw = String(value).trim();
+  // Effective windows are instants, not local wall-clock dates. Require an
+  // explicit timezone so server and tenant timezone differences cannot change
+  // which negotiated price is selected.
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/i.exec(raw);
+  const parsed = Date.parse(raw);
+  const year = Number(match?.[1]);
+  const month = Number(match?.[2]);
+  const day = Number(match?.[3]);
+  const hour = Number(match?.[4]);
+  const minute = Number(match?.[5]);
+  const second = Number(match?.[6]);
+  const offsetHour = Number(match?.[10] || 0);
+  const offsetMinute = Number(match?.[11] || 0);
+  const daysInMonth = month >= 1 && month <= 12
+    ? new Date(Date.UTC(year, month, 0)).getUTCDate()
+    : 0;
+  if (!match || year < 1 || day < 1 || day > daysInMonth
+      || hour > 23 || minute > 59 || second > 59
+      || offsetHour > 23 || offsetMinute > 59 || !Number.isFinite(parsed)) {
+    throw Object.assign(new Error(`${field} must be a valid ISO-8601 timestamp with an explicit timezone`), {
+      statusCode: 400,
+      code: 'INVALID_CUSTOM_PRICING_EFFECTIVE_DATE',
+    });
+  }
+  return new Date(parsed).toISOString();
+}
+
 function customerPricingFromRow(row) {
   if (!row) return null;
   return {
@@ -5174,6 +5204,14 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
   if (currency !== normaliseCurrency(product.currency, tenantCurrency(chatId))) {
     throw Object.assign(new Error('Custom price currency must match the product currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
   }
+  const effectiveFrom = normalizeCustomerPricingEffectiveAt(input.effectiveFrom ?? input.effective_from ?? null, 'effectiveFrom');
+  const effectiveTo = normalizeCustomerPricingEffectiveAt(input.effectiveTo ?? input.effective_to ?? null, 'effectiveTo');
+  if (effectiveFrom && effectiveTo && effectiveFrom > effectiveTo) {
+    throw Object.assign(new Error('effectiveFrom must not be later than effectiveTo'), {
+      statusCode: 400,
+      code: 'INVALID_CUSTOM_PRICING_EFFECTIVE_WINDOW',
+    });
+  }
   const id = String(input.id || crypto.randomUUID());
   const now = nowIso();
   const ownsTransaction = !db.isTransaction;
@@ -5194,8 +5232,8 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
         updated_at = excluded.updated_at
     `).run(id, organizationId, customerId, productId, priceMinor, currency,
       ['active','inactive'].includes(String(input.status)) ? String(input.status) : 'active',
-      input.effectiveFrom ?? input.effective_from ?? null,
-      input.effectiveTo ?? input.effective_to ?? null,
+      effectiveFrom,
+      effectiveTo,
       String(input.reason || ''), actor?.userId || null, now, now);
     // Resolve by the unique business key: on conflict SQLite retains the
     // existing row ID, which may differ from the newly generated candidate ID.
@@ -5283,6 +5321,9 @@ export async function createQuote(chatId, input = {}, actor = null) {
   if (!rawItems.length) throw Object.assign(new Error('At least one quote item is required'), { statusCode: 400, code: 'QUOTE_ITEMS_REQUIRED' });
   const currency = tenantCurrency(chatId);
   const items = [];
+  // Resolve every line against one quote-creation instant so a rule boundary
+  // cannot produce mixed effective prices within a single quote.
+  const pricingAt = nowIso();
   for (const raw of rawItems) {
     const productId = String(raw.productId ?? raw.product_id ?? '').trim();
     const quantity = Number(raw.quantity ?? raw.qty);
@@ -5290,14 +5331,19 @@ export async function createQuote(chatId, input = {}, actor = null) {
     const product = assertCatalogProductForOrganization(chatId, productId, organizationId);
     const productCurrency = normaliseCurrency(product.currency, currency);
     if (productCurrency !== currency) throw Object.assign(new Error('Quote item currency must match tenant currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
-    let unitPriceMinor = Number(raw.unitPriceMinor ?? raw.unit_price_minor);
-    let pricingRuleId = null;
-    if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) {
-      const rule = db.prepare(`SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ? AND status = 'active' LIMIT 1`).get(organizationId, customerId, productId);
-      unitPriceMinor = rule ? Number(rule.price_minor) : Number(product.price_minor);
-      pricingRuleId = rule?.id || null;
-    }
-    if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) throw Object.assign(new Error('Quote unit price must be a non-negative integer minor amount'), { statusCode: 400, code: 'INVALID_QUOTE_PRICE' });
+    // Quote prices are resolved from canonical server-side pricing only.
+    // Client-supplied unitPriceMinor/unit_price_minor values are untrusted and
+    // must never override a customer pricing rule or the catalog price.
+    const rule = db.prepare(`
+      SELECT * FROM customer_pricing_rules
+      WHERE organization_id = ? AND customer_id = ? AND product_id = ? AND status = 'active'
+        AND (effective_from IS NULL OR julianday(effective_from) <= julianday(?))
+        AND (effective_to IS NULL OR julianday(effective_to) >= julianday(?))
+      LIMIT 1
+    `).get(organizationId, customerId, productId, pricingAt, pricingAt);
+    const unitPriceMinor = rule ? Number(rule.price_minor) : Number(product.price_minor);
+    const pricingRuleId = rule?.id || null;
+    if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) throw Object.assign(new Error('Canonical quote unit price must be a non-negative integer minor amount'), { statusCode: 409, code: 'INVALID_CANONICAL_QUOTE_PRICE' });
     items.push({ id: crypto.randomUUID(), productId, description: String(raw.description ?? parseJSON(product.product_json, {}).name ?? productId), quantity, unitPriceMinor, currency, lineTotalMinor: quantity * unitPriceMinor, pricingRuleId });
   }
   const subtotalMinor = items.reduce((sum, item) => sum + item.lineTotalMinor, 0);
@@ -5307,14 +5353,14 @@ export async function createQuote(chatId, input = {}, actor = null) {
   const now = nowIso();
   const status = String(input.status || 'DRAFT').toUpperCase();
   if (status !== 'DRAFT') throw Object.assign(new Error('New quotes must start in DRAFT state'), { statusCode: 409, code: 'INVALID_QUOTE_STATE' });
-  db.exec('BEGIN');
+  db.exec('BEGIN IMMEDIATE');
   try {
     db.prepare(`INSERT INTO quotes (id, organization_id, customer_id, quote_number, currency, status, subtotal_minor, total_minor, valid_until, notes, terms, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, organizationId, customerId, quoteNumber, currency, subtotalMinor, totalMinor, input.validUntil ?? input.valid_until ?? null, String(input.notes || ''), String(input.terms || ''), actor?.userId || null, now, now);
     const stmt = db.prepare(`INSERT INTO quote_items (id, quote_id, product_id, description, quantity, unit_price_minor, currency, line_total_minor, pricing_rule_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const item of items) stmt.run(item.id, id, item.productId, item.description, item.quantity, item.unitPriceMinor, item.currency, item.lineTotalMinor, item.pricingRuleId, now);
+    audit(String(chatId), 'b2b.quote.created', 'quote', id, { quoteNumber, customerId, totalMinor, currency }, { organizationId, actorId: actor?.userId || null });
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
-  audit(String(chatId), 'b2b.quote.created', 'quote', id, { quoteNumber, customerId, totalMinor, currency }, { organizationId, actorId: actor?.userId || null });
   return getQuoteByIdSync(organizationId, id);
 }
 
@@ -5322,20 +5368,44 @@ const QUOTE_TRANSITIONS = Object.freeze({ DRAFT: new Set(['SENT','CANCELLED']), 
 
 export async function transitionQuote(chatId, quoteId, targetState, actor = null, reason = '') {
   const organizationId = await tenantOrganizationId(chatId);
-  const current = getQuoteByIdSync(organizationId, quoteId);
-  if (!current) throw Object.assign(new Error('Quote not found'), { statusCode: 404, code: 'QUOTE_NOT_FOUND' });
-  const target = String(targetState || '').toUpperCase();
-  if (!QUOTE_TRANSITIONS[current.status]?.has(target)) throw Object.assign(new Error(`Invalid quote transition ${current.status} -> ${target}`), { statusCode: 409, code: 'INVALID_QUOTE_TRANSITION' });
-  const now = nowIso();
-  const fields = ['status = ?', 'updated_at = ?']; const params = [target, now];
-  if (target === 'SENT') { fields.push('sent_at = ?'); params.push(now); }
-  if (target === 'ACCEPTED') { fields.push('accepted_at = ?'); params.push(now); }
-  if (target === 'REJECTED') { fields.push('rejected_at = ?'); params.push(now); }
-  if (target === 'CANCELLED') { fields.push('cancelled_at = ?'); params.push(now); }
-  params.push(String(quoteId), organizationId);
-  db.prepare(`UPDATE quotes SET ${fields.join(', ')} WHERE id = ? AND organization_id = ?`).run(...params);
-  audit(String(chatId), 'b2b.quote.transitioned', 'quote', quoteId, { from: current.status, to: target, reason: String(reason || '') }, { organizationId, actorId: actor?.userId || null, reason: String(reason || '') });
-  return getQuoteByIdSync(organizationId, quoteId);
+  const id = String(quoteId);
+  // Match the established invoice lifecycle pattern: serialize state resolution,
+  // conditional mutation and audit on the same SQLite connection.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const current = getQuoteByIdSync(organizationId, id);
+    if (!current) throw Object.assign(new Error('Quote not found'), { statusCode: 404, code: 'QUOTE_NOT_FOUND' });
+    const target = String(targetState || '').toUpperCase();
+    if (!QUOTE_TRANSITIONS[current.status]?.has(target)) {
+      throw Object.assign(new Error(`Invalid quote transition ${current.status} -> ${target}`), { statusCode: 409, code: 'INVALID_QUOTE_TRANSITION' });
+    }
+    if (target === 'ACCEPTED' && current.validUntil) {
+      const expiry = Date.parse(current.validUntil);
+      if (!Number.isFinite(expiry) || expiry <= Date.now()) {
+        throw Object.assign(new Error('Quote has expired and cannot be accepted'), { statusCode: 409, code: 'QUOTE_EXPIRED' });
+      }
+    }
+    const now = nowIso();
+    const fields = ['status = ?', 'updated_at = ?'];
+    const params = [target, now];
+    if (target === 'SENT') { fields.push('sent_at = ?'); params.push(now); }
+    if (target === 'ACCEPTED') { fields.push('accepted_at = ?'); params.push(now); }
+    if (target === 'REJECTED') { fields.push('rejected_at = ?'); params.push(now); }
+    if (target === 'CANCELLED') { fields.push('cancelled_at = ?'); params.push(now); }
+    params.push(id, organizationId, current.status);
+    const update = db.prepare(`UPDATE quotes SET ${fields.join(', ')} WHERE id = ? AND organization_id = ? AND status = ?`).run(...params);
+    if (Number(update.changes) !== 1) {
+      throw Object.assign(new Error('Quote state changed; reload and retry'), { statusCode: 409, code: 'QUOTE_STATE_CONFLICT' });
+    }
+    audit(String(chatId), 'b2b.quote.transitioned', 'quote', id,
+      { from: current.status, to: target, reason: String(reason || '') },
+      { organizationId, actorId: actor?.userId || null, reason: String(reason || '') });
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return getQuoteByIdSync(organizationId, id);
 }
 
 

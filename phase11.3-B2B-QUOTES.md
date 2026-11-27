@@ -56,7 +56,8 @@ PATCH is a controlled state transition endpoint using `status`/`state` and an op
 - Products must belong to the tenant organization.
 - Quote currency follows the tenant's canonical currency.
 - Money is integer minor units.
-- Customer-specific active pricing is used automatically when a unit price is not explicitly supplied.
+- Quote item prices are always resolved server-side from an active customer-pricing rule whose optional effective window contains the current instant, falling back to the canonical catalog price. Client-supplied unit-price fields are ignored; negotiated prices must be represented by an authorized canonical pricing rule before quote creation.
+- Customer-pricing `effective_from` and `effective_to` values are ISO-8601 timestamps with explicit timezones, normalized to UTC. Both bounds are inclusive; a missing bound is open-ended. Invalid timestamps and inverted windows are rejected.
 - Quote totals are recomputed from quote items.
 - Existing orders and legacy B2B checkout remain unchanged.
 - Quote transitions are audit-recorded.
