@@ -29,6 +29,21 @@ assert.equal(quote.totalMinor, 33000);
 assert.equal(quote.items[0].unitPriceMinor, 11000);
 assert.equal(quote.items[0].pricingRuleId, rule.id);
 
+// Caller-supplied prices in either supported legacy spelling are untrusted.
+// The canonical customer price must win even when the supplied values are valid
+// non-negative integers designed to undercut the contract price.
+const tamperedQuote = await store.createQuote(chatId, {
+  customerId: customer.id,
+  items: [
+    { productId: 'cement', quantity: 1, unitPriceMinor: 1 },
+    { productId: 'cement', quantity: 1, unit_price_minor: 2 },
+  ],
+}, { userId: user.id });
+assert.equal(tamperedQuote.subtotalMinor, 22000);
+assert.equal(tamperedQuote.totalMinor, 22000);
+assert.deepEqual(tamperedQuote.items.map(item => item.unitPriceMinor), [11000, 11000]);
+assert.deepEqual(tamperedQuote.items.map(item => item.pricingRuleId), [rule.id, rule.id]);
+
 const sent = await store.transitionQuote(chatId, quote.id, 'SENT', { userId: user.id });
 assert.equal(sent.status, 'SENT');
 const accepted = await store.transitionQuote(chatId, quote.id, 'ACCEPTED', { userId: user.id });
