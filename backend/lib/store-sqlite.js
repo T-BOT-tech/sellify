@@ -171,6 +171,14 @@ function normaliseProduct(product) {
   return value;
 }
 
+function stableOrderIdentityValue(value) {
+  if (Array.isArray(value)) return value.map(stableOrderIdentityValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, stableOrderIdentityValue(value[key])]));
+  }
+  return value === undefined ? null : value;
+}
+
 function queuedOrderIdentityHash(order, expectedCurrency, storedOrder = false) {
   const normalized = validateAndTotalOrderItems(order?.items, expectedCurrency).items
     .map(item => ({
@@ -179,6 +187,8 @@ function queuedOrderIdentityHash(order, expectedCurrency, storedOrder = false) {
       price: Math.round(Number(item.price)),
       qty: Math.floor(Number(item.qty)),
       category: String(item.category ?? ''),
+      itemType: String(item.item_type ?? item.itemType ?? 'product').toLowerCase(),
+      modifiers: JSON.stringify(stableOrderIdentityValue(item.modifiers ?? null)),
     }))
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   // The backend may attach a canonical customer_id when it resolves a
@@ -212,6 +222,35 @@ function queuedOrderIdentityHash(order, expectedCurrency, storedOrder = false) {
     deliveryFee: String(order?.delivery_fee ?? order?.deliveryFee ?? ''),
     deliveryFeeMinor: String(order?.delivery_fee_minor ?? order?.deliveryFeeMinor ?? ''),
     requiredBy: String(order?.required_by ?? order?.requiredBy ?? ''),
+    // Immutable checkout and fulfillment inputs must participate in retry
+    // identity. Server-generated lifecycle/payment projections are excluded.
+    tableId: String(order?.table_id ?? order?.tableId ?? ''),
+    tableNumber: String(order?.table_number ?? order?.tableNumber ?? ''),
+    course: String(order?.course ?? ''),
+    priority: String(order?.priority ?? ''),
+    b2bAccountId: String(order?.b2b_account_id ?? order?.b2bAccountId ?? ''),
+    pricingTierId: String(order?.pricing_tier_id ?? order?.pricingTierId ?? ''),
+    deliveryAddress: String(order?.delivery_address ?? order?.deliveryAddress ?? ''),
+    pickupLocation: String(order?.pickup_location ?? order?.pickupLocation ?? ''),
+    scheduledTime: String(order?.scheduled_time ?? order?.scheduledTime ?? ''),
+    // The service request's customer-authored details are immutable order
+    // inputs. Assessment/assignment state is a separate server-owned lifecycle
+    // projection and must not change the original sync command identity.
+    serviceDeliveryRequest: (() => {
+      const request = order?.service_delivery_request ?? order?.serviceDeliveryRequest ?? null;
+      if (!request || typeof request !== 'object' || Array.isArray(request)) return '';
+      return JSON.stringify({
+        pickupDetails: String(request.pickup_details ?? request.pickupDetails ?? ''),
+        destinationDetails: String(request.destination_details ?? request.destinationDetails ?? ''),
+        customerNote: String(request.customer_note ?? request.customerNote ?? ''),
+      });
+    })(),
+    // Tender and proof are captured with the order today. Until a separate
+    // authorized evidence-update contract exists, changed values must conflict
+    // rather than be silently accepted as an unchanged retry.
+    cashTendered: String(order?.cash_tendered ?? order?.cashTendered ?? ''),
+    changeDue: String(order?.change_due ?? order?.changeDue ?? ''),
+    paymentProof: JSON.stringify(stableOrderIdentityValue(order?.payment_proof ?? order?.paymentProof ?? null)),
     isMarketplace: Boolean(order?.is_marketplace),
     marketplaceOrderId: String(order?.marketplace_order_id ?? ''),
   };
