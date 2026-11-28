@@ -11,6 +11,7 @@ const authz = await import('../backend/lib/authorization.js');
 const user = await store.getOrCreateUserByTelegram(`tg-${Date.now()}`, 'Invoice Test');
 const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'Invoice Test', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa' });
 const chatId = tenant.chatId;
+const tenantRecord = await store.getTenant(chatId);
 const customer = await store.upsertCustomer(chatId, { id: `business-${Date.now()}`, customerType: 'business', name: 'Invoice Buyer' });
 const terms = await store.createCreditTerms(chatId, { customerId: customer.id, creditLimitMinor: 100000, paymentDueDays: 30, requiresPo: false }, { userId: user.id });
 await store.transitionCreditTerms(chatId, terms.id, 'APPROVED', { userId: user.id });
@@ -21,7 +22,7 @@ await assert.rejects(
   error => error?.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error?.statusCode === 409,
 );
 await store.reviewOrderPricing(chatId, sync[0].order_id, 'ACCEPT_AS_SUBMITTED',
-  'Reviewed the submitted B2B order price and accepted it.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
+  'Reviewed the submitted B2B order price and accepted it.', { userId: user.id, role: 'owner', organizationId: tenantRecord.organizationId, chatId });
 const ar = await store.createReceivable(chatId, { sourceType: 'order', sourceId: sync[0].order_id }, { userId: user.id });
 const invoice = await store.createInvoice(chatId, { receivableId: ar.id, notes: 'Net 30 invoice' }, { userId: user.id });
 assert.equal(invoice.status, 'DRAFT');
@@ -38,7 +39,7 @@ const rejectedSync = await store.saveQueuedOrders(chatId, [{
 }]);
 assert.equal(rejectedSync[0].status, 'synced');
 await store.reviewOrderPricing(chatId, rejectedSync[0].order_id, 'REJECT',
-  'Submitted price rejected because it is unsupported by available evidence.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
+  'Submitted price rejected because it is unsupported by available evidence.', { userId: user.id, role: 'owner', organizationId: tenantRecord.organizationId, chatId });
 await assert.rejects(
   () => store.createReceivable(chatId, { sourceType: 'order', sourceId: rejectedSync[0].order_id }, { userId: user.id }),
   error => error?.code === 'ORDER_PRICING_REVIEW_REJECTED' && error?.statusCode === 409,
@@ -62,7 +63,7 @@ await assert.rejects(
   error => error?.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error?.statusCode === 409,
 );
 const legacyDecision = await store.reviewOrderPricing(chatId, legacySync[0].order_id, 'ACCEPT_AS_SUBMITTED',
-  'Reviewed legacy order price and explicitly accepted the submitted amount.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
+  'Reviewed legacy order price and explicitly accepted the submitted amount.', { userId: user.id, role: 'owner', organizationId: tenantRecord.organizationId, chatId });
 assert.equal(legacyDecision.pricing_review.source, 'LEGACY_UNATTRIBUTED');
 assert.equal(legacyDecision.pricing_review.status, 'APPROVED');
 await store.createReceivable(chatId, { sourceType: 'order', sourceId: legacySync[0].order_id }, { userId: user.id });
@@ -82,7 +83,7 @@ const raceSync = await store.saveQueuedOrders(chatId, [{
 }]);
 assert.equal(raceSync[0].status, 'synced');
 await store.reviewOrderPricing(chatId, raceSync[0].order_id, 'ACCEPT_AS_SUBMITTED',
-  'Reviewed the competing B2B order price and accepted it.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
+  'Reviewed the competing B2B order price and accepted it.', { userId: user.id, role: 'owner', organizationId: tenantRecord.organizationId, chatId });
 const raceAr = await store.createReceivable(chatId, { sourceType: 'order', sourceId: raceSync[0].order_id }, { userId: user.id });
 const raceInvoice = await store.createInvoice(chatId, { receivableId: raceAr.id }, { userId: user.id });
 const raceResults = await Promise.allSettled([
@@ -101,9 +102,9 @@ await assert.rejects(() => store.createInvoice(chatId, { receivableId: ar.id }, 
 const db = store.getDatabaseForTests();
 assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 19').get()?.version, 19);
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 2);
-assert.equal(authz.authorize({ userId: 'buyer', role: 'buyer', organizationId: tenant.organizationId }, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.DENY);
-const manager = { userId: 'manager', role: 'manager', organizationId: tenant.organizationId };
-assert.equal(authz.authorize(manager, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.ALLOW);
-assert.equal(authz.authorize(manager, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:create'), authz.AUTHZ.ALLOW);
+assert.equal(authz.authorize({ userId: 'buyer', role: 'buyer', organizationId: tenantRecord.organizationId }, tenantRecord.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.DENY);
+const manager = { userId: 'manager', role: 'manager', organizationId: tenantRecord.organizationId };
+assert.equal(authz.authorize(manager, tenantRecord.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.ALLOW);
+assert.equal(authz.authorize(manager, tenantRecord.organizationId, null, 'b2b_invoices', 'b2b:invoice:create'), authz.AUTHZ.ALLOW);
 await rm(tmp, { recursive: true, force: true });
 console.log('Phase 11.3 B2B Invoice Regression: PASS');

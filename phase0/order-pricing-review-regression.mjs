@@ -15,6 +15,7 @@ try {
     userId: owner.id, sellerName: 'Pricing Review Test', country: 'ET',
     currency: 'ETB', timezone: 'Africa/Addis_Ababa',
   });
+  const tenantRecord = await store.getTenant(tenant.chatId);
   await store.saveCatalog(tenant.chatId, [
     { id: 'catalog-match', name: 'Catalog Match', price: 100, stock: 10 },
     { id: 'catalog-other', name: 'Catalog Other', price: 200, stock: 10 },
@@ -65,7 +66,7 @@ try {
   const inferredStored = (await store.getOrders(tenant.chatId)).find(order => order.id === inferredCustomerOrder.id);
   await store.reviewOrderPricing(tenant.chatId, inferredCreated.order_id, 'ACCEPT_AS_SUBMITTED',
     'Reviewed inferred customer order price and accepted it.', {
-      userId: owner.id, role: 'owner', organizationId: tenant.organizationId, chatId: tenant.chatId,
+      userId: owner.id, role: 'owner', organizationId: tenantRecord.organizationId, chatId: tenant.chatId,
     });
   const [inferredRetry] = await store.saveQueuedOrders(tenant.chatId, [structuredClone(inferredCustomerOrder)]);
   assert.equal(inferredRetry.status, 'synced');
@@ -88,7 +89,7 @@ try {
     'courier assignment lifecycle must remain blocked while pricing review is required',
   );
 
-  const reviewer = { userId: owner.id, role: 'owner', organizationId: tenant.organizationId, chatId: tenant.chatId };
+  const reviewer = { userId: owner.id, role: 'owner', organizationId: tenantRecord.organizationId, chatId: tenant.chatId };
   const decision = await store.reviewOrderPricing(
     tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',
     'Manager reviewed the submitted customer price and accepts it.', reviewer,
@@ -114,7 +115,7 @@ try {
   );
   await assert.rejects(
     store.reviewOrderPricing(tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',
-      'Cashier must not approve manual pricing.', { userId: owner.id, role: 'cashier', organizationId: tenant.organizationId }),
+      'Cashier must not approve manual pricing.', { userId: owner.id, role: 'cashier', organizationId: tenantRecord.organizationId }),
     error => error.code === 'ORDER_PRICING_REVIEW_FORBIDDEN' && error.statusCode === 403,
   );
   await assert.rejects(
