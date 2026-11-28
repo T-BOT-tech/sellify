@@ -137,6 +137,8 @@ jobs:
         run: npm run test:outbox-tenant-scope
       - name: Order sync idempotency regression
         run: npm run test:order-sync-idempotency
+      - name: Order pricing review regression
+        run: node phase0/order-pricing-review-regression.mjs
       - name: B2B invoice transition concurrency regression
         run: npm run phase11.3:invoice-test
       - name: B2B quote lifecycle concurrency expiry and audit atomicity regression

@@ -5897,6 +5897,30 @@ export async function listReceivables(chatId, { customerId = '', status = 'all',
   return db.prepare(`SELECT * FROM accounts_receivable WHERE ${where.join(' AND ')} ORDER BY due_at ASC, created_at DESC LIMIT ?`).all(...params).map(receivableFromRow);
 }
 
+
+function assertOrderPricingReadyForExecution(order, action = 'execution') {
+  const review = order?.pricing_review;
+  const serverVerified = review?.schema_version === 1
+    && review.status === 'VERIFIED'
+    && ['CATALOG_BASE', 'MARKETPLACE_CATALOG'].includes(review.source)
+    && review.verification_state === 'SERVER_VERIFIED';
+  const reviewerApproved = review?.schema_version === 1
+    && review.status === 'APPROVED'
+    && review.decision === 'ACCEPT_AS_SUBMITTED'
+    && review.verification_state === 'REVIEW_APPROVED'
+    && Boolean(String(review.reviewed_by || '').trim())
+    && Boolean(String(review.reviewed_at || '').trim())
+    && Boolean(String(review.reason || '').trim());
+  if (serverVerified || reviewerApproved) return;
+  const rejected = review?.status === 'REJECTED';
+  throw Object.assign(new Error(rejected
+    ? `A rejected order price cannot proceed with ${action}`
+    : `Order pricing review is required before ${action}`), {
+    statusCode: 409,
+    code: rejected ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
+  });
+}
+
 export async function createReceivable(chatId, input = {}, actor = null) {
   ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
@@ -5914,7 +5938,9 @@ export async function createReceivable(chatId, input = {}, actor = null) {
   } else {
     const order = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), sourceId);
     if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
-    customerId = order.customer_id || parseJSON(order.order_json, {}).customer_id || null; amountMinor = Number(order.total_minor); currency = normaliseCurrency(order.currency, currency);
+    const orderJson = parseJSON(order.order_json, {});
+    assertOrderPricingReadyForExecution(orderJson, 'creating a receivable');
+    customerId = order.customer_id || orderJson.customer_id || null; amountMinor = Number(order.total_minor); currency = normaliseCurrency(order.currency, currency);
     creditTerms = customerId ? db.prepare(`SELECT * FROM customer_credit_terms WHERE organization_id = ? AND customer_id = ? AND status = 'APPROVED' ORDER BY updated_at DESC LIMIT 1`).get(organizationId, customerId) : null;
   }
   if (!customerId) throw Object.assign(new Error('A business customer is required for receivables'), { statusCode: 409, code: 'B2B_CUSTOMER_REQUIRED' });
@@ -6055,6 +6081,12 @@ export async function createInvoice(chatId, input = {}, actor = null) {
   if (!receivable) throw Object.assign(new Error('Receivable not found'), { statusCode: 404, code: 'AR_NOT_FOUND' });
   if (['WRITTEN_OFF','CANCELLED'].includes(receivable.status)) throw Object.assign(new Error('Cannot invoice a closed receivable'), { statusCode: 409, code: 'AR_CLOSED' });
   if (receivable.currency !== tenantCurrency(chatId)) throw Object.assign(new Error('Invoice currency must match organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+  if (receivable.sourceType === 'order') {
+    const sourceOrder = db.prepare('SELECT order_json FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(String(chatId), receivable.sourceId);
+    if (!sourceOrder) throw Object.assign(new Error('Receivable source order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    assertOrderPricingReadyForExecution(parseJSON(sourceOrder.order_json, {}), 'creating an invoice');
+  }
   const existing = db.prepare('SELECT id FROM invoices WHERE organization_id = ? AND receivable_id = ?').get(organizationId, receivable.id);
   if (existing) throw Object.assign(new Error('An invoice already exists for this receivable'), { statusCode: 409, code: 'INVOICE_EXISTS' });
   const items = sourceItemsForInvoice(chatId, organizationId, receivable);
@@ -7007,6 +7039,12 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       if(prior.command_type!=='TRANSITION'||String(prior.booking_id)!==String(bookingId)||prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different booking command'),{statusCode:409,code:'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT'});
       const replay=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=?').get(String(bookingId),organizationId);
       db.exec('COMMIT'); return {booking:serviceBookingFromRow(replay),replayed:true};
+    }
+    if (target === 'CONFIRMED') {
+      const canonicalOrderRow = db.prepare('SELECT order_json FROM orders WHERE chat_id = ? AND server_order_id = ?')
+        .get(String(chatId), String(serverOrderId));
+      const canonicalOrder = orderFromRow(canonicalOrderRow || {});
+      assertOrderPricingReadyForExecution(canonicalOrder, 'confirming a service booking');
     }
     if (actor?.actorType === 'TELEGRAM_BUYER'
       && (target !== 'CANCELLED' || !['REQUESTED', 'ACCEPTED'].includes(String(row.status)))) {
@@ -11782,7 +11820,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     try {
       const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
         .get(String(chatId));
-      const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+      const freshOrderRow = db.prepare(`SELECT o.server_order_id, o.order_json,
         (SELECT f.location_id FROM fulfillments f
          WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
          ORDER BY f.created_at DESC LIMIT 1) AS location_id
@@ -11813,6 +11851,8 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         db.exec('COMMIT');
         return replay;
       }
+      const freshOrderJson = orderFromRow(freshOrderRow);
+      assertOrderPricingReadyForExecution(freshOrderJson, 'delivery assignment');
       // Resolve durable key reuse before validating the payload for a new command.
       // A retry with a missing/changed target must conflict against the original
       // fingerprint rather than return an unrelated target-required error.
@@ -11899,6 +11939,12 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), { statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING' });
     db.exec('COMMIT');
     return replay;
+    }
+    const freshOrderJson = orderFromRow(freshOrderRow);
+    // Cancellation/failure are compensating actions, not new execution.
+    // Keep them available so an unreviewed order can still be safely stopped.
+    if (!['CANCELLED', 'FAILED'].includes(normalizedAction)) {
+      assertOrderPricingReadyForExecution(freshOrderJson, 'delivery assignment');
     }
     // Validate action-specific payload only after durable replay resolution.
     // Reusing a key with changed/malformed intent must produce the idempotency
@@ -12108,6 +12154,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
         statusCode: 409, code: 'FULFILLMENT_ORDER_CHANGED',
       });
     }
+    assertOrderPricingReadyForExecution(freshOrderJson, 'fulfillment');
     assertServiceDeliveryReadyForExecution(freshOrderJson);
     const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
     if (freshCanonicalLocationId && requestedLocationId
@@ -12278,6 +12325,74 @@ export async function getOrders(chatId) {
   });
 }
 
+
+function assessQueuedOrderPricing(chatId, order, items, expectedCurrency) {
+  const reasonCodes = new Set();
+  const lineAssessments = [];
+  // The existing POS B2B tier is local-only and is not the canonical
+  // customer-pricing rule authority. Even a Catalog-equal amount cannot
+  // prove that this local commercial context was applied correctly.
+  const hasLocalB2BPricingContext = Boolean(
+    order?.b2b_account_id || order?.b2bAccountId
+    || order?.pricing_tier_id || order?.pricingTierId
+    || order?.b2b_account_name || order?.pricing_tier_name
+  );
+  if (hasLocalB2BPricingContext) reasonCodes.add('B2B_LOCAL_PRICING_CONTEXT');
+  for (const item of items) {
+    const itemId = String(item.item_id ?? item.product_id ?? item.id ?? '').trim();
+    const submittedPriceMinor = Number(item.price);
+    if (!itemId) {
+      reasonCodes.add('CATALOG_ITEM_REFERENCE_MISSING');
+      lineAssessments.push({
+        item_id: null,
+        submitted_price_minor: Number.isInteger(submittedPriceMinor) ? submittedPriceMinor : null,
+        catalog_price_minor: null,
+        result: 'REVIEW_REQUIRED',
+        reason_code: 'CATALOG_ITEM_REFERENCE_MISSING',
+      });
+      continue;
+    }
+    const catalog = db.prepare(
+      'SELECT price_minor FROM catalog_products WHERE chat_id = ? AND product_id = ?'
+    ).get(String(chatId), itemId);
+    if (!catalog) {
+      reasonCodes.add('CATALOG_ITEM_NOT_FOUND');
+      lineAssessments.push({
+        item_id: itemId,
+        submitted_price_minor: Number.isInteger(submittedPriceMinor) ? submittedPriceMinor : null,
+        catalog_price_minor: null,
+        result: 'REVIEW_REQUIRED',
+        reason_code: 'CATALOG_ITEM_NOT_FOUND',
+      });
+      continue;
+    }
+    const catalogPriceMinor = Number(catalog.price_minor);
+    const matchesCatalog = catalogPriceMinor === submittedPriceMinor;
+    if (!matchesCatalog) reasonCodes.add('CATALOG_PRICE_MISMATCH');
+    const lineVerified = matchesCatalog && !hasLocalB2BPricingContext;
+    lineAssessments.push({
+      item_id: itemId,
+      submitted_price_minor: Number.isInteger(submittedPriceMinor) ? submittedPriceMinor : null,
+      catalog_price_minor: Number.isInteger(catalogPriceMinor) ? catalogPriceMinor : null,
+      result: lineVerified ? 'VERIFIED' : 'REVIEW_REQUIRED',
+      ...(!matchesCatalog
+        ? { reason_code: 'CATALOG_PRICE_MISMATCH' }
+        : hasLocalB2BPricingContext ? { reason_code: 'B2B_LOCAL_PRICING_CONTEXT' } : {}),
+    });
+  }
+  const verified = reasonCodes.size === 0;
+  return {
+    schema_version: 1,
+    status: verified ? 'VERIFIED' : 'REVIEW_REQUIRED',
+    source: verified ? 'CATALOG_BASE' : 'CLIENT_REPORTED',
+    verification_state: verified ? 'SERVER_VERIFIED' : 'REVIEW_REQUIRED',
+    currency: expectedCurrency,
+    evaluated_at: nowIso(),
+    reason_codes: [...reasonCodes],
+    line_assessments: lineAssessments,
+  };
+}
+
 export async function saveQueuedOrders(chatId, queuedOrders) {
   ensureDatabase();
   const key = String(chatId);
@@ -12320,6 +12435,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
           order_id: already.server_order_id,
           ...(payment?.id ? { payment_id: payment.id } : {}),
           payment_state: 'UNPAID',
+          pricing_review_status: storedOrder.pricing_review?.status || 'LEGACY_UNASSESSED',
         });
         continue;
       }
@@ -12350,6 +12466,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         if (!owned) customerId = null;
       }
       const serverOrderId = crypto.randomUUID();
+      const pricingReview = assessQueuedOrderPricing(key, order, items, expectedCurrency);
       const stored = {
         ...order,
         ...(customerId ? { customer_id: customerId } : {}),
@@ -12357,6 +12474,13 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         // order reads. It distinguishes an explicit customer binding from a
         // canonical ID inferred from name/phone during first synchronization.
         _sellifyCustomerIdProvided: Boolean(order.customer_id ?? order.customerId ?? order.customer?.id),
+        // Server-owned pricing assessment. Client-supplied pricing decisions are
+        // never trusted as verification or authorization evidence.
+        pricing_review: pricingReview,
+        // Marketplace identity is assigned only by the server-side marketplace
+        // checkout path, never by a POS/offline sync payload.
+        is_marketplace: false,
+        marketplace_order_id: null,
         items,
         total,
         currency: expectedCurrency,
@@ -12365,15 +12489,102 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         synced_at: nowIso(),
         delivered_to_device: true,
       };
+      // Discard client-authored provenance/decision fields after classifying
+      // their presence. They are not evidence and must not become future
+      // consumers' apparent authorization source.
+      delete stored.pricing_decision;
+      delete stored.pricingDecision;
+      delete stored.pricingReview;
+      delete stored.pricing_review_status;
       insertOrder(key, localId, stored);
       const canonicalPaymentId = ensureCanonicalPaymentForOrder(key, stored, serverOrderId, null);
       audit(key, 'order.synced', 'order', serverOrderId, { localId, totalMinor: total, canonicalPaymentId });
-      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId, payment_id: canonicalPaymentId, payment_state: 'UNPAID' });
+      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId, payment_id: canonicalPaymentId, payment_state: 'UNPAID', pricing_review_status: pricingReview.status });
     }
     db.exec('COMMIT');
     return results;
   } catch (error) {
     db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+
+export async function reviewOrderPricing(chatId, serverOrderId, decision, reason, actor = null) {
+  ensureDatabase();
+  const key = String(chatId);
+  const tenant = await getTenant(key);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'TENANT_NOT_FOUND' });
+  const organizationId = String(tenant.organizationId || tenant.organization_id || '');
+  if (!organizationId || authorize(actor, organizationId, null, 'orders', 'orders:pricing:review') !== AUTHZ.ALLOW) {
+    throw Object.assign(new Error('Order pricing review permission required'), { statusCode: 403, code: 'ORDER_PRICING_REVIEW_FORBIDDEN' });
+  }
+  const orderId = String(serverOrderId || '').trim();
+  const normalizedDecision = String(decision || '').trim().toUpperCase();
+  const normalizedReason = String(reason || '').trim();
+  const reviewerId = String(actor?.userId || actor?.user_id || '').trim();
+  if (!orderId) throw Object.assign(new Error('Order id is required'), { statusCode: 400, code: 'ORDER_ID_REQUIRED' });
+  if (!reviewerId) throw Object.assign(new Error('Authenticated reviewer identity is required'), { statusCode: 401, code: 'ORDER_PRICING_REVIEW_ACTOR_REQUIRED' });
+  if (!['ACCEPT_AS_SUBMITTED', 'REJECT'].includes(normalizedDecision)) {
+    throw Object.assign(new Error('Decision must be ACCEPT_AS_SUBMITTED or REJECT'), { statusCode: 400, code: 'ORDER_PRICING_REVIEW_DECISION_INVALID' });
+  }
+  if (normalizedReason.length < 10 || normalizedReason.length > 500) {
+    throw Object.assign(new Error('Review reason must be 10-500 characters'), { statusCode: 400, code: 'ORDER_PRICING_REVIEW_REASON_INVALID' });
+  }
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare(
+      'SELECT local_id, server_order_id, order_json FROM orders WHERE chat_id = ? AND server_order_id = ?'
+    ).get(key, orderId);
+    if (!row) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    // Keep internal retry-identity metadata intact when rewriting order_json.
+    const order = parseJSON(row.order_json, {});
+    const current = order.pricing_review || {
+      schema_version: 1,
+      status: 'REVIEW_REQUIRED',
+      source: 'LEGACY_UNATTRIBUTED',
+      verification_state: 'REVIEW_REQUIRED',
+      currency: normaliseCurrency(order.currency, tenantCurrency(key)),
+      evaluated_at: nowIso(),
+      reason_codes: ['LEGACY_ORDER_PRICE_UNASSESSED'],
+    };
+    const targetStatus = normalizedDecision === 'ACCEPT_AS_SUBMITTED' ? 'APPROVED' : 'REJECTED';
+    if (current.status === targetStatus
+      && current.decision === normalizedDecision
+      && current.reason === normalizedReason
+      && String(current.reviewed_by || '') === reviewerId) {
+      db.exec('COMMIT');
+      return { order_id: orderId, pricing_review: current, replayed: true };
+    }
+    if (current.status !== 'REVIEW_REQUIRED') {
+      throw Object.assign(new Error('Pricing review has already been decided'), { statusCode: 409, code: 'ORDER_PRICING_REVIEW_ALREADY_DECIDED' });
+    }
+
+    const reviewedAt = nowIso();
+    const updatedReview = {
+      ...current,
+      status: targetStatus,
+      verification_state: normalizedDecision === 'ACCEPT_AS_SUBMITTED' ? 'REVIEW_APPROVED' : 'REVIEW_REJECTED',
+      decision: normalizedDecision,
+      reason: normalizedReason,
+      reviewed_by: reviewerId,
+      reviewed_at: reviewedAt,
+    };
+    const updatedOrder = { ...order, pricing_review: updatedReview };
+    db.prepare('UPDATE orders SET order_json = ? WHERE chat_id = ? AND local_id = ?')
+      .run(json(updatedOrder), key, row.local_id);
+    audit(key, 'order.pricing_reviewed', 'order', orderId, {
+      decision: normalizedDecision,
+      reviewStatus: targetStatus,
+      reviewerId,
+      reason: normalizedReason,
+      amountMinorUnchanged: true,
+    });
+    db.exec('COMMIT');
+    return { order_id: orderId, pricing_review: updatedReview, replayed: false };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
     throw error;
   }
 }
@@ -12685,6 +12896,15 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         id: orderId,
         marketplace_order_id: marketplaceOrderId,
         is_marketplace: true,
+        pricing_review: {
+          schema_version: 1,
+          status: 'VERIFIED',
+          source: 'MARKETPLACE_CATALOG',
+          verification_state: 'SERVER_VERIFIED',
+          currency: sellerCurrency,
+          evaluated_at: nowIso(),
+          reason_codes: [],
+        },
         vendor_code: tenant.vendor_code || defaultVendorCode(sellerId),
         items: sellerItems,
         total: subtotal,
@@ -12825,6 +13045,12 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
     if (current === target) {
       db.exec('COMMIT');
       return order;
+    }
+    // Cancellation remains available as a compensating action. Any forward
+    // marketplace lifecycle transition requires a server-verified or
+    // explicitly reviewed historical order price.
+    if (target !== 'cancelled') {
+      assertOrderPricingReadyForExecution(order, 'advancing a marketplace order');
     }
     if (!MARKETPLACE_STATUS_TRANSITIONS[current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move order from ${current} to ${target}`), { statusCode: 409 });
