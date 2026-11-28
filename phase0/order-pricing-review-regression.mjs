@@ -53,6 +53,10 @@ try {
     'client-supplied pricing authorization claims must not persist as canonical order evidence');
   assert.equal(reviewRequired.pricing_review.verification_state, 'REVIEW_REQUIRED');
   assert.deepEqual(reviewRequired.pricing_review.reason_codes, ['CATALOG_PRICE_MISMATCH']);
+  assert.deepEqual(reviewRequired.pricing_review.line_assessments, [{
+    item_id: 'catalog-match', submitted_price_minor: 125, catalog_price_minor: 100,
+    result: 'REVIEW_REQUIRED', reason_code: 'CATALOG_PRICE_MISMATCH',
+  }]);
 
   assert.equal(reviewRequiredResult.pricing_review_status, 'REVIEW_REQUIRED');
 

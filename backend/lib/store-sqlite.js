@@ -12348,10 +12348,19 @@ export async function getOrders(chatId) {
 
 function assessQueuedOrderPricing(chatId, items, expectedCurrency, clientPricingClaimPresent) {
   const reasonCodes = new Set();
+  const lineAssessments = [];
   for (const item of items) {
     const itemId = String(item.item_id ?? item.product_id ?? item.id ?? '').trim();
+    const submittedPriceMinor = Number(item.price);
     if (!itemId) {
       reasonCodes.add('CATALOG_ITEM_REFERENCE_MISSING');
+      lineAssessments.push({
+        item_id: null,
+        submitted_price_minor: Number.isInteger(submittedPriceMinor) ? submittedPriceMinor : null,
+        catalog_price_minor: null,
+        result: 'REVIEW_REQUIRED',
+        reason_code: 'CATALOG_ITEM_REFERENCE_MISSING',
+      });
       continue;
     }
     const catalog = db.prepare(
@@ -12359,11 +12368,25 @@ function assessQueuedOrderPricing(chatId, items, expectedCurrency, clientPricing
     ).get(String(chatId), itemId);
     if (!catalog) {
       reasonCodes.add('CATALOG_ITEM_NOT_FOUND');
+      lineAssessments.push({
+        item_id: itemId,
+        submitted_price_minor: Number.isInteger(submittedPriceMinor) ? submittedPriceMinor : null,
+        catalog_price_minor: null,
+        result: 'REVIEW_REQUIRED',
+        reason_code: 'CATALOG_ITEM_NOT_FOUND',
+      });
       continue;
     }
-    if (Number(catalog.price_minor) !== Number(item.price)) {
-      reasonCodes.add('CATALOG_PRICE_MISMATCH');
-    }
+    const catalogPriceMinor = Number(catalog.price_minor);
+    const matchesCatalog = catalogPriceMinor === submittedPriceMinor;
+    if (!matchesCatalog) reasonCodes.add('CATALOG_PRICE_MISMATCH');
+    lineAssessments.push({
+      item_id: itemId,
+      submitted_price_minor: Number.isInteger(submittedPriceMinor) ? submittedPriceMinor : null,
+      catalog_price_minor: Number.isInteger(catalogPriceMinor) ? catalogPriceMinor : null,
+      result: matchesCatalog ? 'VERIFIED' : 'REVIEW_REQUIRED',
+      ...(matchesCatalog ? {} : { reason_code: 'CATALOG_PRICE_MISMATCH' }),
+    });
   }
   const verified = reasonCodes.size === 0;
   return {
@@ -12374,6 +12397,7 @@ function assessQueuedOrderPricing(chatId, items, expectedCurrency, clientPricing
     currency: expectedCurrency,
     evaluated_at: nowIso(),
     reason_codes: [...reasonCodes],
+    line_assessments: lineAssessments,
   };
 }
 

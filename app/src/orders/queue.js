@@ -207,8 +207,16 @@ export function ticketInnerHtml(o) {
   const b2bLine = o.b2b_account_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-building"/></svg> ${escapeHtml(o.b2b_account_name)}${o.pricing_tier_name ? ' · ' + escapeHtml(o.pricing_tier_name) : ''}</div>` : '';
   const pricingReviewStatus = String(o.pricing_review?.status || (o.server_order_id ? 'LEGACY_UNASSESSED' : '')).toUpperCase();
+  const pricingReasonLabels = {
+    CATALOG_PRICE_MISMATCH: 'Submitted line price differs from the Catalog snapshot',
+    CATALOG_ITEM_NOT_FOUND: 'Order item is not present in the current Catalog',
+    CATALOG_ITEM_REFERENCE_MISSING: 'Order line has no Catalog item reference',
+  };
+  const pricingReasonText = (o.pricing_review?.reason_codes || [])
+    .map(code => pricingReasonLabels[code] || 'Pricing evidence requires review')
+    .filter(Boolean).join(' · ');
   const pricingReviewLine = pricingReviewStatus === 'REVIEW_REQUIRED'
-    ? '<div class="ticket-customer" role="status">Price review required · fulfillment is blocked until an authorized decision</div>'
+    ? `<div class="ticket-customer" role="status">Price review required · fulfillment is blocked until an authorized decision${pricingReasonText ? ' · ' + escapeHtml(pricingReasonText) : ''}</div>`
     : pricingReviewStatus === 'LEGACY_UNASSESSED'
       ? '<div class="ticket-customer" role="status">Legacy price provenance unavailable · review required before credit or invoicing</div>'
       : pricingReviewStatus === 'APPROVED'
