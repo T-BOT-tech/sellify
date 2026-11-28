@@ -79,6 +79,13 @@ try {
   assert.equal(await store.getOrderFulfillment(tenant.chatId, reviewRequiredResult.order_id), null,
     'blocked fulfillment must not create a fulfillment record');
 
+  await assert.rejects(
+    store.transitionDeliveryAssignment(tenant.chatId, reviewRequiredResult.order_id, 'DELIVERED',
+      { userId: owner.id }, { idempotencyKey: 'pricing-review-required-assignment' }),
+    error => error.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error.statusCode === 409,
+    'courier assignment lifecycle must remain blocked while pricing review is required',
+  );
+
   const reviewer = { userId: owner.id };
   const decision = await store.reviewOrderPricing(
     tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',
@@ -130,6 +137,13 @@ try {
   );
   assert.equal(rejectedDecision.pricing_review.status, 'REJECTED');
   assert.equal(rejectedDecision.pricing_review.verification_state, 'REVIEW_REJECTED');
+
+  await assert.rejects(
+    store.transitionOrderFulfillment(tenant.chatId, unknownCatalog.server_order_id, 'out_for_delivery',
+      { userId: owner.id }, { idempotencyKey: 'pricing-review-rejected-fulfillment' }),
+    error => error.code === 'ORDER_PRICING_REVIEW_REJECTED' && error.statusCode === 409,
+    'a rejected submitted price must remain blocked from fulfillment',
+  );
 
   const permissions = getRolePermissions('manager');
   assert.ok(permissions.includes('orders:pricing:review'));
