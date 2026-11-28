@@ -5898,7 +5898,7 @@ export async function listReceivables(chatId, { customerId = '', status = 'all',
 }
 
 
-function assertOrderPricingReadyForFinancialCommitment(order) {
+function assertOrderPricingReadyForExecution(order, action = 'execution') {
   const review = order?.pricing_review;
   const serverVerified = review?.schema_version === 1
     && review.status === 'VERIFIED'
@@ -5914,8 +5914,8 @@ function assertOrderPricingReadyForFinancialCommitment(order) {
   if (serverVerified || reviewerApproved) return;
   const rejected = review?.status === 'REJECTED';
   throw Object.assign(new Error(rejected
-    ? 'A rejected order price cannot create a receivable or invoice'
-    : 'Order pricing review is required before creating a receivable or invoice'), {
+    ? `A rejected order price cannot proceed with ${action}`
+    : `Order pricing review is required before ${action}`), {
     statusCode: 409,
     code: rejected ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
   });
@@ -5939,7 +5939,7 @@ export async function createReceivable(chatId, input = {}, actor = null) {
     const order = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), sourceId);
     if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
     const orderJson = parseJSON(order.order_json, {});
-    assertOrderPricingReadyForFinancialCommitment(orderJson);
+    assertOrderPricingReadyForExecution(orderJson, 'creating a receivable');
     customerId = order.customer_id || orderJson.customer_id || null; amountMinor = Number(order.total_minor); currency = normaliseCurrency(order.currency, currency);
     creditTerms = customerId ? db.prepare(`SELECT * FROM customer_credit_terms WHERE organization_id = ? AND customer_id = ? AND status = 'APPROVED' ORDER BY updated_at DESC LIMIT 1`).get(organizationId, customerId) : null;
   }
@@ -6085,7 +6085,7 @@ export async function createInvoice(chatId, input = {}, actor = null) {
     const sourceOrder = db.prepare('SELECT order_json FROM orders WHERE chat_id = ? AND server_order_id = ?')
       .get(String(chatId), receivable.sourceId);
     if (!sourceOrder) throw Object.assign(new Error('Receivable source order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
-    assertOrderPricingReadyForFinancialCommitment(parseJSON(sourceOrder.order_json, {}));
+    assertOrderPricingReadyForExecution(parseJSON(sourceOrder.order_json, {}), 'creating an invoice');
   }
   const existing = db.prepare('SELECT id FROM invoices WHERE organization_id = ? AND receivable_id = ?').get(organizationId, receivable.id);
   if (existing) throw Object.assign(new Error('An invoice already exists for this receivable'), { statusCode: 409, code: 'INVOICE_EXISTS' });
@@ -7044,13 +7044,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       const canonicalOrderRow = db.prepare('SELECT order_json FROM orders WHERE chat_id = ? AND server_order_id = ?')
         .get(String(chatId), String(serverOrderId));
       const canonicalOrder = orderFromRow(canonicalOrderRow || {});
-      if (canonicalOrder.pricing_review?.status === 'REVIEW_REQUIRED'
-        || canonicalOrder.pricing_review?.status === 'REJECTED') {
-        throw Object.assign(new Error('Order pricing must be reviewed before confirming a service booking'), {
-          statusCode: 409, code: canonicalOrder.pricing_review.status === 'REJECTED'
-            ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
-        });
-      }
+      assertOrderPricingReadyForExecution(canonicalOrder, 'confirming a service booking');
     }
     if (actor?.actorType === 'TELEGRAM_BUYER'
       && (target !== 'CANCELLED' || !['REQUESTED', 'ACCEPTED'].includes(String(row.status)))) {
@@ -11858,13 +11852,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         return replay;
       }
       const freshOrderJson = orderFromRow(freshOrderRow);
-      if (freshOrderJson.pricing_review?.status === 'REVIEW_REQUIRED'
-        || freshOrderJson.pricing_review?.status === 'REJECTED') {
-        throw Object.assign(new Error('Order pricing must be reviewed before delivery assignment can proceed'), {
-          statusCode: 409, code: freshOrderJson.pricing_review.status === 'REJECTED'
-            ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
-        });
-      }
+      assertOrderPricingReadyForExecution(freshOrderJson, 'delivery assignment');
       // Resolve durable key reuse before validating the payload for a new command.
       // A retry with a missing/changed target must conflict against the original
       // fingerprint rather than return an unrelated target-required error.
@@ -11953,13 +11941,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     return replay;
     }
     const freshOrderJson = orderFromRow(freshOrderRow);
-    if (freshOrderJson.pricing_review?.status === 'REVIEW_REQUIRED'
-      || freshOrderJson.pricing_review?.status === 'REJECTED') {
-      throw Object.assign(new Error('Order pricing must be reviewed before delivery assignment can proceed'), {
-        statusCode: 409, code: freshOrderJson.pricing_review.status === 'REJECTED'
-          ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
-      });
-    }
+    assertOrderPricingReadyForExecution(freshOrderJson, 'delivery assignment');
     // Validate action-specific payload only after durable replay resolution.
     // Reusing a key with changed/malformed intent must produce the idempotency
     // conflict, not bypass the canonical command-history check.
@@ -12168,13 +12150,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
         statusCode: 409, code: 'FULFILLMENT_ORDER_CHANGED',
       });
     }
-    if (freshOrderJson.pricing_review?.status === 'REVIEW_REQUIRED'
-      || freshOrderJson.pricing_review?.status === 'REJECTED') {
-      throw Object.assign(new Error('Order pricing must be reviewed before fulfillment can proceed'), {
-        statusCode: 409, code: freshOrderJson.pricing_review.status === 'REJECTED'
-          ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
-      });
-    }
+    assertOrderPricingReadyForExecution(freshOrderJson, 'fulfillment');
     assertServiceDeliveryReadyForExecution(freshOrderJson);
     const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
     if (freshCanonicalLocationId && requestedLocationId

@@ -166,6 +166,48 @@ try {
     'service booking confirmation must not commit a resource while the order price is unreviewed',
   );
 
+  // Legacy canonical orders can lack the newer pricing_review projection.
+  // They must be treated as unassessed, not silently allowed to execute.
+  const [legacyExecutionResult] = await store.saveQueuedOrders(tenant.chatId, [{
+    id: 'legacy-order-execution-gate',
+    currency: 'ETB',
+    items: [{ id: 'catalog-match', name: 'Catalog Match', price: 100, qty: 1, currency: 'ETB' }],
+  }]);
+  const legacyExecutionRow = store.getDatabaseForTests().prepare(
+    'SELECT local_id, order_json FROM orders WHERE chat_id = ? AND server_order_id = ?'
+  ).get(tenant.chatId, legacyExecutionResult.order_id);
+  const legacyExecutionJson = JSON.parse(legacyExecutionRow.order_json);
+  delete legacyExecutionJson.pricing_review;
+  store.getDatabaseForTests().prepare('UPDATE orders SET order_json = ? WHERE chat_id = ? AND local_id = ?')
+    .run(JSON.stringify(legacyExecutionJson), tenant.chatId, legacyExecutionRow.local_id);
+
+  await assert.rejects(
+    store.transitionOrderFulfillment(tenant.chatId, legacyExecutionResult.order_id, 'out_for_delivery',
+      { userId: owner.id }, { idempotencyKey: 'legacy-pricing-review-fulfillment' }),
+    error => error.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error.statusCode === 409,
+    'legacy orders without a pricing assessment must not enter fulfillment',
+  );
+  await assert.rejects(
+    store.transitionDeliveryAssignment(tenant.chatId, legacyExecutionResult.order_id, 'DELIVERED',
+      { userId: owner.id }, { idempotencyKey: 'legacy-pricing-review-assignment' }),
+    error => error.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error.statusCode === 409,
+    'legacy orders without a pricing assessment must not enter courier assignment',
+  );
+  const legacyServiceRequest = await store.createServiceBooking(tenant.chatId, legacyExecutionResult.order_id, {
+    service_item_id: 'catalog-match',
+    requested_start: '2026-12-01T11:00:00+03:00',
+    requested_end: '2026-12-01T12:00:00+03:00',
+    appointment_mode: 'REMOTE',
+    idempotency_key: 'legacy-pricing-review-booking-request',
+  }, reviewer);
+  await assert.rejects(
+    store.transitionServiceBooking(tenant.chatId, legacyExecutionResult.order_id, legacyServiceRequest.booking.id,
+      { status: 'CONFIRMED', expected_version: 1, service_resource_id: 'unused-resource',
+        idempotency_key: 'legacy-pricing-review-booking-confirm' }, reviewer),
+    error => error.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error.statusCode === 409,
+    'legacy orders without a pricing assessment must not confirm service commitments',
+  );
+
   const [forgedMarketplaceResult] = await store.saveQueuedOrders(tenant.chatId, [{
     id: 'client-cannot-claim-marketplace',
     is_marketplace: true,
