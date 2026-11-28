@@ -11941,7 +11941,11 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     return replay;
     }
     const freshOrderJson = orderFromRow(freshOrderRow);
-    assertOrderPricingReadyForExecution(freshOrderJson, 'delivery assignment');
+    // Cancellation/failure are compensating actions, not new execution.
+    // Keep them available so an unreviewed order can still be safely stopped.
+    if (!['CANCELLED', 'FAILED'].includes(normalizedAction)) {
+      assertOrderPricingReadyForExecution(freshOrderJson, 'delivery assignment');
+    }
     // Validate action-specific payload only after durable replay resolution.
     // Reusing a key with changed/malformed intent must produce the idempotency
     // conflict, not bypass the canonical command-history check.
