@@ -46,6 +46,30 @@ await assert.rejects(
   error => error?.code === 'PO_ALREADY_EXISTS' && error?.statusCode === 409
 );
 
+// Mandatory creation audit failure must roll back the PO header and item rows.
+const secondQuote = await store.createQuote(chatId, {
+  customerId: customer.id, items: [{ productId: 'cement', quantity: 1 }],
+}, { userId: user.id });
+await store.transitionQuote(chatId, secondQuote.id, 'SENT', { userId: user.id });
+await store.transitionQuote(chatId, secondQuote.id, 'ACCEPTED', { userId: user.id });
+const auditDb = store.getDatabaseForTests();
+auditDb.exec(`
+  CREATE TRIGGER fail_b2b_po_audit_insert
+  BEFORE INSERT ON audit_events
+  WHEN NEW.entity_type = 'purchase_order'
+  BEGIN SELECT RAISE(ABORT, 'forced purchase order audit failure'); END;
+`);
+try {
+  await assert.rejects(
+    () => store.createPurchaseOrder(chatId, { quoteId: secondQuote.id }, { userId: user.id }),
+    /forced purchase order audit failure/
+  );
+  assert.equal(auditDb.prepare('SELECT COUNT(*) AS n FROM purchase_orders WHERE quote_id = ?').get(secondQuote.id).n, 0);
+  assert.equal(auditDb.prepare('SELECT COUNT(*) AS n FROM purchase_order_items WHERE purchase_order_id IN (SELECT id FROM purchase_orders WHERE quote_id = ?)').get(secondQuote.id).n, 0);
+} finally {
+  auditDb.exec('DROP TRIGGER IF EXISTS fail_b2b_po_audit_insert');
+}
+
 const submitted = await store.transitionPurchaseOrder(chatId, po.id, 'SUBMITTED', { userId: user.id });
 assert.equal(submitted.status, 'SUBMITTED');
 assert.ok(submitted.submittedAt);

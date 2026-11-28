@@ -72,6 +72,25 @@ assert.equal(listed.length, 1);
 assert.equal(listed[0].id, pending.id);
 
 const db = store.getDatabaseForTests();
+// Concurrent receivable creation must serialize the credit-limit read/check/write.
+const raceTerms = await store.createCreditTerms(chatId, {
+  customerId: business2.id, creditLimitMinor: 10000, paymentDueDays: 30, requiresPo: false,
+}, { userId: user.id });
+await store.transitionCreditTerms(chatId, raceTerms.id, 'APPROVED', { userId: user.id });
+const raceOrders = await store.saveQueuedOrders(chatId, [
+  { id: `credit-race-a-${Date.now()}`, customer_id: business2.id, currency: 'ETB', items: [{ id: 'race-a', name: 'Race A', price: 6000, qty: 1 }], total: 6000 },
+  { id: `credit-race-b-${Date.now()}`, customer_id: business2.id, currency: 'ETB', items: [{ id: 'race-b', name: 'Race B', price: 6000, qty: 1 }], total: 6000 },
+]);
+assert.deepEqual(raceOrders.map(order => order.status), ['synced', 'synced']);
+const raceResults = await Promise.allSettled(raceOrders.map(order => store.createReceivable(chatId, {
+  sourceType: 'order', sourceId: order.order_id,
+}, { userId: user.id })));
+assert.equal(raceResults.filter(result => result.status === 'fulfilled').length, 1);
+assert.equal(raceResults.filter(result => result.status === 'rejected' && result.reason?.code === 'CREDIT_LIMIT_EXCEEDED').length, 1);
+const raceExposure = db.prepare(`SELECT COALESCE(SUM(outstanding_minor), 0) AS total FROM accounts_receivable WHERE customer_id = ?`).get(business2.id);
+assert.equal(Number(raceExposure.total), 6000);
+
+
 assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 17').get()?.version, 17);
 
 const buyer = { userId: 'buyer-1', role: 'buyer', organizationId: tenant.organizationId };
