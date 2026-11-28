@@ -7040,6 +7040,18 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       const replay=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=?').get(String(bookingId),organizationId);
       db.exec('COMMIT'); return {booking:serviceBookingFromRow(replay),replayed:true};
     }
+    if (target === 'CONFIRMED') {
+      const canonicalOrderRow = db.prepare('SELECT order_json FROM orders WHERE chat_id = ? AND server_order_id = ?')
+        .get(String(chatId), String(serverOrderId));
+      const canonicalOrder = orderFromRow(canonicalOrderRow || {});
+      if (canonicalOrder.pricing_review?.status === 'REVIEW_REQUIRED'
+        || canonicalOrder.pricing_review?.status === 'REJECTED') {
+        throw Object.assign(new Error('Order pricing must be reviewed before confirming a service booking'), {
+          statusCode: 409, code: canonicalOrder.pricing_review.status === 'REJECTED'
+            ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
+        });
+      }
+    }
     if (actor?.actorType === 'TELEGRAM_BUYER'
       && (target !== 'CANCELLED' || !['REQUESTED', 'ACCEPTED'].includes(String(row.status)))) {
       throw Object.assign(new Error('Customers may cancel only requested or accepted appointments'), {

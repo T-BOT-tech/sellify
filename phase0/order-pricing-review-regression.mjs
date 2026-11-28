@@ -123,6 +123,37 @@ try {
     error => error.code === 'ORDER_PRICING_REVIEW_REASON_INVALID',
   );
 
+  const [serviceOrderResult] = await store.saveQueuedOrders(tenant.chatId, [{
+    id: 'service-price-review-required',
+    currency: 'ETB',
+    items: [{ id: 'service-unlisted', name: 'Unlisted Service', price: 300, qty: 1, item_type: 'service' }],
+  }]);
+  const serviceBooking = await store.createServiceBooking(tenant.chatId, serviceOrderResult.order_id, {
+    service_item_id: 'service-unlisted',
+    requested_start: '2026-12-01T09:00:00+03:00',
+    requested_end: '2026-12-01T10:00:00+03:00',
+    appointment_mode: 'REMOTE',
+    idempotency_key: 'service-booking-price-review-request',
+  }, reviewer);
+  assert.equal(serviceBooking.booking.status, 'REQUESTED',
+    'a service request may be recorded without treating it as authorization to commit');
+  const acceptedServiceRequest = await store.transitionServiceBooking(
+    tenant.chatId, serviceOrderResult.order_id, serviceBooking.booking.id,
+    { status: 'ACCEPTED', expected_version: 1, idempotency_key: 'service-booking-price-review-accept' },
+    reviewer,
+  );
+  assert.equal(acceptedServiceRequest.booking.status, 'ACCEPTED');
+  await assert.rejects(
+    store.transitionServiceBooking(
+      tenant.chatId, serviceOrderResult.order_id, serviceBooking.booking.id,
+      { status: 'CONFIRMED', expected_version: 2, service_resource_id: 'unused-resource',
+        idempotency_key: 'service-booking-price-review-confirm' },
+      reviewer,
+    ),
+    error => error.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error.statusCode === 409,
+    'service booking confirmation must not commit a resource while the order price is unreviewed',
+  );
+
   const [unknownCatalogResult] = await store.saveQueuedOrders(tenant.chatId, [{
     id: 'unknown-catalog-item',
     currency: 'ETB',
