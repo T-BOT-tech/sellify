@@ -64,7 +64,9 @@ try {
   const [inferredCreated] = await store.saveQueuedOrders(tenant.chatId, [inferredCustomerOrder]);
   const inferredStored = (await store.getOrders(tenant.chatId)).find(order => order.id === inferredCustomerOrder.id);
   await store.reviewOrderPricing(tenant.chatId, inferredCreated.order_id, 'ACCEPT_AS_SUBMITTED',
-    'Reviewed inferred customer order price and accepted it.', { userId: owner.id });
+    'Reviewed inferred customer order price and accepted it.', {
+      userId: owner.id, role: 'owner', organizationId: tenant.organizationId, chatId: tenant.chatId,
+    });
   const [inferredRetry] = await store.saveQueuedOrders(tenant.chatId, [structuredClone(inferredCustomerOrder)]);
   assert.equal(inferredRetry.status, 'synced');
   assert.equal(inferredRetry.order_id, inferredCreated.order_id);
