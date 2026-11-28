@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -134,6 +135,16 @@ try {
   assert.ok(!getRolePermissions('cashier').includes('orders:pricing:review'));
   assert.ok(!getRolePermissions('buyer').includes('orders:pricing:review'));
   assert.ok(!getRolePermissions('staff').includes('orders:pricing:review'));
+
+
+  const queueSource = await readFile(new URL('../app/src/orders/queue.js', import.meta.url), 'utf8');
+  assert.match(queueSource, /Price review required/);
+  assert.match(queueSource, /data-order-pricing-review/);
+  assert.match(queueSource, /orders:pricing:review/);
+  assert.match(queueSource, /\/pricing-review/);
+  const clientPermissions = await readFile(new URL('../app/src/auth/permissions.js', import.meta.url), 'utf8');
+  assert.match(clientPermissions, /manager:\s*\[[\s\S]*?orders:pricing:review/);
+  assert.doesNotMatch(clientPermissions, /cashier:\s*\[[^\]]*orders:pricing:review/);
 
   const syncedPayment = await store.getPayment(tenant.chatId, reviewRequiredResult.payment_id);
   assert.equal(syncedPayment.state, 'UNPAID', 'pricing review must not mutate Payment Core state');

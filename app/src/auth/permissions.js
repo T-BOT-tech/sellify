@@ -18,7 +18,7 @@
 const PERMISSIONS = {
   owner: ['*'],
   manager: [
-    'orders:create', 'orders:view', 'orders:delete', 'payments:accept',
+    'orders:create', 'orders:view', 'orders:delete', 'orders:pricing:review', 'payments:accept',
     'payments:view_proof', 'inventory:add', 'inventory:edit', 'sync:manual',
     'settings:configure', 'paymethods:manage',
     'tables:manage', 'tables:status', 'kitchen:manage', 'b2b:manage', 'compliance:manage', 'membership:role:manage', 'b2b:quotes:view', 'b2b:quotes:manage', 'devices:manage', 'audit:view'
