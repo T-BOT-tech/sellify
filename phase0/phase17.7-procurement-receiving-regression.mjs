@@ -34,21 +34,7 @@ const r1=await createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId:l
 assert.equal(r1.status,'POSTED'); assert.equal(r1.lines[0].receivedQuantity,39);
 const after1=db.prepare("SELECT COALESCE(SUM(quantity),0) q FROM inventory_movements WHERE organization_id=? AND product_id=? AND location_id=?").get(buyer.tenant.organization_id,productId,location.id).q; assert.equal(Number(after1)-Number(before),40);
 const same=await createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId:location.id,idempotencyKey:'receipt-177-a',items:[{purchaseOrderItemId:po.items[0].id,receivedQuantity:39}]},buyer.actor); assert.equal(same.id,r1.id);
-// Simulate a pre-v2 receipt hash to prove legacy retries remain compatible.
-// The stored immutable receipt lines must still be compared because the old
-// hash did not cover nested item quantities.
-const legacyHashInput = {
-  purchaseOrderId: po.id, locationId: location.id, receivedAt: null, notes: '',
-  items: [{ purchaseOrderItemId: po.items[0].id, productId, receivedQuantity: 39, notes: '' }],
-};
-const legacyHash = createHash('sha256')
-  .update(JSON.stringify(legacyHashInput, Object.keys(legacyHashInput).sort())).digest('hex');
-db.prepare('UPDATE procurement_receipts SET request_hash=? WHERE id=?').run(legacyHash, r1.id);
-const legacyRetry = await createProcurementReceipt(buyer.tenant.chat_id, po.id, {
-  locationId: location.id, idempotencyKey: 'receipt-177-a',
-  items: [{ purchaseOrderItemId: po.items[0].id, receivedQuantity: 39 }],
-}, buyer.actor);
-assert.equal(legacyRetry.id, r1.id); const countAfterRetry=db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE organization_id=? AND product_id=? AND location_id=? AND reference_type='procurement_receipt' AND reference_id=?").get(buyer.tenant.organization_id,productId,location.id,r1.id).c; assert.equal(countAfterRetry,1);
+ const countAfterRetry=db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE organization_id=? AND product_id=? AND location_id=? AND reference_type='procurement_receipt' AND reference_id=?").get(buyer.tenant.organization_id,productId,location.id,r1.id).c; assert.equal(countAfterRetry,1);
 await assert.rejects(
   () => createProcurementReceipt(buyer.tenant.chat_id, po.id, {
     locationId: location.id, idempotencyKey: 'receipt-177-a',
@@ -90,6 +76,29 @@ db.exec('DROP TRIGGER fail_second_receipt_movement');
 assert.equal(db.prepare('SELECT status FROM procurement_receipts WHERE id=?').get(batchReceipt.id).status, 'PENDING');
 assert.equal(db.prepare('SELECT COUNT(*) c FROM inventory_movements WHERE reference_type=? AND reference_id=?').get('procurement_receipt', batchReceipt.id).c, 0,
   'all Inventory movements must roll back when any receipt line fails');
+// Simulate a pre-v2 pending receipt. The legacy hash omits nested line fields,
+// so stored immutable lines must be checked before allowing a retry.
+const legacyBatchHashInput = {
+  purchaseOrderId: po.id, locationId: location.id, receivedAt: null, notes: '',
+  items: [
+    { purchaseOrderItemId: firstBatchItemId, productId, receivedQuantity: 2, notes: '' },
+    { purchaseOrderItemId: secondBatchItemId, productId: secondProductId, receivedQuantity: 3, notes: '' },
+  ],
+};
+const legacyBatchHash = createHash('sha256')
+  .update(JSON.stringify(legacyBatchHashInput, Object.keys(legacyBatchHashInput).sort())).digest('hex');
+db.prepare('UPDATE procurement_receipts SET request_hash=? WHERE id=?').run(legacyBatchHash, batchReceipt.id);
+await assert.rejects(
+  () => createProcurementReceipt(buyer.tenant.chat_id, po.id, {
+    ...batchReceipt,
+    items: [
+      { purchaseOrderItemId: firstBatchItemId, receivedQuantity: 1 },
+      { purchaseOrderItemId: secondBatchItemId, receivedQuantity: 3 },
+    ],
+  }, buyer.actor),
+  e => e?.code === 'IDEMPOTENCY_KEY_REUSED' && e?.statusCode === 409,
+  'legacy hash must not permit changed nested receipt-line quantities',
+);
 const recoveredReceipt = await createProcurementReceipt(buyer.tenant.chat_id, po.id, batchReceipt, buyer.actor);
 assert.equal(recoveredReceipt.id, batchReceipt.id);
 assert.equal(recoveredReceipt.status, 'POSTED');
