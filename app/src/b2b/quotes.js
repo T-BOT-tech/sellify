@@ -38,7 +38,7 @@ export async function loadQuoteFormOptions() {
   try {
     const [customerData, catalogData] = await Promise.all([
       request(`/tenants/${encodeURIComponent(config.chatId)}/customers?status=active&limit=200`),
-      request(`/tenants/${encodeURIComponent(config.chatId)}/catalog`),
+      request(`/catalog/${encodeURIComponent(config.chatId)}`),
     ]);
     const customers = (customerData.customers || []).filter(c => String(c.customerType || '').toLowerCase() === 'business');
     const products = catalogData.products || [];
