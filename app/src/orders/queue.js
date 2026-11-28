@@ -524,7 +524,7 @@ export async function openOrderPricingReview(serverOrderId, decision) {
   const order = orders.find(item => String(item.server_order_id || '') === String(serverOrderId));
   if (!order || !config.chatId || !config.syncUrl) return;
   if (!hasPermission(currentStaff ? currentStaff.role : 'owner', 'orders:pricing:review')) return;
-  if (String(order.pricing_review?.status || '').toUpperCase() !== 'REVIEW_REQUIRED') return;
+  if (!['REVIEW_REQUIRED', 'LEGACY_UNASSESSED'].includes(String(order.pricing_review?.status || 'LEGACY_UNASSESSED').toUpperCase())) return;
   const reason = window.prompt('Enter the reason for this pricing decision (10–500 characters):');
   if (reason === null) return;
   try {

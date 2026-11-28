@@ -29,6 +29,44 @@ assert.equal(invoice.totalMinor, 500);
 assert.equal(invoice.currency, 'ETB');
 assert.equal(invoice.items.length, 1);
 assert.equal(invoice.items[0].lineTotalMinor, 500);
+
+const rejectedSync = await store.saveQueuedOrders(chatId, [{
+  id: `invoice-rejected-price-${Date.now()}`,
+  customer_id: customer.id,
+  currency: 'ETB',
+  items: [{ id: 'p1', name: 'Invoice Product', price: 300, qty: 1 }],
+}]);
+assert.equal(rejectedSync[0].status, 'synced');
+await store.reviewOrderPricing(chatId, rejectedSync[0].order_id, 'REJECT',
+  'Submitted price rejected because it is unsupported by available evidence.', { userId: user.id });
+await assert.rejects(
+  () => store.createReceivable(chatId, { sourceType: 'order', sourceId: rejectedSync[0].order_id }, { userId: user.id }),
+  error => error?.code === 'ORDER_PRICING_REVIEW_REJECTED' && error?.statusCode === 409,
+);
+
+const legacySync = await store.saveQueuedOrders(chatId, [{
+  id: `invoice-legacy-price-${Date.now()}`,
+  customer_id: customer.id,
+  currency: 'ETB',
+  items: [{ id: 'p1', name: 'Invoice Product', price: 275, qty: 1 }],
+}]);
+assert.equal(legacySync[0].status, 'synced');
+const orderDb = store.getDatabaseForTests();
+const legacyRow = orderDb.prepare('SELECT local_id, order_json FROM orders WHERE server_order_id = ?').get(legacySync[0].order_id);
+const legacyJson = JSON.parse(legacyRow.order_json);
+delete legacyJson.pricing_review;
+orderDb.prepare('UPDATE orders SET order_json = ? WHERE chat_id = ? AND local_id = ?')
+  .run(JSON.stringify(legacyJson), chatId, legacyRow.local_id);
+await assert.rejects(
+  () => store.createReceivable(chatId, { sourceType: 'order', sourceId: legacySync[0].order_id }, { userId: user.id }),
+  error => error?.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error?.statusCode === 409,
+);
+const legacyDecision = await store.reviewOrderPricing(chatId, legacySync[0].order_id, 'ACCEPT_AS_SUBMITTED',
+  'Reviewed legacy order price and explicitly accepted the submitted amount.', { userId: user.id });
+assert.equal(legacyDecision.pricing_review.source, 'LEGACY_UNATTRIBUTED');
+assert.equal(legacyDecision.pricing_review.status, 'APPROVED');
+await store.createReceivable(chatId, { sourceType: 'order', sourceId: legacySync[0].order_id }, { userId: user.id });
+
 const issued = await store.transitionInvoice(chatId, invoice.id, 'ISSUED', { userId: user.id });
 assert.equal(issued.status, 'ISSUED');
 await assert.rejects(() => store.transitionInvoice(chatId, invoice.id, 'DRAFT', { userId: user.id }), e => e?.code === 'INVALID_INVOICE_TRANSITION' && e?.statusCode === 409);
