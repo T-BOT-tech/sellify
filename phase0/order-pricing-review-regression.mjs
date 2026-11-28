@@ -202,6 +202,11 @@ try {
   assert.ok(!getRolePermissions('staff').includes('orders:pricing:review'));
 
 
+  const serverSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
+  assert.ok(serverSource.includes("method: 'PATCH', pattern: /^\\/orders\\/([^/]+)\\/([^/]+)\\/pricing-review$/"));
+  assert.ok(serverSource.includes("requireAuthorization(session, tenant, 'orders', 'orders:pricing:review'"));
+  assert.ok(serverSource.includes("reviewOrderPricing(chatId, orderId, body.decision, body.reason, session)"));
+
   const queueSource = await readFile(new URL('../app/src/orders/queue.js', import.meta.url), 'utf8');
   assert.match(queueSource, /Price review required/);
   assert.match(queueSource, /data-order-pricing-review/);
