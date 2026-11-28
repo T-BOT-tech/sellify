@@ -5879,7 +5879,7 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
       throw Object.assign(new Error('Procurement receipt is not in a postable state'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_PENDING' });
     }
 
-    const lines = db.prepare('SELECT * FROM procurement_receipt_lines WHERE receipt_id = ? ORDER BY created_at, id')
+    const lines = db.prepare('SELECT * FROM procurement_receipt_lines WHERE receipt_id = ? ORDER BY rowid')
       .all(receiptId);
     if (!lines.length) throw Object.assign(new Error('Pending procurement receipt has no lines'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_LINES_MISSING' });
     for (const line of lines) {
