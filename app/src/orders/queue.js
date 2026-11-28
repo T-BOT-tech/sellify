@@ -218,7 +218,7 @@ export function ticketInnerHtml(o) {
   const pricingReviewLine = pricingReviewStatus === 'REVIEW_REQUIRED'
     ? `<div class="ticket-customer" role="status">Price review required · fulfillment is blocked until an authorized decision${pricingReasonText ? ' · ' + escapeHtml(pricingReasonText) : ''}</div>`
     : pricingReviewStatus === 'LEGACY_UNASSESSED'
-      ? '<div class="ticket-customer" role="status">Legacy price provenance unavailable · review required before credit or invoicing</div>'
+      ? '<div class="ticket-customer" role="status">Legacy price provenance unavailable · review required before fulfillment, credit or invoicing</div>'
       : pricingReviewStatus === 'APPROVED'
       ? '<div class="ticket-customer">Price accepted after authorized review</div>'
       : pricingReviewStatus === 'REJECTED'

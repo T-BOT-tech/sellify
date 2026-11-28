@@ -185,6 +185,27 @@ try {
     'service booking confirmation must not commit a resource while the order price is unreviewed',
   );
 
+  const [legacyMarketplaceResult] = await store.saveQueuedOrders(tenant.chatId, [{
+    id: 'legacy-marketplace-pricing-gate',
+    currency: 'ETB',
+    items: [{ id: 'catalog-match', name: 'Catalog Match', price: 100, qty: 1, currency: 'ETB' }],
+  }]);
+  const legacyMarketplaceRow = store.getDatabaseForTests().prepare(
+    'SELECT local_id, order_json FROM orders WHERE chat_id = ? AND server_order_id = ?'
+  ).get(tenant.chatId, legacyMarketplaceResult.order_id);
+  const legacyMarketplaceJson = JSON.parse(legacyMarketplaceRow.order_json);
+  delete legacyMarketplaceJson.pricing_review;
+  legacyMarketplaceJson.is_marketplace = true;
+  legacyMarketplaceJson.marketplace_order_id = 'legacy-marketplace-order';
+  store.getDatabaseForTests().prepare(
+    'UPDATE orders SET order_json = ?, is_marketplace = 1, marketplace_order_id = ? WHERE chat_id = ? AND local_id = ?'
+  ).run(JSON.stringify(legacyMarketplaceJson), 'legacy-marketplace-order', tenant.chatId, legacyMarketplaceRow.local_id);
+  await assert.rejects(
+    store.updateMarketplaceOrderStatus(tenant.chatId, legacyMarketplaceRow.local_id, 'confirmed'),
+    error => error.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error.statusCode === 409,
+    'legacy marketplace orders without a pricing assessment must not advance',
+  );
+
   // Legacy canonical orders can lack the newer pricing_review projection.
   // They must be treated as unassessed, not silently allowed to execute.
   const [legacyExecutionResult] = await store.saveQueuedOrders(tenant.chatId, [{

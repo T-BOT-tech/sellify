@@ -13042,6 +13042,12 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
       db.exec('COMMIT');
       return order;
     }
+    // Cancellation remains available as a compensating action. Any forward
+    // marketplace lifecycle transition requires a server-verified or
+    // explicitly reviewed historical order price.
+    if (target !== 'cancelled') {
+      assertOrderPricingReadyForExecution(order, 'advancing a marketplace order');
+    }
     if (!MARKETPLACE_STATUS_TRANSITIONS[current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move order from ${current} to ${target}`), { statusCode: 409 });
     }
