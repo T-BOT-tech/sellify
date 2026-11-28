@@ -87,7 +87,7 @@ const raceResults = await Promise.allSettled(raceOrders.map(order => store.creat
 }, { userId: user.id })));
 assert.equal(raceResults.filter(result => result.status === 'fulfilled').length, 1);
 assert.equal(raceResults.filter(result => result.status === 'rejected' && result.reason?.code === 'CREDIT_LIMIT_EXCEEDED').length, 1);
-const raceExposure = db.prepare(`SELECT COALESCE(SUM(outstanding_minor), 0) AS total FROM accounts_receivable WHERE organization_id = ? AND customer_id = ?`).get(tenant.organizationId, business2.id);
+const raceExposure = db.prepare(`SELECT COALESCE(SUM(outstanding_minor), 0) AS total FROM accounts_receivable WHERE customer_id = ?`).get(business2.id);
 assert.equal(Number(raceExposure.total), 6000);
 
 
