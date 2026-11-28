@@ -12495,7 +12495,8 @@ export async function reviewOrderPricing(chatId, serverOrderId, decision, reason
   const key = String(chatId);
   const tenant = await getTenant(key);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'TENANT_NOT_FOUND' });
-  if (authorize(actor, tenant, null, 'orders', 'orders:pricing:review') !== AUTHZ.ALLOW) {
+  const organizationId = String(tenant.organizationId || tenant.organization_id || '');
+  if (!organizationId || authorize(actor, organizationId, null, 'orders', 'orders:pricing:review') !== AUTHZ.ALLOW) {
     throw Object.assign(new Error('Order pricing review permission required'), { statusCode: 403, code: 'ORDER_PRICING_REVIEW_FORBIDDEN' });
   }
   const orderId = String(serverOrderId || '').trim();
