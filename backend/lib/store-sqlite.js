@@ -5594,7 +5594,10 @@ export async function createPurchaseOrder(chatId, input = {}, actor = null) {
   if (sourceType === 'PROCUREMENT_AWARD') {
     return createPurchaseOrderFromProcurementAward(chatId, input, actor);
   }
-  const quoteId = String(input.quoteId ?? input.quote_id ?? '').trim();
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const quoteId = String(input.quoteId ?? input.quote_id ?? '').trim();
   if (!quoteId) throw Object.assign(new Error('quoteId is required'), { statusCode: 400, code: 'PO_QUOTE_REQUIRED' });
   const quote = getQuoteByIdSync(organizationId, quoteId);
   if (!quote) throw Object.assign(new Error('Quote not found'), { statusCode: 404, code: 'QUOTE_NOT_FOUND' });
@@ -5604,18 +5607,19 @@ export async function createPurchaseOrder(chatId, input = {}, actor = null) {
   const buyerReference = String(input.buyerReference ?? input.buyer_reference ?? '').trim();
   const id = String(input.id || crypto.randomUUID());
   const poNumber = String(input.poNumber ?? input.po_number ?? '').trim() || nextPurchaseOrderNumber(organizationId);
-  const now = nowIso();
-  db.exec('BEGIN');
-  try {
+    const now = nowIso();
     db.prepare(`INSERT INTO purchase_orders (id, organization_id, customer_id, quote_id, procurement_award_id, supplier_organization_id, source_type, po_number, currency, status, subtotal_minor, total_minor, buyer_reference, notes, rejection_reason, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, NULL, 'B2B_QUOTE', ?, ?, 'DRAFT', ?, ?, ?, ?, '', ?, ?, ?)`).run(
       id, organizationId, quote.customerId, quote.id, poNumber, quote.currency, quote.subtotalMinor, quote.totalMinor,
       buyerReference, String(input.notes || ''), actor?.userId || null, now, now
     );
     const stmt = db.prepare(`INSERT INTO purchase_order_items (id, purchase_order_id, product_id, description, quantity, unit_price_minor, currency, line_total_minor, quote_item_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const item of quote.items) stmt.run(crypto.randomUUID(), id, item.productId, item.description, item.quantity, item.unitPriceMinor, item.currency, item.lineTotalMinor, item.id, now);
-    db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
-  audit(String(chatId), 'b2b.purchase-order.created', 'purchase_order', id, { poNumber, quoteId, customerId: quote.customerId, totalMinor: quote.totalMinor, currency: quote.currency, sourceType: 'B2B_QUOTE' }, { organizationId, actorId: actor?.userId || null });
+    audit(String(chatId), 'b2b.purchase-order.created', 'purchase_order', id, { poNumber, quoteId, customerId: quote.customerId, totalMinor: quote.totalMinor, currency: quote.currency, sourceType: 'B2B_QUOTE' }, { organizationId, actorId: actor?.userId || null });
+    if (ownsTransaction) db.exec('COMMIT');
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
   return getPurchaseOrderByIdSync(organizationId, id);
 }
 
@@ -5900,7 +5904,10 @@ export async function listReceivables(chatId, { customerId = '', status = 'all',
 export async function createReceivable(chatId, input = {}, actor = null) {
   ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
-  const sourceType = String(input.sourceType || input.source_type || '').toLowerCase();
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const sourceType = String(input.sourceType || input.source_type || '').toLowerCase();
   const sourceId = String(input.sourceId || input.source_id || '');
   if (!['purchase_order', 'order'].includes(sourceType) || !sourceId) throw Object.assign(new Error('sourceType must be purchase_order or order and sourceId is required'), { statusCode: 400, code: 'INVALID_AR_SOURCE' });
 
@@ -5927,18 +5934,19 @@ export async function createReceivable(chatId, input = {}, actor = null) {
   if (existing) throw Object.assign(new Error('A receivable already exists for this source'), { statusCode: 409, code: 'AR_EXISTS' });
   const open = db.prepare(`SELECT COALESCE(SUM(outstanding_minor),0) AS outstanding FROM accounts_receivable WHERE organization_id = ? AND customer_id = ? AND status IN ('OPEN','PARTIAL','OVERDUE')`).get(organizationId, customerId);
   if (Number(open.outstanding) + amountMinor > Number(creditTerms.credit_limit_minor)) throw Object.assign(new Error('Receivable would exceed the customer credit limit'), { statusCode: 409, code: 'CREDIT_LIMIT_EXCEEDED' });
-  const now = nowIso(); const id = crypto.randomUUID(); const dueAt = input.dueAt || input.due_at || addDaysIso(now, Number(creditTerms.payment_due_days));
-  db.exec('BEGIN IMMEDIATE');
-  try {
+    const now = nowIso(); const id = crypto.randomUUID(); const dueAt = input.dueAt || input.due_at || addDaysIso(now, Number(creditTerms.payment_due_days));
     db.prepare(`INSERT INTO accounts_receivable (id, organization_id, location_id, customer_id, credit_terms_id, source_type, source_id, currency, amount_minor, outstanding_minor, due_at, status, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)`).run(
       id, organizationId, locationId, customerId, creditTerms.id, sourceType, sourceId, currency, amountMinor, amountMinor, String(dueAt), String(input.notes || ''), actor?.userId || null, now, now
     );
     db.prepare(`INSERT INTO ar_ledger_entries (id, receivable_id, organization_id, entry_type, amount_minor, currency, from_status, to_status, payment_id, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CHARGE', ?, ?, NULL, 'OPEN', NULL, ?, ?, ?, ?)`).run(
       crypto.randomUUID(), id, organizationId, amountMinor, currency, actor?.userId || null, String(input.reason || ''), json({ sourceType, sourceId }), now
     );
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
-  audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
+    audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
+    if (ownsTransaction) db.exec('COMMIT');
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
   return getReceivable(chatId, id);
 }
 
