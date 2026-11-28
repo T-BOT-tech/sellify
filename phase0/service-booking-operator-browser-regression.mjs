@@ -56,7 +56,7 @@ try {
 
   const booking = {
     id: 'booking-1',
-    service_item_id: 'consultation',
+    service_item_id: 'haircut',
     status: 'REQUESTED',
     version: 1,
     appointment_mode: 'REMOTE',
@@ -153,7 +153,7 @@ try {
       currentStaffRole: 'owner',
       contextualRoles: [],
     });
-    state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Consultation' }]);
+    state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Haircut' }]);
     const logisticsUI = await import('/src/logistics/ui.js');
     logisticsUI.applyLogisticsUI();
     const ownerWithServices = document.getElementById('navAppointments').style.display !== 'none';
@@ -171,7 +171,7 @@ try {
     state.setProducts([]);
     logisticsUI.applyLogisticsUI();
     const ownerWithoutServices = document.getElementById('navAppointments').style.display !== 'none';
-    state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Consultation' }]);
+    state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Haircut' }]);
     state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
     logisticsUI.applyLogisticsUI();
     state.setOrders([{

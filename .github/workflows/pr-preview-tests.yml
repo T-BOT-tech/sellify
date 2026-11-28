@@ -1,0 +1,268 @@
+name: Sellify PR preview tests
+
+on:
+  push:
+    branches:
+      - feature/workforce-capability-20261124
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Preview/test profile to run
+        required: true
+        type: choice
+        options:
+          - backend-only
+          - frontend-only
+          - full-stack
+          - migration
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sellify-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    outputs:
+      profile: ${{ steps.classify.outputs.profile }}
+      profiles: ${{ steps.classify.outputs.profiles }}
+      backend_sha: ${{ steps.classify.outputs.backend_sha }}
+      frontend_sha: ${{ steps.classify.outputs.frontend_sha }}
+      base_sha: ${{ steps.classify.outputs.base_sha }}
+    steps:
+      - name: Checkout exact PR revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Classify preview profile and component revisions
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REQUESTED_PROFILE: ${{ inputs.profile }}
+        run: |
+          set -euo pipefail
+          base_sha="$PR_BASE_SHA"
+          head_sha="$PR_HEAD_SHA"
+          profile="$REQUESTED_PROFILE"
+          profiles="[\"$profile\"]"
+          backend_sha="$head_sha"
+          frontend_sha="$head_sha"
+          backend_changed=false
+          frontend_changed=false
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git cat-file -e "${base_sha}^{commit}"
+            mapfile -t changed < <(git diff --name-only "${base_sha}...${head_sha}")
+            node phase0/sellify-preview-profile-regression.mjs
+            classification="$(node scripts/sellify-preview-profile.mjs "$PR_BRANCH" "${changed[@]}")"
+            profile="$(node -e 'console.log(JSON.parse(process.argv[1]).profile)' "$classification")"
+            backend_changed="$(node -e 'console.log(JSON.parse(process.argv[1]).backendChanged)' "$classification")"
+            frontend_changed="$(node -e 'console.log(JSON.parse(process.argv[1]).frontendChanged)' "$classification")"
+
+            if [[ "$profile" == backend-only ]]; then
+              frontend_sha="$base_sha"
+            elif [[ "$profile" == frontend-only ]]; then
+              backend_sha="$base_sha"
+            elif [[ "$profile" == migration && "$frontend_changed" == false ]]; then
+              frontend_sha="$base_sha"
+            fi
+
+            # Fail closed if a component assigned to the base revision is not unchanged.
+            if [[ "$backend_sha" == "$base_sha" ]] && ! git diff --quiet "${base_sha}...${head_sha}" -- backend/; then
+              echo "Backend differs from base but classifier selected base backend." >&2
+              exit 1
+            fi
+            if [[ "$frontend_sha" == "$base_sha" ]] && ! git diff --quiet "${base_sha}...${head_sha}" -- app/; then
+              echo "Frontend differs from base but classifier selected base frontend." >&2
+              exit 1
+            fi
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            profile=full-stack
+            profiles='["backend-only","frontend-only","full-stack","migration"]'
+            node phase0/sellify-preview-profile-regression.mjs
+          else
+            case "$profile" in
+              backend-only|frontend-only|full-stack|migration) ;;
+              *) echo "Unsupported workflow_dispatch profile: $profile" >&2; exit 1 ;;
+            esac
+            node phase0/sellify-preview-profile-regression.mjs
+          fi
+          if [[ "$EVENT_NAME" != "push" ]]; then
+            case "$profile" in
+              migration)
+                if [[ "$backend_changed" == true && "$frontend_changed" == true ]]; then
+                  profiles='["migration","full-stack"]'
+                elif [[ "$backend_changed" == true ]]; then
+                  profiles='["migration","backend-only"]'
+                elif [[ "$frontend_changed" == true ]]; then
+                  profiles='["migration","frontend-only"]'
+                else
+                  profiles='["migration"]'
+                fi
+                ;;
+              *) profiles=$(printf '["%s"]' "$profile") ;;
+            esac
+          fi
+          {
+            echo "profile=$profile"
+            echo "profiles=$profiles"
+            echo "backend_sha=$backend_sha"
+            echo "frontend_sha=$frontend_sha"
+            echo "base_sha=$base_sha"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Selected profile: $profile"
+          echo "Selected profiles: $profiles"
+          echo "Backend revision: $backend_sha"
+          echo "Frontend revision: $frontend_sha"
+          echo "Base revision: $base_sha"
+
+  preview-test:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    needs: classify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        profile: ${{ fromJSON(needs.classify.outputs.profiles) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact PR revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup shared Sellify toolchain
+        uses: ./.github/actions/setup-sellify
+        with:
+          install-playwright: ${{ matrix.profile != 'backend-only' }}
+
+      - name: Run isolated synthetic preview profile
+        shell: bash
+        env:
+          PREVIEW_PROFILE: ${{ matrix.profile }}
+          BACKEND_SHA: ${{ needs.classify.outputs.backend_sha }}
+          FRONTEND_SHA: ${{ needs.classify.outputs.frontend_sha }}
+          BASE_SHA: ${{ needs.classify.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          preview_data_dir="$RUNNER_TEMP/sellify-preview-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$preview_data_dir"
+          export NODE_ENV=test
+          export SELLIFY_DATA_DIR="$preview_data_dir"
+          export SELLIFY_BACKUP_DIR="$preview_data_dir/backups"
+          if [[ "$PREVIEW_PROFILE" == frontend-only || "$PREVIEW_PROFILE" == full-stack ]]; then
+            export PREVIEW_SCREENSHOT_PATH="$GITHUB_WORKSPACE/preview-mobile.png"
+          fi
+          touch preview-test.log
+
+          run_test() {
+            echo -e "\n===== $* =====" | tee -a preview-test.log
+            "$@" 2>&1 | tee -a preview-test.log
+          }
+
+          case "$PREVIEW_PROFILE" in
+            backend-only)
+              run_test npm run phase0:baseline
+              run_test npm run phase11.3:po-test
+              run_test npm run test:workforce-api-http
+              run_test npm run test:inventory-sync-event-authorization-http
+              run_test npm run test:logistics-scheduling-http
+              run_test node phase0/sc-03.5-buyer-appointment-order-regression.mjs
+              run_test node phase0/sc-03.5-telegram-appointments-http-regression.mjs
+              ;;
+            frontend-only)
+              run_test npm run test:first-product-empty-state
+              run_test npm run test:service-catalog-frontend-sync
+              run_test npm run test:browser-module-serving-browser
+              run_test npm run test:first-experience-onboarding-browser
+              ;;
+            full-stack)
+              run_test npm run phase0:baseline
+              run_test npm run phase11.3:po-test
+              run_test npm run phase0:test
+              run_test node phase0/sc-03.5-buyer-appointment-order-regression.mjs
+              run_test node phase0/sc-03.5-telegram-appointments-http-regression.mjs
+              run_test npm run test:service-catalog-frontend-sync
+              run_test npm run test:browser-module-serving-browser
+              run_test npm run test:first-experience-onboarding-browser
+              run_test node phase0/sc-03.5-customer-appointments-browser-regression.mjs
+              run_test node phase0/service-booking-operator-browser-regression.mjs
+              run_test npm run test:workforce-operator-workspace
+              ;;
+            migration)
+              run_test npm run test:phase21.17
+              run_test npm run test:service-resource-migration-compatibility
+              run_test npm run test:workforce-sqlite-migration
+              run_test npm run test:gap-1.23-migration-retry
+              ;;
+            *)
+              echo "Unknown preview profile: $PREVIEW_PROFILE" | tee -a preview-test.log
+              exit 2
+              ;;
+          esac
+
+          cat > preview-manifest.json <<EOF
+          {
+            "repository": "$GITHUB_REPOSITORY",
+            "run_id": "$GITHUB_RUN_ID",
+            "run_attempt": "$GITHUB_RUN_ATTEMPT",
+            "profile": "$PREVIEW_PROFILE",
+            "backend_sha": "$BACKEND_SHA",
+            "frontend_sha": "$FRONTEND_SHA",
+            "base_sha": "$BASE_SHA",
+            "data_mode": "synthetic-temporary-sqlite",
+            "result": "passed"
+          }
+          EOF
+
+      - name: Upload short-lived preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellify-pr-preview-${{ github.event.pull_request.number || 'manual' }}-${{ github.run_id }}-${{ matrix.profile }}
+          path: |
+            preview-manifest.json
+            preview-test.log
+            preview-mobile.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+  cleanup:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Delete preview evidence for the closed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="sellify-pr-preview-${PR_NUMBER}-"
+          gh api --paginate "repos/${REPOSITORY}/actions/artifacts" \
+            --jq ".artifacts[] | select(.name | startswith(\"$prefix\")) | .id" |
+          while read -r artifact_id; do
+            [[ -z "$artifact_id" ]] && continue
+            gh api --method DELETE "repos/${REPOSITORY}/actions/artifacts/${artifact_id}"
+            echo "Deleted preview artifact $artifact_id"
+          done

@@ -1,0 +1,67 @@
+name: Workforce capability verification
+
+on:
+  push:
+    branches:
+      - feature/workforce-capability-20261124
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workforce:
+    if: github.event_name != 'pull_request' || github.head_ref == 'feature/workforce-capability-20261124'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup shared Sellify toolchain
+        uses: ./.github/actions/setup-sellify
+        with:
+          install-playwright: "true"
+
+      - name: workforce-contract-regression
+        run: node phase0/workforce-contract-regression.mjs
+      - name: workforce-member-contract-regression
+        run: node phase0/workforce-member-contract-regression.mjs
+      - name: workforce-profile-engagement-regression
+        run: node phase0/workforce-profile-engagement-regression.mjs
+      - name: workforce-calendar-availability-regression
+        run: node phase0/workforce-calendar-availability-regression.mjs
+      - name: workforce-four-state-availability-assessment-contract
+        run: node phase0/workforce-availability-assessment-regression.mjs
+      - name: workforce-assignment-shift-regression
+        run: node phase0/workforce-assignment-shift-regression.mjs
+      - name: workforce-allocation-utilization-regression
+        run: node phase0/workforce-allocation-utilization-regression.mjs
+      - name: workforce-scheduling-constraints-regression
+        run: npm run test:workforce-scheduling-constraints
+
+      - name: Repository contract and SQLite persistence
+        run: |
+          npm run test:workforce-repository-contract
+          npm run test:workforce-sqlite-migration
+          npm run test:workforce-sqlite-repository
+
+      - name: Central authorization and API validation
+        run: |
+          npm run test:workforce-authorization-adapter
+          npm run test:workforce-api
+          npm run test:workforce-api-http
+
+      - name: Workforce operator workspace integration
+        run: |
+          npm run test:workforce-operator-workspace
+          node phase0/workforce-operator-browser-regression.mjs
+
+      - name: Service Booking integration and provider isolation
+        run: npm run test:workforce-service-booking
+
+      - name: Generate and verify backend route inventory
+        run: npm run test:workforce-route-inventory

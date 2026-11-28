@@ -1,0 +1,115 @@
+import { AUTHZ, authorize } from './authorization.js';
+import { tenantScopeDecision } from './tenant-isolation.js';
+import {
+  canAccessWorkforceResource,
+  canAccessWorkforceAssignment,
+  canAccessProviderAppointment,
+} from './workforce-authorization-service.js';
+
+const PERMISSION_BY_ENTITY = Object.freeze({
+  department: { view: 'workforce:department:view', manage: 'workforce:department:manage' },
+  position: { view: 'workforce:position:view', manage: 'workforce:position:manage' },
+  shift_template: { view: 'workforce:shift_template:view', manage: 'workforce:shift_template:manage' },
+  member: { view: 'workforce:member:view', manage: 'workforce:member:manage' },
+  profile: { view: 'workforce:profile:view', manage: 'workforce:profile:manage' },
+  engagement: { view: 'workforce:engagement:view', manage: 'workforce:engagement:manage' },
+  calendar: { view: 'workforce:calendar:view', manage: 'workforce:calendar:manage' },
+  calendar_exception: { view: 'workforce:calendar:view', manage: 'workforce:calendar:manage' },
+  availability: { view: 'workforce:availability:view', manage: 'workforce:availability:manage' },
+  assignment: { view: 'workforce:assignment:view', manage: 'workforce:assignment:manage' },
+  shift: { view: 'workforce:assignment:view', manage: 'workforce:assignment:manage' },
+  allocation: { view: 'workforce:allocation:view', manage: 'workforce:allocation:manage', release: 'workforce:allocation:release' },
+  utilization: { view: 'workforce:utilization:view', manage: 'workforce:utilization:manage' },
+  leave_request: { view: 'workforce:leave:view', manage: 'workforce:leave:manage', request: 'workforce:leave:request', withdraw: 'workforce:leave:withdraw' },
+  absence: { view: 'workforce:absence:view', manage: 'workforce:absence:manage' },
+  scheduling_policy: { view: 'workforce:assignment:view', manage: 'workforce:assignment:manage' },
+});
+
+const READ_OPERATIONS = new Set(['get','list']);
+
+function permissionFor(entity, operation) {
+  const mapping = PERMISSION_BY_ENTITY[entity];
+  if (!mapping) return null;
+  if (READ_OPERATIONS.has(operation)) return mapping.view;
+  if (entity === 'member' && operation === 'activate') return 'workforce:member:activate';
+  if (entity === 'member' && operation === 'suspend') return 'workforce:member:suspend';
+  if (entity === 'member' && ['link_account','unlink_account'].includes(operation)) return mapping.manage;
+  if (entity === 'allocation' && operation === 'release') return mapping.release;
+  if (entity === 'leave_request' && ['create','update','submit'].includes(operation)) return mapping.request;
+  if (entity === 'leave_request' && operation === 'withdraw') return mapping.withdraw;
+  return mapping.manage;
+}
+
+/**
+ * Adapter from the Workforce repository boundary to Sellify's existing
+ * authorization and tenant-isolation authorities. No parallel role system.
+ */
+export function authorizeWorkforceRepositoryAccess(request = {}) {
+  const { actor, organization_id, chat_id, entity, operation, record = null } = request;
+  if (!actor?.userId || !organization_id || !chat_id) return false;
+
+  const tenantDecision = tenantScopeDecision(actor, {
+    chatId: String(chat_id),
+    organizationId: String(organization_id),
+  });
+  if (tenantDecision !== 'ALLOW') return false;
+
+  const permission = permissionFor(entity, operation);
+  if (!permission) return false;
+
+  const contextualRoles = Array.isArray(actor.contextualRoles) ? actor.contextualRoles : [];
+  const providerScoped = contextualRoles.some((entry) => String(entry?.role || '').trim().toLowerCase() === 'service_provider');
+  const scopedResourceId = request.resource_id == null ? null : String(request.resource_id);
+  if (providerScoped && !scopedResourceId) return false;
+  if (providerScoped && ['shift_template','scheduling_policy'].includes(entity)) return false;
+
+  const resourceId = providerScoped
+    ? scopedResourceId
+    : (scopedResourceId || record?.resource_id || null);
+  const locationId = record?.location_id || request.location_id || null;
+  const resource = resourceId ? 'service_resource' : 'workforce';
+  const resourceContext = resourceId ? {
+    resourceType: 'service_resource',
+    resourceId,
+    organizationId: String(organization_id),
+    locationId,
+  } : null;
+
+  const workforceContext = {
+    organization_id: String(organization_id),
+    tenant_id: String(request.tenant_id),
+    resource_id: resourceId,
+    provider_id: request.provider_user_id || null,
+    permissions: [permission],
+  };
+  const workforceResource = record || {
+    organization_id: String(organization_id),
+    tenant_id: String(request.tenant_id),
+    ...(resourceId ? { resource_id: resourceId } : {}),
+  };
+  if (!canAccessWorkforceResource(workforceContext, workforceResource, permission)) return false;
+  if (entity === 'assignment' && record
+    && !canAccessWorkforceAssignment(workforceContext, record, permission)) return false;
+  if (record?.provider_id
+    && !canAccessProviderAppointment(workforceContext, record, permission)) return false;
+
+  return authorize(
+    actor,
+    String(organization_id),
+    locationId,
+    resource,
+    permission,
+    resourceContext,
+  ) === AUTHZ.ALLOW;
+}
+
+export function workforceAuthorizationAdapterContract() {
+  return Object.freeze({
+    authority: 'backend/lib/authorization.js',
+    tenant_scope_authority: 'backend/lib/tenant-isolation.js',
+    workforce_permissions_are_central: true,
+    provider_access_is_resource_scoped: true,
+    provider_access_is_read_only: true,
+    no_parallel_role_matrix: true,
+  });
+}

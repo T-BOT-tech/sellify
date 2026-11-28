@@ -38,7 +38,7 @@ export async function loadQuoteFormOptions() {
   try {
     const [customerData, catalogData] = await Promise.all([
       request(`/tenants/${encodeURIComponent(config.chatId)}/customers?status=active&limit=200`),
-      request(`/tenants/${encodeURIComponent(config.chatId)}/catalog`),
+      request(`/catalog/${encodeURIComponent(config.chatId)}`),
     ]);
     const customers = (customerData.customers || []).filter(c => String(c.customerType || '').toLowerCase() === 'business');
     const products = catalogData.products || [];
@@ -123,7 +123,17 @@ export function bindQuoteUI() {
   const refresh = document.getElementById('b2bQuoteRefresh');
   const create = document.getElementById('b2bQuoteCreate');
   const list = document.getElementById('b2bQuotesList');
-  if (refresh) refresh.addEventListener('click', () => renderQuotes());
+  if (refresh) refresh.addEventListener('click', async () => {
+    try {
+      // Refresh both canonical quote rows and the customer/product selectors.
+      // Newly-created business customers and catalog products must be usable
+      // without reloading the app or waiting for another page initialization.
+      await loadQuoteFormOptions();
+      await renderQuotes();
+    } catch (error) {
+      if (list) list.innerHTML = `<div class="empty">${escapeHtml(error.message || 'Could not refresh quote options.')}</div>`;
+    }
+  });
   if (create) {
     create.addEventListener('click', () => createQuoteFromUI().catch(error => {
       list?.insertAdjacentHTML('afterbegin', `<div class="empty">${escapeHtml(error.message || 'Quote creation failed.')}</div>`);
