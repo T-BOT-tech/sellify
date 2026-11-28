@@ -18,6 +18,7 @@ assert(!ui.includes('b2bAccounts'), 'legacy local B2B account IDs must not be se
 assert(ui.includes('/customers?status=active&limit=200'), 'selector must load active canonical tenant customers');
 assert(ui.includes('customerType') && ui.includes("'business'"), 'selector must restrict options to business customers');
 assert(ui.includes('Could not load business customers'), 'selector must expose canonical customer loading failures');
+assert(ui.includes("if (String(config.chatId || '') !== chatId || String(config.sessionToken || '') !== sessionToken) return;"), 'asynchronous customer and pricing reads must be tenant/session scoped');
 
 assert(html.includes('b2bCustomerPricingPanel'), 'Accounts workspace must expose the canonical customer pricing panel');
 assert(server.includes('handleCustomerPricing'), 'backend must expose the canonical customer pricing handler');
