@@ -107,6 +107,13 @@ try {
     'Manager reviewed the submitted customer price and accepts it.', reviewer,
   );
   assert.equal(replay.replayed, true);
+  const reviewAuditRows = store.getDatabaseForTests().prepare(
+    "SELECT action, metadata_json FROM audit_events WHERE action = 'order.pricing_reviewed' AND entity_id = ?"
+  ).all(reviewRequired.server_order_id);
+  assert.equal(reviewAuditRows.length, 1, 'review decision and audit record must be atomic and idempotent');
+  const reviewAuditMetadata = JSON.parse(reviewAuditRows[0].metadata_json);
+  assert.equal(reviewAuditMetadata.decision, 'ACCEPT_AS_SUBMITTED');
+  assert.equal(reviewAuditMetadata.reviewerId, owner.id);
   orders = await store.getOrders(tenant.chatId);
   const approved = orders.find(order => order.id === 'manual-price-review');
   assert.equal(approved.total, 250, 'review must not rewrite the accepted amount');
