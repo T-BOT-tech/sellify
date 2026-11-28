@@ -26,7 +26,7 @@ export const ROLES = Object.freeze([
 const ROLE_PERMISSIONS = Object.freeze({
   owner: new Set(['*']),
   manager: new Set([
-    'orders:create', 'orders:view', 'orders:delete', 'fulfillment:view', 'fulfillment:update',
+    'orders:create', 'orders:view', 'orders:delete', 'orders:pricing:review', 'fulfillment:view', 'fulfillment:update',
     'payments:accept', 'payments:view_proof', 'payments:view', 'payments:manage', 'payments:reconcile', 'payments:settlement:view', 'payments:settlement:allocate', 'payments:route',
     'inventory:add', 'inventory:edit', 'sync:manual',
     'settings:configure', 'paymethods:manage',

@@ -102,6 +102,7 @@ import {
   getCatalog,
   saveCatalog,
   saveQueuedOrders,
+  reviewOrderPricing,
   processSyncEvent,
   pullNewOrders,
   searchMarketplaceListings,
@@ -1256,6 +1257,21 @@ async function handleOrdersFeed(req, res, chatId) {
   const limit = Math.min(200, Math.max(1, Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 100));
   const orders = (await getOrders(chatId)).slice(0, limit);
   sendJSON(res, 200, { orders }, req);
+}
+
+
+async function handleOrderPricingReview(req, res, chatId, orderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store' }, status: 404 }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'orders', 'orders:pricing:review', {
+    deniedMessage: 'Order pricing review permission required',
+  });
+  const body = await readBody(req);
+  const result = await reviewOrderPricing(chatId, orderId, body.decision, body.reason, {
+    userId: session.userId,
+  });
+  sendJSON(res, 200, result, req);
 }
 
 async function handleSyncPull(req, res, chatId) {
@@ -3869,6 +3885,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'PATCH', pattern: /^\/orders\/([^/]+)\/([^/]+)\/pricing-review$/, handler: (req, res, m) => handleOrderPricingReview(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/resources$/, handler: (req, res, m) => handleServiceProviderResources(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/bookings$/, handler: (req, res, m) => handleServiceProviderBookings(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
