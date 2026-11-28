@@ -132,13 +132,47 @@ test('GAP-1.14 partial refunds are durable and full refund is only reached at th
   const base = await setup();
   const pc = core();
 
+  const refundActor = { userId: 'gap1-14-refund-actor', deviceId: 'gap1-14-refund-device' };
   const first = await pc.refund({
     ...base, amountMinor: 3000, currency: 'ETB',
-    idempotencyKey: 'refund-1', reason: 'Partial customer refund',
+    idempotencyKey: 'refund-1', reason: 'Partial customer refund', actor: refundActor,
   });
   assert.equal(first.status, 'SUCCEEDED');
   assert.equal(first.refund.amountMinor, 3000);
   assert.equal((await store.getPayment(base.chatId, base.paymentId)).state, 'VERIFIED');
+
+  const db = store.getDatabaseForTests();
+  const refundRequestedAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json, lineage_type, lineage_id
+    FROM audit_events WHERE action = 'payment.refund.requested' AND entity_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(first.refund.id);
+  assert.ok(refundRequestedAudit, 'refund request must emit an audit event');
+  assert.equal(refundRequestedAudit.entity_type, 'payment_refund',
+    'refund request audit must use the canonical refund entity type');
+  assert.equal(refundRequestedAudit.entity_id, first.refund.id,
+    'refund request audit must reference the canonical refund ID');
+  assert.equal(refundRequestedAudit.lineage_type, 'payment_refund');
+  assert.equal(refundRequestedAudit.lineage_id, first.refund.id);
+  assert.equal(refundRequestedAudit.actor_id, refundActor.userId,
+    'refund request audit must retain the authenticated actor');
+  assert.equal(refundRequestedAudit.device_id, refundActor.deviceId,
+    'refund request audit must retain the authenticated device');
+  assert.equal(JSON.parse(refundRequestedAudit.metadata_json).refundId, first.refund.id);
+
+  const refundSucceededAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json, lineage_type, lineage_id
+    FROM audit_events WHERE action = 'payment.refund.succeeded' AND entity_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(first.refund.id);
+  assert.ok(refundSucceededAudit, 'successful refund must emit an audit event');
+  assert.equal(refundSucceededAudit.entity_type, 'payment_refund');
+  assert.equal(refundSucceededAudit.entity_id, first.refund.id);
+  assert.equal(refundSucceededAudit.lineage_type, 'payment_refund');
+  assert.equal(refundSucceededAudit.lineage_id, first.refund.id);
+  assert.equal(refundSucceededAudit.actor_id, refundActor.userId);
+  assert.equal(refundSucceededAudit.device_id, refundActor.deviceId);
+  assert.equal(JSON.parse(refundSucceededAudit.metadata_json).refundId, first.refund.id);
 
   const duplicate = await pc.refund({
     ...base, amountMinor: 3000, currency: 'ETB',
@@ -167,6 +201,36 @@ test('GAP-1.14 partial refunds are durable and full refund is only reached at th
     ...base, amountMinor: 1, currency: 'ETB',
     idempotencyKey: 'refund-over', reason: 'Over refund',
   }), /Only VERIFIED or RECONCILED payments can be refunded/);
+});
+
+test('GAP-1.14 refund request and audit event commit atomically', async () => {
+  const base = await setup();
+  const db = store.getDatabaseForTests();
+  const idempotencyKey = 'refund-audit-atomicity';
+  db.exec(`
+    CREATE TRIGGER fail_payment_refund_audit
+    BEFORE INSERT ON audit_events
+    WHEN NEW.action = 'payment.refund.requested'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced payment refund audit failure');
+    END;
+  `);
+  try {
+    await assert.rejects(
+      () => store.createPaymentRefundRequest(base.chatId, {
+        paymentId: base.paymentId,
+        amountMinor: 1000,
+        currency: 'ETB',
+        idempotencyKey,
+        reason: 'Atomicity regression',
+      }, { userId: 'refund-atomic-actor' }),
+      /forced payment refund audit failure/
+    );
+    assert.equal(await store.getPaymentRefundByIdempotencyKey(base.chatId, idempotencyKey), null,
+      'a failed refund audit must roll back the payment_refunds insert');
+  } finally {
+    db.exec('DROP TRIGGER IF EXISTS fail_payment_refund_audit');
+  }
 });
 
 test('GAP-1.14 provider unsupported remains UNKNOWN and does not create a financial effect', async () => {
