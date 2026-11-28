@@ -70,10 +70,15 @@ async function loadBusinessCustomers() {
 
 export async function loadCustomerPricing() {
   const list = document.getElementById('b2bCustomerPricingList');
-  if (!list || !config.chatId || !config.sessionToken) return;
+  const chatId = String(config.chatId || '');
+  const sessionToken = String(config.sessionToken || '');
+  if (!list || !chatId || !sessionToken) return;
   list.innerHTML = '<div class="hint">Loading canonical customer pricing…</div>';
   try {
-    const data = await api('/tenants/' + encodeURIComponent(config.chatId) + '/b2b/pricing?limit=200');
+    const data = await api('/tenants/' + encodeURIComponent(chatId) + '/b2b/pricing?limit=200');
+    // A tenant/session switch can occur while the request is in flight. Never
+    // render one organization's negotiated prices in another tenant's panel.
+    if (String(config.chatId || '') !== chatId || String(config.sessionToken || '') !== sessionToken) return;
     const rows = data.pricing || [];
     list.innerHTML = rows.length ? rows.map(rule =>
       '<div class="table-card">'
@@ -85,6 +90,7 @@ export async function loadCustomerPricing() {
       + '</div>'
     ).join('') : '<div class="empty">No customer-specific pricing rules.</div>';
   } catch (error) {
+    if (String(config.chatId || '') !== chatId || String(config.sessionToken || '') !== sessionToken) return;
     list.innerHTML = '<div class="hint">' + escapeHtml(error.message || 'Could not load pricing rules.') + '</div>';
   }
 }
