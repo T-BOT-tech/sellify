@@ -55,7 +55,7 @@ async function loadBusinessCustomers() {
   select.innerHTML = '<option value="">Loading business customers…</option>';
   try {
     // Customer pricing rules reference canonical customers.id values.
-    // Legacy b2bAccounts are local tier-assignment records and are not valid
+    // Legacy local B2B account records are tier-assignment records and are not valid
     // customer foreign keys for the canonical B2B pricing API.
     const data = await api('/tenants/' + encodeURIComponent(chatId) + '/customers?status=active&limit=200');
     if (String(config.chatId || '') !== chatId || String(config.sessionToken || '') !== sessionToken) return;
