@@ -34,6 +34,30 @@ await assert.rejects(
   error => error?.code === 'AR_EXISTS' && error?.statusCode === 409
 );
 
+// A failed mandatory creation audit must roll back both the receivable and its CHARGE ledger entry.
+const failedAuditOrder = await store.saveQueuedOrders(chatId, [{
+  id: `audit-failure-${Date.now()}`, customer_id: customer.id, currency: 'ETB',
+  items: [{ id: 'p2', name: 'Audit Product', price: 1000, qty: 1 }], total: 1000,
+}]);
+assert.equal(failedAuditOrder[0].status, 'synced');
+const db = store.getDatabaseForTests();
+db.exec(`
+  CREATE TRIGGER fail_b2b_ar_audit_insert
+  BEFORE INSERT ON audit_events
+  WHEN NEW.entity_type = 'accounts_receivable'
+  BEGIN SELECT RAISE(ABORT, 'forced receivable audit failure'); END;
+`);
+try {
+  await assert.rejects(
+    () => store.createReceivable(chatId, { sourceType: 'order', sourceId: failedAuditOrder[0].order_id }, { userId: user.id }),
+    /forced receivable audit failure/
+  );
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM accounts_receivable WHERE source_id = ?').get(failedAuditOrder[0].order_id).n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM ar_ledger_entries WHERE metadata_json LIKE ?").get(`%audit-failure%`).n, 0);
+} finally {
+  db.exec('DROP TRIGGER IF EXISTS fail_b2b_ar_audit_insert');
+}
+
 const payment = await store.createPayment(chatId, { orderId, customerId: customer.id, amountMinor: 20000, currency: 'ETB' }, { userId: user.id });
 await store.transitionPayment(chatId, payment.id, 'RECEIVED', { userId: user.id });
 await store.transitionPayment(chatId, payment.id, 'VERIFIED', { userId: user.id });
@@ -59,7 +83,6 @@ assert.equal(ledger[0].entryType, 'CHARGE');
 assert.equal(ledger[1].entryType, 'PAYMENT');
 assert.equal(ledger[2].entryType, 'PAYMENT');
 
-const db = store.getDatabaseForTests();
 assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 18').get()?.version, 18);
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM ar_payment_allocations').get().n, 2);
 
