@@ -50,6 +50,23 @@ try {
   assert.equal(reviewRequired.pricing_review.verification_state, 'REVIEW_REQUIRED');
   assert.deepEqual(reviewRequired.pricing_review.reason_codes, ['CATALOG_PRICE_MISMATCH']);
 
+  assert.equal(reviewRequiredResult.pricing_review_status, 'REVIEW_REQUIRED');
+
+  // Name/phone-based customer inference stores a private retry-identity bit.
+  // A review update must preserve it so an exact sync retry remains idempotent.
+  const inferredCustomerOrder = {
+    id: 'review-preserves-customer-identity', customer_name: 'Buyer Inferred', customer_phone: '+251911000001',
+    currency: 'ETB', items: [{ id: 'catalog-match', name: 'Catalog Match', price: 125, qty: 1, currency: 'ETB' }],
+  };
+  const [inferredCreated] = await store.saveQueuedOrders(tenant.chatId, [inferredCustomerOrder]);
+  const inferredStored = (await store.getOrders(tenant.chatId)).find(order => order.id === inferredCustomerOrder.id);
+  await store.reviewOrderPricing(tenant.chatId, inferredCreated.order_id, 'ACCEPT_AS_SUBMITTED',
+    'Reviewed inferred customer order price and accepted it.', { userId: owner.id });
+  const [inferredRetry] = await store.saveQueuedOrders(tenant.chatId, [structuredClone(inferredCustomerOrder)]);
+  assert.equal(inferredRetry.status, 'synced');
+  assert.equal(inferredRetry.order_id, inferredCreated.order_id);
+  assert.equal(inferredStored.customer_id, (await store.getOrders(tenant.chatId)).find(order => order.id === inferredCustomerOrder.id).customer_id);
+
   const reviewer = { userId: owner.id };
   const decision = await store.reviewOrderPricing(
     tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',

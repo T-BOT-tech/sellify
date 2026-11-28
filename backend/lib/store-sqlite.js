@@ -12352,6 +12352,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
           order_id: already.server_order_id,
           ...(payment?.id ? { payment_id: payment.id } : {}),
           payment_state: 'UNPAID',
+          pricing_review_status: storedOrder.pricing_review?.status || 'LEGACY_UNASSESSED',
         });
         continue;
       }
@@ -12404,7 +12405,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
       insertOrder(key, localId, stored);
       const canonicalPaymentId = ensureCanonicalPaymentForOrder(key, stored, serverOrderId, null);
       audit(key, 'order.synced', 'order', serverOrderId, { localId, totalMinor: total, canonicalPaymentId });
-      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId, payment_id: canonicalPaymentId, payment_state: 'UNPAID' });
+      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId, payment_id: canonicalPaymentId, payment_state: 'UNPAID', pricing_review_status: pricingReview.status });
     }
     db.exec('COMMIT');
     return results;
@@ -12437,7 +12438,8 @@ export async function reviewOrderPricing(chatId, serverOrderId, decision, reason
       'SELECT local_id, server_order_id, order_json FROM orders WHERE chat_id = ? AND server_order_id = ?'
     ).get(key, orderId);
     if (!row) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
-    const order = orderFromRow(row);
+    // Keep internal retry-identity metadata intact when rewriting order_json.
+    const order = parseJSON(row.order_json, {});
     const current = order.pricing_review;
     if (!current) {
       throw Object.assign(new Error('Order has no pricing review assessment'), { statusCode: 409, code: 'ORDER_PRICING_ASSESSMENT_MISSING' });
