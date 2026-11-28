@@ -5760,6 +5760,7 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   await waitForInventoryTransactionSlot();
   db.exec('BEGIN IMMEDIATE');
   try {
+    assertProcurementActor(organizationId, actor);
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ? AND organization_id = ?')
       .get(String(purchaseOrderId), organizationId);
     if (!po) throw Object.assign(new Error('Purchase order not found'), { statusCode: 404, code: 'PO_NOT_FOUND' });
@@ -5798,13 +5799,14 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
       : null;
 
     if (existingReceipt) {
+      const storedLinesMatch = procurementReceiptLegacyLinesMatch(existingReceipt.id, items);
       const legacyMatch = existingReceipt.request_hash === legacyProcurementReceiptHash(hashInput)
         && String(existingReceipt.purchase_order_id) === String(po.id)
         && String(existingReceipt.location_id) === locationId
         && String(existingReceipt.notes || '') === notes
         && (requestedReceivedAt == null || String(existingReceipt.received_at) === receivedAt)
-        && procurementReceiptLegacyLinesMatch(existingReceipt.id, items);
-      if (existingReceipt.request_hash !== requestHash && !legacyMatch) {
+        && storedLinesMatch;
+      if (!storedLinesMatch || (existingReceipt.request_hash !== requestHash && !legacyMatch)) {
         throw Object.assign(new Error('Idempotency key was already used with a different receipt payload'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
       }
       if (existingReceipt.status === 'POSTED') {
@@ -5868,9 +5870,20 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   try {
     await waitForInventoryTransactionSlot();
     db.exec('BEGIN IMMEDIATE');
+    assertProcurementActor(organizationId, actor);
     const receipt = db.prepare('SELECT * FROM procurement_receipts WHERE id = ? AND organization_id = ?')
       .get(receiptId, organizationId);
     if (!receipt) throw Object.assign(new Error('Pending procurement receipt was not found'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_FOUND' });
+    const postingPo = db.prepare('SELECT source_type, status FROM purchase_orders WHERE id = ? AND organization_id = ?')
+      .get(receipt.purchase_order_id, organizationId);
+    if (!postingPo || postingPo.source_type !== 'PROCUREMENT_AWARD' || postingPo.status !== 'APPROVED') {
+      throw Object.assign(new Error('Purchase order is no longer eligible for receiving'), { statusCode: 409, code: 'PO_NOT_APPROVED' });
+    }
+    const postingLocation = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'")
+      .get(receipt.location_id, organizationId);
+    if (!postingLocation) {
+      throw Object.assign(new Error('Receiving location is no longer active in this organization'), { statusCode: 409, code: 'INVALID_RECEIVING_LOCATION' });
+    }
     if (receipt.status === 'POSTED') {
       db.exec('COMMIT');
       return getProcurementReceiptByIdSync(organizationId, receiptId);
