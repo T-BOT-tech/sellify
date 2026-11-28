@@ -48,6 +48,8 @@ try {
   assert.equal(reviewRequired.total, 250);
   assert.equal(reviewRequired.pricing_review.status, 'REVIEW_REQUIRED');
   assert.equal(reviewRequired.pricing_review.source, 'CLIENT_REPORTED');
+  assert.equal(Object.hasOwn(reviewRequired, 'pricing_decision'), false,
+    'client-supplied pricing authorization claims must not persist as canonical order evidence');
   assert.equal(reviewRequired.pricing_review.verification_state, 'REVIEW_REQUIRED');
   assert.deepEqual(reviewRequired.pricing_review.reason_codes, ['CATALOG_PRICE_MISMATCH']);
 

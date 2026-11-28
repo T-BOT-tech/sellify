@@ -12406,7 +12406,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         if (!owned) customerId = null;
       }
       const serverOrderId = crypto.randomUUID();
-      const pricingReview = assessQueuedOrderPricing(key, items, expectedCurrency, Boolean(order.pricing_decision));
+      const pricingReview = assessQueuedOrderPricing(key, items, expectedCurrency, Boolean(order.pricing_decision || order.pricingDecision));
       const stored = {
         ...order,
         ...(customerId ? { customer_id: customerId } : {}),
@@ -12425,6 +12425,13 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         synced_at: nowIso(),
         delivered_to_device: true,
       };
+      // Discard client-authored provenance/decision fields after classifying
+      // their presence. They are not evidence and must not become future
+      // consumers' apparent authorization source.
+      delete stored.pricing_decision;
+      delete stored.pricingDecision;
+      delete stored.pricingReview;
+      delete stored.pricing_review_status;
       insertOrder(key, localId, stored);
       const canonicalPaymentId = ensureCanonicalPaymentForOrder(key, stored, serverOrderId, null);
       audit(key, 'order.synced', 'order', serverOrderId, { localId, totalMinor: total, canonicalPaymentId });
