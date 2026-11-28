@@ -5684,7 +5684,7 @@ function legacyProcurementReceiptHash(input) {
   return crypto.createHash('sha256').update(JSON.stringify(input, Object.keys(input).sort())).digest('hex');
 }
 
-function procurementReceiptLegacyLinesMatch(organizationId, receiptId, items) {
+function procurementReceiptLegacyLinesMatch(receiptId, items) {
   const rows = db.prepare(
     'SELECT purchase_order_item_id, product_id, received_quantity, notes FROM procurement_receipt_lines WHERE receipt_id = ? ORDER BY purchase_order_item_id'
   ).all(String(receiptId));
@@ -5803,7 +5803,7 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
         && String(existingReceipt.location_id) === locationId
         && String(existingReceipt.notes || '') === notes
         && (requestedReceivedAt == null || String(existingReceipt.received_at) === receivedAt)
-        && procurementReceiptLegacyLinesMatch(organizationId, existingReceipt.id, items);
+        && procurementReceiptLegacyLinesMatch(existingReceipt.id, items);
       if (existingReceipt.request_hash !== requestHash && !legacyMatch) {
         throw Object.assign(new Error('Idempotency key was already used with a different receipt payload'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
       }
