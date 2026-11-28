@@ -21,7 +21,7 @@ await assert.rejects(
   error => error?.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error?.statusCode === 409,
 );
 await store.reviewOrderPricing(chatId, sync[0].order_id, 'ACCEPT_AS_SUBMITTED',
-  'Reviewed the submitted B2B order price and accepted it.', { userId: user.id });
+  'Reviewed the submitted B2B order price and accepted it.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
 const ar = await store.createReceivable(chatId, { sourceType: 'order', sourceId: sync[0].order_id }, { userId: user.id });
 const invoice = await store.createInvoice(chatId, { receivableId: ar.id, notes: 'Net 30 invoice' }, { userId: user.id });
 assert.equal(invoice.status, 'DRAFT');
@@ -38,7 +38,7 @@ const rejectedSync = await store.saveQueuedOrders(chatId, [{
 }]);
 assert.equal(rejectedSync[0].status, 'synced');
 await store.reviewOrderPricing(chatId, rejectedSync[0].order_id, 'REJECT',
-  'Submitted price rejected because it is unsupported by available evidence.', { userId: user.id });
+  'Submitted price rejected because it is unsupported by available evidence.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
 await assert.rejects(
   () => store.createReceivable(chatId, { sourceType: 'order', sourceId: rejectedSync[0].order_id }, { userId: user.id }),
   error => error?.code === 'ORDER_PRICING_REVIEW_REJECTED' && error?.statusCode === 409,
@@ -62,7 +62,7 @@ await assert.rejects(
   error => error?.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error?.statusCode === 409,
 );
 const legacyDecision = await store.reviewOrderPricing(chatId, legacySync[0].order_id, 'ACCEPT_AS_SUBMITTED',
-  'Reviewed legacy order price and explicitly accepted the submitted amount.', { userId: user.id });
+  'Reviewed legacy order price and explicitly accepted the submitted amount.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
 assert.equal(legacyDecision.pricing_review.source, 'LEGACY_UNATTRIBUTED');
 assert.equal(legacyDecision.pricing_review.status, 'APPROVED');
 await store.createReceivable(chatId, { sourceType: 'order', sourceId: legacySync[0].order_id }, { userId: user.id });
@@ -82,7 +82,7 @@ const raceSync = await store.saveQueuedOrders(chatId, [{
 }]);
 assert.equal(raceSync[0].status, 'synced');
 await store.reviewOrderPricing(chatId, raceSync[0].order_id, 'ACCEPT_AS_SUBMITTED',
-  'Reviewed the competing B2B order price and accepted it.', { userId: user.id });
+  'Reviewed the competing B2B order price and accepted it.', { userId: user.id, role: 'owner', organizationId: tenant.organizationId, chatId });
 const raceAr = await store.createReceivable(chatId, { sourceType: 'order', sourceId: raceSync[0].order_id }, { userId: user.id });
 const raceInvoice = await store.createInvoice(chatId, { receivableId: raceAr.id }, { userId: user.id });
 const raceResults = await Promise.allSettled([
