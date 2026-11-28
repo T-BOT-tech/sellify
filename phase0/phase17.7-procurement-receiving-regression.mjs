@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,7 +33,22 @@ assert.equal(afterCanonicalProduct-Number(before),1);
 const r1=await createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId:location.id,idempotencyKey:'receipt-177-a',items:[{purchaseOrderItemId:po.items[0].id,receivedQuantity:39}]},buyer.actor);
 assert.equal(r1.status,'POSTED'); assert.equal(r1.lines[0].receivedQuantity,39);
 const after1=db.prepare("SELECT COALESCE(SUM(quantity),0) q FROM inventory_movements WHERE organization_id=? AND product_id=? AND location_id=?").get(buyer.tenant.organization_id,productId,location.id).q; assert.equal(Number(after1)-Number(before),40);
-const same=await createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId:location.id,idempotencyKey:'receipt-177-a',items:[{purchaseOrderItemId:po.items[0].id,receivedQuantity:39}]},buyer.actor); assert.equal(same.id,r1.id); const countAfterRetry=db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE organization_id=? AND product_id=? AND location_id=? AND reference_type='procurement_receipt' AND reference_id=?").get(buyer.tenant.organization_id,productId,location.id,r1.id).c; assert.equal(countAfterRetry,1);
+const same=await createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId:location.id,idempotencyKey:'receipt-177-a',items:[{purchaseOrderItemId:po.items[0].id,receivedQuantity:39}]},buyer.actor); assert.equal(same.id,r1.id);
+// Simulate a pre-v2 receipt hash to prove legacy retries remain compatible.
+// The stored immutable receipt lines must still be compared because the old
+// hash did not cover nested item quantities.
+const legacyHashInput = {
+  purchaseOrderId: po.id, locationId: location.id, receivedAt: null, notes: '',
+  items: [{ purchaseOrderItemId: po.items[0].id, productId, receivedQuantity: 39, notes: '' }],
+};
+const legacyHash = createHash('sha256')
+  .update(JSON.stringify(legacyHashInput, Object.keys(legacyHashInput).sort())).digest('hex');
+db.prepare('UPDATE procurement_receipts SET request_hash=? WHERE id=?').run(legacyHash, r1.id);
+const legacyRetry = await createProcurementReceipt(buyer.tenant.chat_id, po.id, {
+  locationId: location.id, idempotencyKey: 'receipt-177-a',
+  items: [{ purchaseOrderItemId: po.items[0].id, receivedQuantity: 39 }],
+}, buyer.actor);
+assert.equal(legacyRetry.id, r1.id); const countAfterRetry=db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE organization_id=? AND product_id=? AND location_id=? AND reference_type='procurement_receipt' AND reference_id=?").get(buyer.tenant.organization_id,productId,location.id,r1.id).c; assert.equal(countAfterRetry,1);
 await assert.rejects(
   () => createProcurementReceipt(buyer.tenant.chat_id, po.id, {
     locationId: location.id, idempotencyKey: 'receipt-177-a',
