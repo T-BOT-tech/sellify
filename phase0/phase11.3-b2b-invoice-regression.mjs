@@ -51,10 +51,48 @@ const rejectedRace = raceResults.find(result => result.status === 'rejected');
 assert.ok(['INVALID_INVOICE_TRANSITION', 'INVOICE_STATE_CONFLICT'].includes(rejectedRace.reason?.code));
 const persistedRaceInvoice = await store.getInvoice(chatId, raceInvoice.id);
 assert.ok(['ISSUED', 'CANCELLED'].includes(persistedRaceInvoice.status));
-await assert.rejects(() => store.createInvoice(chatId, { receivableId: ar.id }, { userId: user.id }), e => e?.code === 'INVOICE_EXISTS' && e?.statusCode === 409);
 const db = store.getDatabaseForTests();
+await assert.rejects(() => store.createInvoice(chatId, { receivableId: ar.id }, { userId: user.id }), e => e?.code === 'INVOICE_EXISTS' && e?.statusCode === 409);
+
+// Concurrent invoice creation for one receivable must serialize duplicate detection.
+const createRaceSync = await store.saveQueuedOrders(chatId, [{
+  id: `invoice-create-race-${Date.now()}`, customer_id: customer.id, currency: 'ETB',
+  items: [{ id: 'p1', name: 'Invoice Product', price: 250, qty: 2 }], total: 500,
+}]);
+assert.equal(createRaceSync[0].status, 'synced');
+const createRaceAr = await store.createReceivable(chatId, { sourceType: 'order', sourceId: createRaceSync[0].order_id }, { userId: user.id });
+const createRaceResults = await Promise.allSettled([
+  store.createInvoice(chatId, { receivableId: createRaceAr.id }, { userId: user.id }),
+  store.createInvoice(chatId, { receivableId: createRaceAr.id }, { userId: user.id }),
+]);
+assert.equal(createRaceResults.filter(result => result.status === 'fulfilled').length, 1);
+assert.equal(createRaceResults.filter(result => result.status === 'rejected' && result.reason?.code === 'INVOICE_EXISTS').length, 1);
+
+// A mandatory audit failure must roll back both invoice header and item rows.
+const failedAuditSync = await store.saveQueuedOrders(chatId, [{
+  id: `invoice-audit-failure-${Date.now()}`, customer_id: customer.id, currency: 'ETB',
+  items: [{ id: 'p1', name: 'Invoice Product', price: 250, qty: 2 }], total: 500,
+}]);
+assert.equal(failedAuditSync[0].status, 'synced');
+const failedAuditAr = await store.createReceivable(chatId, { sourceType: 'order', sourceId: failedAuditSync[0].order_id }, { userId: user.id });
+db.exec(`
+  CREATE TRIGGER fail_b2b_invoice_audit_insert
+  BEFORE INSERT ON audit_events
+  WHEN NEW.entity_type = 'invoices'
+  BEGIN SELECT RAISE(ABORT, 'forced invoice audit failure'); END;
+`);
+try {
+  await assert.rejects(
+    () => store.createInvoice(chatId, { receivableId: failedAuditAr.id }, { userId: user.id }),
+    /forced invoice audit failure/
+  );
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE receivable_id = ?').get(failedAuditAr.id).n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE receivable_id = ?)').get(failedAuditAr.id).n, 0);
+} finally {
+  db.exec('DROP TRIGGER IF EXISTS fail_b2b_invoice_audit_insert');
+}
 assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 19').get()?.version, 19);
-assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 2);
+assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 3);
 assert.equal(authz.authorize({ userId: 'buyer', role: 'buyer', organizationId: tenant.organizationId }, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.DENY);
 const manager = { userId: 'manager', role: 'manager', organizationId: tenant.organizationId };
 assert.equal(authz.authorize(manager, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.ALLOW);

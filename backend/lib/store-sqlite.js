@@ -6058,28 +6058,46 @@ function sourceItemsForInvoice(chatId, organizationId, receivable) {
 export async function createInvoice(chatId, input = {}, actor = null) {
   ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
-  const receivableId = String(input.receivableId || input.receivable_id || '');
-  if (!receivableId) throw Object.assign(new Error('receivableId is required'), { statusCode: 400, code: 'RECEIVABLE_REQUIRED' });
-  const receivable = await getReceivable(chatId, receivableId);
-  if (!receivable) throw Object.assign(new Error('Receivable not found'), { statusCode: 404, code: 'AR_NOT_FOUND' });
-  if (['WRITTEN_OFF','CANCELLED'].includes(receivable.status)) throw Object.assign(new Error('Cannot invoice a closed receivable'), { statusCode: 409, code: 'AR_CLOSED' });
-  if (receivable.currency !== tenantCurrency(chatId)) throw Object.assign(new Error('Invoice currency must match organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
-  const existing = db.prepare('SELECT id FROM invoices WHERE organization_id = ? AND receivable_id = ?').get(organizationId, receivable.id);
-  if (existing) throw Object.assign(new Error('An invoice already exists for this receivable'), { statusCode: 409, code: 'INVOICE_EXISTS' });
-  const items = sourceItemsForInvoice(chatId, organizationId, receivable);
-  if (!items.length) items.push({ productId: null, description: 'Commerce receivable', quantity: 1, unitPriceMinor: receivable.amountMinor, lineTotalMinor: receivable.amountMinor });
-  const total = items.reduce((sum, i) => sum + Number(i.lineTotalMinor), 0);
-  if (total !== receivable.amountMinor) throw Object.assign(new Error('Invoice items must equal the receivable amount'), { statusCode: 409, code: 'INVOICE_TOTAL_MISMATCH' });
-  const now = nowIso(); const id = crypto.randomUUID(); const number = String(input.invoiceNumber || input.invoice_number || nextInvoiceNumber(organizationId));
-  db.exec('BEGIN IMMEDIATE');
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
   try {
-    db.prepare(`INSERT INTO invoices (id, organization_id, location_id, customer_id, receivable_id, invoice_number, currency, subtotal_minor, total_minor, status, issued_at, due_at, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', NULL, ?, ?, ?, ?, ?)`).run(id, organizationId, receivable.locationId || null, receivable.customerId, receivable.id, number, receivable.currency, total, total, receivable.dueAt, String(input.notes || ''), actor?.userId || null, now, now);
+    const receivableId = String(input.receivableId || input.receivable_id || '');
+    if (!receivableId) throw Object.assign(new Error('receivableId is required'), { statusCode: 400, code: 'RECEIVABLE_REQUIRED' });
+    const receivable = receivableFromRow(
+      db.prepare('SELECT * FROM accounts_receivable WHERE id = ? AND organization_id = ?')
+        .get(receivableId, organizationId)
+    );
+    if (!receivable) throw Object.assign(new Error('Receivable not found'), { statusCode: 404, code: 'AR_NOT_FOUND' });
+    if (['WRITTEN_OFF','CANCELLED'].includes(receivable.status)) throw Object.assign(new Error('Cannot invoice a closed receivable'), { statusCode: 409, code: 'AR_CLOSED' });
+    if (receivable.currency !== tenantCurrency(chatId)) throw Object.assign(new Error('Invoice currency must match organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+    const existing = db.prepare('SELECT id FROM invoices WHERE organization_id = ? AND receivable_id = ?').get(organizationId, receivable.id);
+    if (existing) throw Object.assign(new Error('An invoice already exists for this receivable'), { statusCode: 409, code: 'INVOICE_EXISTS' });
+    const items = sourceItemsForInvoice(chatId, organizationId, receivable);
+    if (!items.length) items.push({ productId: null, description: 'Commerce receivable', quantity: 1, unitPriceMinor: receivable.amountMinor, lineTotalMinor: receivable.amountMinor });
+    const total = items.reduce((sum, item) => sum + Number(item.lineTotalMinor), 0);
+    if (total !== receivable.amountMinor) throw Object.assign(new Error('Invoice items must equal the receivable amount'), { statusCode: 409, code: 'INVOICE_TOTAL_MISMATCH' });
+    const now = nowIso();
+    const id = crypto.randomUUID();
+    const number = String(input.invoiceNumber || input.invoice_number || nextInvoiceNumber(organizationId));
+    db.prepare(`INSERT INTO invoices (id, organization_id, location_id, customer_id, receivable_id, invoice_number, currency, subtotal_minor, total_minor, status, issued_at, due_at, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', NULL, ?, ?, ?, ?, ?)`).run(
+      id, organizationId, receivable.locationId || null, receivable.customerId, receivable.id, number,
+      receivable.currency, total, total, receivable.dueAt, String(input.notes || ''), actor?.userId || null, now, now
+    );
     const stmt = db.prepare(`INSERT INTO invoice_items (id, invoice_id, product_id, description, quantity, unit_price_minor, line_total_minor, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const item of items) stmt.run(crypto.randomUUID(), id, item.productId, String(item.description), Number(item.quantity), Number(item.unitPriceMinor), Number(item.lineTotalMinor), receivable.currency, now);
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
-  audit(String(chatId), 'b2b.invoice.created', 'invoices', id, { receivableId: receivable.id, invoiceNumber: number, totalMinor: total, currency: receivable.currency }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
-  return getInvoice(chatId, id);
+    for (const item of items) {
+      stmt.run(crypto.randomUUID(), id, item.productId, String(item.description), Number(item.quantity),
+        Number(item.unitPriceMinor), Number(item.lineTotalMinor), receivable.currency, now);
+    }
+    audit(String(chatId), 'b2b.invoice.created', 'invoices', id,
+      { receivableId: receivable.id, invoiceNumber: number, totalMinor: total, currency: receivable.currency },
+      { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
+    if (ownsTransaction) db.exec('COMMIT');
+    const saved = db.prepare('SELECT * FROM invoices WHERE id = ? AND organization_id = ?').get(id, organizationId);
+    return invoiceFromRow(saved, saved ? invoiceItems(saved.id) : []);
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 const INVOICE_TRANSITIONS = Object.freeze({ DRAFT: new Set(['ISSUED','CANCELLED']), ISSUED: new Set(['VOID']), VOID: new Set([]), CANCELLED: new Set([]) });
