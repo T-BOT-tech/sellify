@@ -5943,7 +5943,8 @@ export async function createReceivable(chatId, input = {}, actor = null) {
     );
     audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
     if (ownsTransaction) db.exec('COMMIT');
-    return getReceivable(chatId, id);
+    const saved = db.prepare('SELECT * FROM accounts_receivable WHERE id = ? AND organization_id = ?').get(id, organizationId);
+    return receivableFromRow(saved);
   } catch (error) {
     if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
     throw error;
