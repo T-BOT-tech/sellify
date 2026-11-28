@@ -11782,7 +11782,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     try {
       const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
         .get(String(chatId));
-      const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+      const freshOrderRow = db.prepare(`SELECT o.server_order_id, o.order_json,
         (SELECT f.location_id FROM fulfillments f
          WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
          ORDER BY f.created_at DESC LIMIT 1) AS location_id
@@ -11812,6 +11812,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), { statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING' });
         db.exec('COMMIT');
         return replay;
+      }
+      const freshOrderJson = orderFromRow(freshOrderRow);
+      if (freshOrderJson.pricing_review?.status === 'REVIEW_REQUIRED'
+        || freshOrderJson.pricing_review?.status === 'REJECTED') {
+        throw Object.assign(new Error('Order pricing must be reviewed before delivery assignment can proceed'), {
+          statusCode: 409, code: freshOrderJson.pricing_review.status === 'REJECTED'
+            ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
+        });
       }
       // Resolve durable key reuse before validating the payload for a new command.
       // A retry with a missing/changed target must conflict against the original
@@ -11899,6 +11907,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), { statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING' });
     db.exec('COMMIT');
     return replay;
+    }
+    const freshOrderJson = orderFromRow(freshOrderRow);
+    if (freshOrderJson.pricing_review?.status === 'REVIEW_REQUIRED'
+      || freshOrderJson.pricing_review?.status === 'REJECTED') {
+      throw Object.assign(new Error('Order pricing must be reviewed before delivery assignment can proceed'), {
+        statusCode: 409, code: freshOrderJson.pricing_review.status === 'REJECTED'
+          ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
+      });
     }
     // Validate action-specific payload only after durable replay resolution.
     // Reusing a key with changed/malformed intent must produce the idempotency
@@ -12106,6 +12122,13 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     if (freshCommandFingerprint !== commandFingerprint) {
       throw Object.assign(new Error('Canonical order fulfillment inputs changed during the command'), {
         statusCode: 409, code: 'FULFILLMENT_ORDER_CHANGED',
+      });
+    }
+    if (freshOrderJson.pricing_review?.status === 'REVIEW_REQUIRED'
+      || freshOrderJson.pricing_review?.status === 'REJECTED') {
+      throw Object.assign(new Error('Order pricing must be reviewed before fulfillment can proceed'), {
+        statusCode: 409, code: freshOrderJson.pricing_review.status === 'REJECTED'
+          ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
       });
     }
     assertServiceDeliveryReadyForExecution(freshOrderJson);
