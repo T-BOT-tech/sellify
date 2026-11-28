@@ -5897,6 +5897,30 @@ export async function listReceivables(chatId, { customerId = '', status = 'all',
   return db.prepare(`SELECT * FROM accounts_receivable WHERE ${where.join(' AND ')} ORDER BY due_at ASC, created_at DESC LIMIT ?`).all(...params).map(receivableFromRow);
 }
 
+
+function assertOrderPricingReadyForFinancialCommitment(order) {
+  const review = order?.pricing_review;
+  const serverVerified = review?.schema_version === 1
+    && review.status === 'VERIFIED'
+    && review.source === 'CATALOG_BASE'
+    && review.verification_state === 'SERVER_VERIFIED';
+  const reviewerApproved = review?.schema_version === 1
+    && review.status === 'APPROVED'
+    && review.decision === 'ACCEPT_AS_SUBMITTED'
+    && review.verification_state === 'REVIEW_APPROVED'
+    && Boolean(String(review.reviewed_by || '').trim())
+    && Boolean(String(review.reviewed_at || '').trim())
+    && Boolean(String(review.reason || '').trim());
+  if (serverVerified || reviewerApproved) return;
+  const rejected = review?.status === 'REJECTED';
+  throw Object.assign(new Error(rejected
+    ? 'A rejected order price cannot create a receivable or invoice'
+    : 'Order pricing review is required before creating a receivable or invoice'), {
+    statusCode: 409,
+    code: rejected ? 'ORDER_PRICING_REVIEW_REJECTED' : 'ORDER_PRICING_REVIEW_REQUIRED',
+  });
+}
+
 export async function createReceivable(chatId, input = {}, actor = null) {
   ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
@@ -5914,7 +5938,9 @@ export async function createReceivable(chatId, input = {}, actor = null) {
   } else {
     const order = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), sourceId);
     if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
-    customerId = order.customer_id || parseJSON(order.order_json, {}).customer_id || null; amountMinor = Number(order.total_minor); currency = normaliseCurrency(order.currency, currency);
+    const orderJson = parseJSON(order.order_json, {});
+    assertOrderPricingReadyForFinancialCommitment(orderJson);
+    customerId = order.customer_id || orderJson.customer_id || null; amountMinor = Number(order.total_minor); currency = normaliseCurrency(order.currency, currency);
     creditTerms = customerId ? db.prepare(`SELECT * FROM customer_credit_terms WHERE organization_id = ? AND customer_id = ? AND status = 'APPROVED' ORDER BY updated_at DESC LIMIT 1`).get(organizationId, customerId) : null;
   }
   if (!customerId) throw Object.assign(new Error('A business customer is required for receivables'), { statusCode: 409, code: 'B2B_CUSTOMER_REQUIRED' });
@@ -6055,6 +6081,12 @@ export async function createInvoice(chatId, input = {}, actor = null) {
   if (!receivable) throw Object.assign(new Error('Receivable not found'), { statusCode: 404, code: 'AR_NOT_FOUND' });
   if (['WRITTEN_OFF','CANCELLED'].includes(receivable.status)) throw Object.assign(new Error('Cannot invoice a closed receivable'), { statusCode: 409, code: 'AR_CLOSED' });
   if (receivable.currency !== tenantCurrency(chatId)) throw Object.assign(new Error('Invoice currency must match organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+  if (receivable.sourceType === 'order') {
+    const sourceOrder = db.prepare('SELECT order_json FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(String(chatId), receivable.sourceId);
+    if (!sourceOrder) throw Object.assign(new Error('Receivable source order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    assertOrderPricingReadyForFinancialCommitment(parseJSON(sourceOrder.order_json, {}));
+  }
   const existing = db.prepare('SELECT id FROM invoices WHERE organization_id = ? AND receivable_id = ?').get(organizationId, receivable.id);
   if (existing) throw Object.assign(new Error('An invoice already exists for this receivable'), { statusCode: 409, code: 'INVOICE_EXISTS' });
   const items = sourceItemsForInvoice(chatId, organizationId, receivable);
@@ -12470,10 +12502,15 @@ export async function reviewOrderPricing(chatId, serverOrderId, decision, reason
     if (!row) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
     // Keep internal retry-identity metadata intact when rewriting order_json.
     const order = parseJSON(row.order_json, {});
-    const current = order.pricing_review;
-    if (!current) {
-      throw Object.assign(new Error('Order has no pricing review assessment'), { statusCode: 409, code: 'ORDER_PRICING_ASSESSMENT_MISSING' });
-    }
+    const current = order.pricing_review || {
+      schema_version: 1,
+      status: 'REVIEW_REQUIRED',
+      source: 'LEGACY_UNATTRIBUTED',
+      verification_state: 'REVIEW_REQUIRED',
+      currency: normaliseCurrency(order.currency, tenantCurrency(key)),
+      evaluated_at: nowIso(),
+      reason_codes: ['LEGACY_ORDER_PRICE_UNASSESSED'],
+    };
     const targetStatus = normalizedDecision === 'ACCEPT_AS_SUBMITTED' ? 'APPROVED' : 'REJECTED';
     if (current.status === targetStatus
       && current.decision === normalizedDecision

@@ -206,10 +206,12 @@ export function ticketInnerHtml(o) {
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-user"/></svg> Staff: ${escapeHtml(o.created_by_user || 'Staff')} (${escapeHtml((o.created_by_role || '').toUpperCase())})</div>` : '';
   const b2bLine = o.b2b_account_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-building"/></svg> ${escapeHtml(o.b2b_account_name)}${o.pricing_tier_name ? ' · ' + escapeHtml(o.pricing_tier_name) : ''}</div>` : '';
-  const pricingReviewStatus = String(o.pricing_review?.status || '').toUpperCase();
+  const pricingReviewStatus = String(o.pricing_review?.status || (o.server_order_id ? 'LEGACY_UNASSESSED' : '')).toUpperCase();
   const pricingReviewLine = pricingReviewStatus === 'REVIEW_REQUIRED'
     ? '<div class="ticket-customer" role="status">Price review required · fulfillment is blocked until an authorized decision</div>'
-    : pricingReviewStatus === 'APPROVED'
+    : pricingReviewStatus === 'LEGACY_UNASSESSED'
+      ? '<div class="ticket-customer" role="status">Legacy price provenance unavailable · review required before credit or invoicing</div>'
+      : pricingReviewStatus === 'APPROVED'
       ? '<div class="ticket-customer">Price accepted after authorized review</div>'
       : pricingReviewStatus === 'REJECTED'
         ? '<div class="ticket-customer" role="status">Submitted price rejected · fulfillment remains blocked</div>'
@@ -237,7 +239,7 @@ export function ticketInnerHtml(o) {
   const disabledAttr = o._deleting ? ' disabled' : '';
   const paymentEvidenceBtn = o.server_order_id && payment?.id && hasPermission(currentStaff ? currentStaff.role : 'owner', 'payments:view')
     ? `<button type="button" class="ticket-act-btn" data-payment-evidence-order="${escapeHtml(String(o.id))}"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment evidence</button>` : '';
-  const pricingReviewActions = pricingReviewStatus === 'REVIEW_REQUIRED' && o.server_order_id
+  const pricingReviewActions = ['REVIEW_REQUIRED', 'LEGACY_UNASSESSED'].includes(pricingReviewStatus) && o.server_order_id
     && hasPermission(currentStaff ? currentStaff.role : 'owner', 'orders:pricing:review')
     ? `<button type="button" class="ticket-act-btn" data-order-pricing-review="${escapeHtml(String(o.server_order_id))}" data-decision="ACCEPT_AS_SUBMITTED">Accept submitted price</button>
        <button type="button" class="ticket-act-btn danger" data-order-pricing-review="${escapeHtml(String(o.server_order_id))}" data-decision="REJECT">Reject price</button>`

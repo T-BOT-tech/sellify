@@ -16,6 +16,12 @@ const terms = await store.createCreditTerms(chatId, { customerId: customer.id, c
 await store.transitionCreditTerms(chatId, terms.id, 'APPROVED', { userId: user.id });
 const sync = await store.saveQueuedOrders(chatId, [{ id: `local-${Date.now()}`, customer_id: customer.id, currency: 'ETB', items: [{ id: 'p1', name: 'Invoice Product', price: 250, qty: 2 }], total: 500 }]);
 assert.equal(sync[0].status, 'synced');
+await assert.rejects(
+  () => store.createReceivable(chatId, { sourceType: 'order', sourceId: sync[0].order_id }, { userId: user.id }),
+  error => error?.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error?.statusCode === 409,
+);
+await store.reviewOrderPricing(chatId, sync[0].order_id, 'ACCEPT_AS_SUBMITTED',
+  'Reviewed the submitted B2B order price and accepted it.', { userId: user.id });
 const ar = await store.createReceivable(chatId, { sourceType: 'order', sourceId: sync[0].order_id }, { userId: user.id });
 const invoice = await store.createInvoice(chatId, { receivableId: ar.id, notes: 'Net 30 invoice' }, { userId: user.id });
 assert.equal(invoice.status, 'DRAFT');
@@ -37,6 +43,8 @@ const raceSync = await store.saveQueuedOrders(chatId, [{
   total: 500,
 }]);
 assert.equal(raceSync[0].status, 'synced');
+await store.reviewOrderPricing(chatId, raceSync[0].order_id, 'ACCEPT_AS_SUBMITTED',
+  'Reviewed the competing B2B order price and accepted it.', { userId: user.id });
 const raceAr = await store.createReceivable(chatId, { sourceType: 'order', sourceId: raceSync[0].order_id }, { userId: user.id });
 const raceInvoice = await store.createInvoice(chatId, { receivableId: raceAr.id }, { userId: user.id });
 const raceResults = await Promise.allSettled([
