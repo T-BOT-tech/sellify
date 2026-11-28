@@ -5616,11 +5616,11 @@ export async function createPurchaseOrder(chatId, input = {}, actor = null) {
     for (const item of quote.items) stmt.run(crypto.randomUUID(), id, item.productId, item.description, item.quantity, item.unitPriceMinor, item.currency, item.lineTotalMinor, item.id, now);
     audit(String(chatId), 'b2b.purchase-order.created', 'purchase_order', id, { poNumber, quoteId, customerId: quote.customerId, totalMinor: quote.totalMinor, currency: quote.currency, sourceType: 'B2B_QUOTE' }, { organizationId, actorId: actor?.userId || null });
     if (ownsTransaction) db.exec('COMMIT');
+    return getPurchaseOrderByIdSync(organizationId, id);
   } catch (error) {
     if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
     throw error;
   }
-  return getPurchaseOrderByIdSync(organizationId, id);
 }
 
 
@@ -5943,11 +5943,11 @@ export async function createReceivable(chatId, input = {}, actor = null) {
     );
     audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
     if (ownsTransaction) db.exec('COMMIT');
+    return getReceivable(chatId, id);
   } catch (error) {
     if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
     throw error;
   }
-  return getReceivable(chatId, id);
 }
 
 const RECEIVABLE_TRANSITIONS = Object.freeze({
