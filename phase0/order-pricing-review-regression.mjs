@@ -34,6 +34,25 @@ try {
   assert.equal(verified.pricing_review.verification_state, 'SERVER_VERIFIED');
   assert.deepEqual(verified.pricing_review.reason_codes, []);
 
+  const [b2bCatalogMatchResult] = await store.saveQueuedOrders(tenant.chatId, [{
+    id: 'b2b-local-tier-catalog-match',
+    b2b_account_id: 'local-b2b-account-17',
+    b2b_account_name: 'Wholesale Customer',
+    pricing_tier_id: 'local-tier-5',
+    pricing_tier_name: 'Wholesale Tier',
+    currency: 'ETB',
+    // A Catalog-equal amount is not enough to verify the client-only B2B
+    // tier context, because the backend cannot reconstruct that tier decision.
+    items: [{ id: 'catalog-match', name: 'Catalog Match', price: 100, qty: 2, currency: 'ETB' }],
+  }]);
+  const b2bCatalogMatch = (await store.getOrders(tenant.chatId))
+    .find(order => order.id === 'b2b-local-tier-catalog-match');
+  assert.equal(b2bCatalogMatchResult.status, 'synced');
+  assert.equal(b2bCatalogMatch.pricing_review.status, 'REVIEW_REQUIRED');
+  assert.equal(b2bCatalogMatch.pricing_review.source, 'CLIENT_REPORTED');
+  assert.deepEqual(b2bCatalogMatch.pricing_review.reason_codes, ['B2B_LOCAL_PRICING_CONTEXT']);
+  assert.equal(b2bCatalogMatch.pricing_review.line_assessments[0].result, 'REVIEW_REQUIRED');
+
   const submitted = {
     id: 'manual-price-review',
     currency: 'ETB',
@@ -227,6 +246,7 @@ try {
   assert.equal(unknownCatalogResult.status, 'synced');
   const unknownCatalog = (await store.getOrders(tenant.chatId)).find(order => order.id === 'unknown-catalog-item');
   assert.equal(unknownCatalog.pricing_review.status, 'REVIEW_REQUIRED');
+  assert.equal(unknownCatalog.pricing_review.source, 'CLIENT_REPORTED');
   assert.deepEqual(unknownCatalog.pricing_review.reason_codes, ['CATALOG_ITEM_NOT_FOUND']);
 
   const rejectedDecision = await store.reviewOrderPricing(

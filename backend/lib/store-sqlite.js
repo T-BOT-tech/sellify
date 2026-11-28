@@ -12322,9 +12322,18 @@ export async function getOrders(chatId) {
 }
 
 
-function assessQueuedOrderPricing(chatId, items, expectedCurrency, clientPricingClaimPresent) {
+function assessQueuedOrderPricing(chatId, order, items, expectedCurrency) {
   const reasonCodes = new Set();
   const lineAssessments = [];
+  // The existing POS B2B tier is local-only and is not the canonical
+  // customer-pricing rule authority. Even a Catalog-equal amount cannot
+  // prove that this local commercial context was applied correctly.
+  const hasLocalB2BPricingContext = Boolean(
+    order?.b2b_account_id || order?.b2bAccountId
+    || order?.pricing_tier_id || order?.pricingTierId
+    || order?.b2b_account_name || order?.pricing_tier_name
+  );
+  if (hasLocalB2BPricingContext) reasonCodes.add('B2B_LOCAL_PRICING_CONTEXT');
   for (const item of items) {
     const itemId = String(item.item_id ?? item.product_id ?? item.id ?? '').trim();
     const submittedPriceMinor = Number(item.price);
@@ -12356,19 +12365,22 @@ function assessQueuedOrderPricing(chatId, items, expectedCurrency, clientPricing
     const catalogPriceMinor = Number(catalog.price_minor);
     const matchesCatalog = catalogPriceMinor === submittedPriceMinor;
     if (!matchesCatalog) reasonCodes.add('CATALOG_PRICE_MISMATCH');
+    const lineVerified = matchesCatalog && !hasLocalB2BPricingContext;
     lineAssessments.push({
       item_id: itemId,
       submitted_price_minor: Number.isInteger(submittedPriceMinor) ? submittedPriceMinor : null,
       catalog_price_minor: Number.isInteger(catalogPriceMinor) ? catalogPriceMinor : null,
-      result: matchesCatalog ? 'VERIFIED' : 'REVIEW_REQUIRED',
-      ...(matchesCatalog ? {} : { reason_code: 'CATALOG_PRICE_MISMATCH' }),
+      result: lineVerified ? 'VERIFIED' : 'REVIEW_REQUIRED',
+      ...(!matchesCatalog
+        ? { reason_code: 'CATALOG_PRICE_MISMATCH' }
+        : hasLocalB2BPricingContext ? { reason_code: 'B2B_LOCAL_PRICING_CONTEXT' } : {}),
     });
   }
   const verified = reasonCodes.size === 0;
   return {
     schema_version: 1,
     status: verified ? 'VERIFIED' : 'REVIEW_REQUIRED',
-    source: verified ? 'CATALOG_BASE' : (clientPricingClaimPresent ? 'CLIENT_REPORTED' : 'LEGACY_UNATTRIBUTED'),
+    source: verified ? 'CATALOG_BASE' : 'CLIENT_REPORTED',
     verification_state: verified ? 'SERVER_VERIFIED' : 'REVIEW_REQUIRED',
     currency: expectedCurrency,
     evaluated_at: nowIso(),
@@ -12450,7 +12462,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         if (!owned) customerId = null;
       }
       const serverOrderId = crypto.randomUUID();
-      const pricingReview = assessQueuedOrderPricing(key, items, expectedCurrency, Boolean(order.pricing_decision || order.pricingDecision));
+      const pricingReview = assessQueuedOrderPricing(key, order, items, expectedCurrency);
       const stored = {
         ...order,
         ...(customerId ? { customer_id: customerId } : {}),
