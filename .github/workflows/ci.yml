@@ -141,6 +141,14 @@ jobs:
         run: npm run phase11.3:invoice-test
       - name: B2B quote lifecycle concurrency expiry and audit atomicity regression
         run: npm run phase11.3:quotes-test
+      - name: B2B canonical customer pricing regression
+        run: npm run phase11.3:b2b-test
+      - name: B2B purchase order creation and approval regression
+        run: npm run phase11.3:po-test
+      - name: B2B credit terms regression
+        run: npm run phase11.3:credit-test
+      - name: B2B accounts receivable regression
+        run: npm run phase11.3:ar-test
       - name: Authorization location capability projection regression
         run: node phase0/p1-05-scope-context-regression.mjs
       - name: Location scope gate regression
