@@ -67,6 +67,15 @@ try {
   assert.equal(inferredRetry.order_id, inferredCreated.order_id);
   assert.equal(inferredStored.customer_id, (await store.getOrders(tenant.chatId)).find(order => order.id === inferredCustomerOrder.id).customer_id);
 
+  await assert.rejects(
+    store.transitionOrderFulfillment(tenant.chatId, reviewRequiredResult.order_id, 'out_for_delivery',
+      { userId: owner.id }, { idempotencyKey: 'pricing-review-required-fulfillment' }),
+    error => error.code === 'ORDER_PRICING_REVIEW_REQUIRED' && error.statusCode === 409,
+    'fulfillment must remain blocked until an authorized pricing review decision',
+  );
+  assert.equal(await store.getOrderFulfillment(tenant.chatId, reviewRequiredResult.order_id), null,
+    'blocked fulfillment must not create a fulfillment record');
+
   const reviewer = { userId: owner.id };
   const decision = await store.reviewOrderPricing(
     tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',
