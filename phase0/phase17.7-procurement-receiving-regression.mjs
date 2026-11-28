@@ -36,5 +36,61 @@ const same=await createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId
 await assert.rejects(()=>createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId:location.id,items:[{purchaseOrderItemId:po.items[0].id,receivedQuantity:61}]},buyer.actor),e=>e?.code==='OVER_RECEIPT');
 const r2=await createProcurementReceipt(buyer.tenant.chat_id,po.id,{locationId:location.id,idempotencyKey:'receipt-177-b',items:[{purchaseOrderItemId:po.items[0].id,receivedQuantity:60}]},buyer.actor); assert.equal(r2.lines[0].receivedQuantity,60);
 const after2=db.prepare("SELECT COALESCE(SUM(quantity),0) q FROM inventory_movements WHERE organization_id=? AND product_id=? AND location_id=?").get(buyer.tenant.organization_id,productId,location.id).q; assert.equal(Number(after2)-Number(before),100);
-const receipts=await listProcurementReceipts(buyer.tenant.chat_id,{purchaseOrderId:po.id},buyer.actor); assert.equal(receipts.length,3); assert.equal(db.prepare("SELECT COUNT(*) c FROM procurement_receipt_lines").get().c,3); assert.equal(db.prepare("SELECT COUNT(*) c FROM payments").get().c,0); assert.equal(db.prepare("SELECT COUNT(*) c FROM accounts_receivable").get().c,0);
+// A receipt with multiple products is one atomic Inventory operation. Force
+// the second movement to fail after the first would otherwise have been
+// inserted, then verify rollback and replay of the same PENDING receipt.
+const secondProductId = `${productId}-second`;
+db.prepare(`INSERT INTO catalog_products(chat_id,product_id,product_json,price_minor,stock,marketplace_listed,updated_at,stock_revision,currency) VALUES(?,?,?,?,?,?,?,?,?)`)
+  .run(buyer.tenant.chat_id,secondProductId,JSON.stringify({id:secondProductId,name:'Cement second'}),1000,0,0,new Date().toISOString(),0,'ETB');
+const firstBatchItemId = `po-item-${x}-batch-first`;
+const secondBatchItemId = `po-item-${x}-batch-second`;
+for (const [id,product] of [[firstBatchItemId,productId],[secondBatchItemId,secondProductId]]) {
+  db.prepare(`INSERT INTO purchase_order_items(id,purchase_order_id,product_id,description,quantity,unit_price_minor,currency,line_total_minor,quote_item_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`)
+    .run(id,po.id,product,`Atomic receipt ${product}`,10,1000,'ETB',10000,null,new Date().toISOString());
+}
+const batchReceipt = {
+  id: `receipt-atomic-${x}`,
+  locationId: location.id,
+  idempotencyKey: `receipt-atomic-${x}`,
+  items: [
+    { purchaseOrderItemId: firstBatchItemId, receivedQuantity: 2 },
+    { purchaseOrderItemId: secondBatchItemId, receivedQuantity: 3 },
+  ],
+};
+db.exec(`CREATE TRIGGER fail_second_receipt_movement BEFORE INSERT ON inventory_movements
+  WHEN NEW.product_id = '${secondProductId}'
+  BEGIN SELECT RAISE(ABORT, 'injected second-line failure'); END;`);
+await assert.rejects(
+  () => createProcurementReceipt(buyer.tenant.chat_id,po.id,batchReceipt,buyer.actor),
+  /injected second-line failure/,
+);
+db.exec('DROP TRIGGER fail_second_receipt_movement');
+const pendingReceipt = db.prepare('SELECT id,status FROM procurement_receipts WHERE id=?').get(batchReceipt.id);
+assert.equal(pendingReceipt.status,'PENDING');
+assert.equal(db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE event_id=?").get(`procurement_receipt:${batchReceipt.id}:${firstBatchItemId}`).c,0,
+  'first movement must roll back when the second line fails');
+const recoveredReceipt = await createProcurementReceipt(buyer.tenant.chat_id,po.id,batchReceipt,buyer.actor);
+assert.equal(recoveredReceipt.id,batchReceipt.id);
+assert.equal(recoveredReceipt.status,'POSTED');
+assert.equal(db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE reference_type='procurement_receipt' AND reference_id=?").get(batchReceipt.id).c,2);
+assert.equal(db.prepare("SELECT quantity FROM inventory_movements WHERE event_id=?").get(`procurement_receipt:${batchReceipt.id}:${firstBatchItemId}`).quantity,2);
+assert.equal(db.prepare("SELECT quantity FROM inventory_movements WHERE event_id=?").get(`procurement_receipt:${batchReceipt.id}:${secondBatchItemId}`).quantity,3);
+// Two simultaneous retries with the same key must converge on one posted
+// receipt and one movement, even when both callers pass the initial lookup.
+const concurrentReceiptInput = {
+  locationId: location.id,
+  idempotencyKey: `receipt-concurrent-${x}`,
+  items: [{ purchaseOrderItemId: secondBatchItemId, receivedQuantity: 1 }],
+};
+const concurrentResults = await Promise.all([
+  createProcurementReceipt(buyer.tenant.chat_id,po.id,concurrentReceiptInput,buyer.actor),
+  createProcurementReceipt(buyer.tenant.chat_id,po.id,concurrentReceiptInput,buyer.actor),
+]);
+assert.equal(concurrentResults[0].id, concurrentResults[1].id);
+assert.equal(concurrentResults[0].status, 'POSTED');
+assert.equal(concurrentResults[1].status, 'POSTED');
+assert.equal(db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE event_id=?").get(
+  `procurement_receipt:${concurrentResults[0].id}:${secondBatchItemId}`
+).c, 1, 'concurrent same-key retries must create exactly one movement');
+const receipts=await listProcurementReceipts(buyer.tenant.chat_id,{purchaseOrderId:po.id},buyer.actor); assert.equal(receipts.length,5); assert.equal(db.prepare("SELECT COUNT(*) c FROM procurement_receipt_lines").get().c,6); assert.equal(db.prepare("SELECT COUNT(*) c FROM payments").get().c,0); assert.equal(db.prepare("SELECT COUNT(*) c FROM accounts_receivable").get().c,0);
 console.log('Phase 17.7 Procurement Receiving Regression: PASS');
