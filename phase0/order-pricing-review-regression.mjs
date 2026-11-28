@@ -86,7 +86,7 @@ try {
     'courier assignment lifecycle must remain blocked while pricing review is required',
   );
 
-  const reviewer = { userId: owner.id };
+  const reviewer = { userId: owner.id, role: 'owner', organizationId: tenant.organizationId, chatId: tenant.chatId };
   const decision = await store.reviewOrderPricing(
     tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',
     'Manager reviewed the submitted customer price and accepts it.', reviewer,
@@ -112,8 +112,8 @@ try {
   );
   await assert.rejects(
     store.reviewOrderPricing(tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',
-      'Missing reviewer', null),
-    error => error.code === 'ORDER_PRICING_REVIEW_ACTOR_REQUIRED',
+      'Cashier must not approve manual pricing.', { userId: owner.id, role: 'cashier', organizationId: tenant.organizationId }),
+    error => error.code === 'ORDER_PRICING_REVIEW_FORBIDDEN' && error.statusCode === 403,
   );
   await assert.rejects(
     store.reviewOrderPricing(tenant.chatId, reviewRequired.server_order_id, 'ACCEPT_AS_SUBMITTED',

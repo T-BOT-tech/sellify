@@ -1268,9 +1268,7 @@ async function handleOrderPricingReview(req, res, chatId, orderId) {
     deniedMessage: 'Order pricing review permission required',
   });
   const body = await readBody(req);
-  const result = await reviewOrderPricing(chatId, orderId, body.decision, body.reason, {
-    userId: session.userId,
-  });
+  const result = await reviewOrderPricing(chatId, orderId, body.decision, body.reason, session);
   sendJSON(res, 200, result, req);
 }
 
