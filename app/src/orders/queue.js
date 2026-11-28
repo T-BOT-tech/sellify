@@ -206,6 +206,16 @@ export function ticketInnerHtml(o) {
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-user"/></svg> Staff: ${escapeHtml(o.created_by_user || 'Staff')} (${escapeHtml((o.created_by_role || '').toUpperCase())})</div>` : '';
   const b2bLine = o.b2b_account_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-building"/></svg> ${escapeHtml(o.b2b_account_name)}${o.pricing_tier_name ? ' · ' + escapeHtml(o.pricing_tier_name) : ''}</div>` : '';
+  const pricingReviewStatus = String(o.pricing_review?.status || '').toUpperCase();
+  const pricingReviewLine = pricingReviewStatus === 'REVIEW_REQUIRED'
+    ? '<div class="ticket-customer" role="status">Price review required · fulfillment is blocked until an authorized decision</div>'
+    : pricingReviewStatus === 'APPROVED'
+      ? '<div class="ticket-customer">Price accepted after authorized review</div>'
+      : pricingReviewStatus === 'REJECTED'
+        ? '<div class="ticket-customer" role="status">Submitted price rejected · fulfillment remains blocked</div>'
+        : pricingReviewStatus === 'VERIFIED'
+          ? '<div class="ticket-customer">Price verified against current Catalog base price</div>'
+          : '';
   const hasVolumeDiscount = isVolumeDiscountEnabled() && o.items.some(i => getVolumeDiscountForQty(i.qty));
   const volumeLine = hasVolumeDiscount ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-box"/></svg> ${t('volumeDiscountApplied')}</div>` : '';
   const statusLabel = o.status === 'handoff_pending'
@@ -227,6 +237,11 @@ export function ticketInnerHtml(o) {
   const disabledAttr = o._deleting ? ' disabled' : '';
   const paymentEvidenceBtn = o.server_order_id && payment?.id && hasPermission(currentStaff ? currentStaff.role : 'owner', 'payments:view')
     ? `<button type="button" class="ticket-act-btn" data-payment-evidence-order="${escapeHtml(String(o.id))}"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment evidence</button>` : '';
+  const pricingReviewActions = pricingReviewStatus === 'REVIEW_REQUIRED' && o.server_order_id
+    && hasPermission(currentStaff ? currentStaff.role : 'owner', 'orders:pricing:review')
+    ? `<button type="button" class="ticket-act-btn" data-order-pricing-review="${escapeHtml(String(o.server_order_id))}" data-decision="ACCEPT_AS_SUBMITTED">Accept submitted price</button>
+       <button type="button" class="ticket-act-btn danger" data-order-pricing-review="${escapeHtml(String(o.server_order_id))}" data-decision="REJECT">Reject price</button>`
+    : '';
 
   return `
     <div class="ticket-head">
@@ -243,6 +258,7 @@ export function ticketInnerHtml(o) {
     ${cashLine}
     ${customerLine}
     ${b2bLine}
+    ${pricingReviewLine}
     ${volumeLine}
     ${staffLine}
     <div class="ticket-actions">
@@ -252,6 +268,7 @@ export function ticketInnerHtml(o) {
       <button type="button" class="ticket-act-btn" onclick="printReceipt('${o.id}')"${disabledAttr}><svg class="icon icon-sm"><use href="#i-print"/></svg> ${t('print')}</button>
       ${proofBtn}
       ${paymentEvidenceBtn}
+      ${pricingReviewActions}
       ${o.is_marketplace && MARKETPLACE_NEXT[o.status] ? `<button type="button" class="ticket-act-btn" onclick="advanceMarketplaceOrderStatus('${o.id}')"${disabledAttr}>Next: ${escapeHtml(MARKETPLACE_NEXT[o.status].replaceAll('_', ' '))}</button>` : ''}
       ${o.is_marketplace && ['queued','confirmed','preparing'].includes(o.status) ? `<button type="button" class="ticket-act-btn danger" onclick="cancelMarketplaceOrder('${o.id}')"${disabledAttr}>Cancel</button>` : ''}
       <button type="button" class="ticket-act-btn danger" onclick="deleteOrder('${o.id}')"${disabledAttr}><svg class="icon icon-sm"><use href="#i-trash"/></svg> ${t('delete')}</button>
@@ -500,11 +517,44 @@ export async function openPaymentEvidencePanel(localOrderId) {
   }
 }
 
+
+export async function openOrderPricingReview(serverOrderId, decision) {
+  const order = orders.find(item => String(item.server_order_id || '') === String(serverOrderId));
+  if (!order || !config.chatId || !config.syncUrl) return;
+  if (!hasPermission(currentStaff ? currentStaff.role : 'owner', 'orders:pricing:review')) return;
+  if (String(order.pricing_review?.status || '').toUpperCase() !== 'REVIEW_REQUIRED') return;
+  const reason = window.prompt('Enter the reason for this pricing decision (10–500 characters):');
+  if (reason === null) return;
+  try {
+    const response = await fetch(
+      `${config.syncUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(config.chatId)}/${encodeURIComponent(serverOrderId)}/pricing-review`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ decision, reason }),
+      },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || 'Unable to save the pricing review decision.');
+    order.pricing_review = data.pricing_review;
+    saveJSON(STORAGE_KEYS.orders, orders);
+    renderQueue();
+  } catch (error) {
+    window.alert(error?.message || 'Unable to save the pricing review decision.');
+  }
+}
+
 export function createTicketNode(o) {
   const div = document.createElement('div');
   div.className = 'ticket ticket-enter';
   div.innerHTML = ticketInnerHtml(o);
   div.addEventListener('click', event => {
+    const pricingButton = event.target.closest('[data-order-pricing-review]');
+    if (pricingButton) {
+      event.preventDefault();
+      openOrderPricingReview(pricingButton.dataset.orderPricingReview, pricingButton.dataset.decision);
+      return;
+    }
     const button = event.target.closest('[data-payment-evidence-order]');
     if (button) openPaymentEvidencePanel(button.dataset.paymentEvidenceOrder);
   });
