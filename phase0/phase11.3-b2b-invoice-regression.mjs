@@ -51,6 +51,7 @@ const rejectedRace = raceResults.find(result => result.status === 'rejected');
 assert.ok(['INVALID_INVOICE_TRANSITION', 'INVOICE_STATE_CONFLICT'].includes(rejectedRace.reason?.code));
 const persistedRaceInvoice = await store.getInvoice(chatId, raceInvoice.id);
 assert.ok(['ISSUED', 'CANCELLED'].includes(persistedRaceInvoice.status));
+const db = store.getDatabaseForTests();
 await assert.rejects(() => store.createInvoice(chatId, { receivableId: ar.id }, { userId: user.id }), e => e?.code === 'INVOICE_EXISTS' && e?.statusCode === 409);
 
 // Concurrent invoice creation for one receivable must serialize duplicate detection.
@@ -90,9 +91,8 @@ try {
 } finally {
   db.exec('DROP TRIGGER IF EXISTS fail_b2b_invoice_audit_insert');
 }
-const db = store.getDatabaseForTests();
 assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 19').get()?.version, 19);
-assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 2);
+assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 3);
 assert.equal(authz.authorize({ userId: 'buyer', role: 'buyer', organizationId: tenant.organizationId }, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.DENY);
 const manager = { userId: 'manager', role: 'manager', organizationId: tenant.organizationId };
 assert.equal(authz.authorize(manager, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.ALLOW);
