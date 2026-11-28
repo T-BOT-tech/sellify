@@ -18,6 +18,8 @@ console.log('FUX-53 B2B Quotes frontend authority boundary regression: PASS');
 console.log('Canonical backend quote authority remains the required integration target.');
 
 assert(quotes.includes("/b2b/quotes"), 'Quotes UI must call the canonical B2B quotes API');
+assert(quotes.includes("request(`/catalog/${encodeURIComponent(config.chatId)}`)"), 'Quote product selector must use the existing canonical Catalog read route');
+assert(!quotes.includes("/tenants/${encodeURIComponent(config.chatId)}/catalog"), 'Quote product selector must not call a nonexistent tenant Catalog route');
 assert(quotes.includes("method: 'POST'"), 'Quotes UI must create quotes through POST');
 assert(quotes.includes("method: 'PATCH'"), 'Quotes UI must transition quotes through PATCH');
 assert(quotes.includes('Authorization'), 'Quotes UI must send the canonical session authorization');
