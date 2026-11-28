@@ -5902,7 +5902,7 @@ function assertOrderPricingReadyForFinancialCommitment(order) {
   const review = order?.pricing_review;
   const serverVerified = review?.schema_version === 1
     && review.status === 'VERIFIED'
-    && review.source === 'CATALOG_BASE'
+    && ['CATALOG_BASE', 'MARKETPLACE_CATALOG'].includes(review.source)
     && review.verification_state === 'SERVER_VERIFIED';
   const reviewerApproved = review?.schema_version === 1
     && review.status === 'APPROVED'
@@ -12461,6 +12461,10 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         // Server-owned pricing assessment. Client-supplied pricing decisions are
         // never trusted as verification or authorization evidence.
         pricing_review: pricingReview,
+        // Marketplace identity is assigned only by the server-side marketplace
+        // checkout path, never by a POS/offline sync payload.
+        is_marketplace: false,
+        marketplace_order_id: null,
         items,
         total,
         currency: expectedCurrency,
@@ -12876,6 +12880,15 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         id: orderId,
         marketplace_order_id: marketplaceOrderId,
         is_marketplace: true,
+        pricing_review: {
+          schema_version: 1,
+          status: 'VERIFIED',
+          source: 'MARKETPLACE_CATALOG',
+          verification_state: 'SERVER_VERIFIED',
+          currency: sellerCurrency,
+          evaluated_at: nowIso(),
+          reason_codes: [],
+        },
         vendor_code: tenant.vendor_code || defaultVendorCode(sellerId),
         items: sellerItems,
         total: subtotal,

@@ -154,6 +154,17 @@ try {
     'service booking confirmation must not commit a resource while the order price is unreviewed',
   );
 
+  const [forgedMarketplaceResult] = await store.saveQueuedOrders(tenant.chatId, [{
+    id: 'client-cannot-claim-marketplace',
+    is_marketplace: true,
+    marketplace_order_id: 'forged-marketplace-id',
+    currency: 'ETB',
+    items: [{ id: 'catalog-match', name: 'Catalog Match', price: 100, qty: 1, currency: 'ETB' }],
+  }]);
+  const forgedMarketplaceOrder = (await store.getOrders(tenant.chatId)).find(order => order.id === 'client-cannot-claim-marketplace');
+  assert.equal(forgedMarketplaceOrder.is_marketplace, false);
+  assert.equal(forgedMarketplaceOrder.marketplace_order_id, null);
+
   const [unknownCatalogResult] = await store.saveQueuedOrders(tenant.chatId, [{
     id: 'unknown-catalog-item',
     currency: 'ETB',
