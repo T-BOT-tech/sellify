@@ -5668,8 +5668,40 @@ function getProcurementReceiptByIdSync(organizationId, receiptId) {
   return procurementReceiptFromRow(row, lines);
 }
 
+function canonicalizeProcurementReceiptValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalizeProcurementReceiptValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalizeProcurementReceiptValue(value[key])]));
+  }
+  return value;
+}
+
 function procurementReceiptHash(input) {
+  return `v2:${crypto.createHash('sha256').update(JSON.stringify(canonicalizeProcurementReceiptValue(input))).digest('hex')}`;
+}
+
+function legacyProcurementReceiptHash(input) {
   return crypto.createHash('sha256').update(JSON.stringify(input, Object.keys(input).sort())).digest('hex');
+}
+
+function procurementReceiptLegacyLinesMatch(receiptId, items) {
+  const rows = db.prepare(
+    'SELECT purchase_order_item_id, product_id, received_quantity, notes FROM procurement_receipt_lines WHERE receipt_id = ? ORDER BY purchase_order_item_id'
+  ).all(String(receiptId));
+  const expected = [...items].map(item => ({
+    purchaseOrderItemId: String(item.purchaseOrderItemId),
+    productId: String(item.productId),
+    receivedQuantity: Number(item.receivedQuantity),
+    notes: String(item.notes || ''),
+  })).sort((a, b) => a.purchaseOrderItemId.localeCompare(b.purchaseOrderItemId));
+  const actual = rows.map(row => ({
+    purchaseOrderItemId: String(row.purchase_order_item_id),
+    productId: String(row.product_id),
+    receivedQuantity: Number(row.received_quantity),
+    notes: String(row.notes || ''),
+  })).sort((a, b) => a.purchaseOrderItemId.localeCompare(b.purchaseOrderItemId));
+  return actual.length === expected.length
+    && JSON.stringify(actual) === JSON.stringify(expected);
 }
 
 export async function getProcurementReceipt(chatId, receiptId, actor = null) {
@@ -5690,106 +5722,220 @@ export async function listProcurementReceipts(chatId, { purchaseOrderId = '', st
 }
 
 export async function createProcurementReceipt(chatId, purchaseOrderId, input = {}, actor = null) {
+  ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
   const actorId = assertProcurementActor(organizationId, actor);
-  const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ? AND organization_id = ?').get(String(purchaseOrderId), organizationId);
-  if (!po) throw Object.assign(new Error('Purchase order not found'), { statusCode: 404, code: 'PO_NOT_FOUND' });
-  if (po.source_type !== 'PROCUREMENT_AWARD') throw Object.assign(new Error('Only procurement-origin purchase orders can use procurement receiving'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_SOURCE_REQUIRED' });
-  if (po.status !== 'APPROVED') throw Object.assign(new Error('Only approved procurement purchase orders can be received'), { statusCode: 409, code: 'PO_NOT_APPROVED' });
-
   const locationId = String(input.locationId ?? input.location_id ?? '').trim();
   if (!locationId) throw Object.assign(new Error('locationId is required for procurement receiving'), { statusCode: 400, code: 'RECEIPT_LOCATION_REQUIRED' });
-  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
-  if (!location) throw Object.assign(new Error('Receiving location does not belong to this organization'), { statusCode: 400, code: 'INVALID_RECEIVING_LOCATION' });
 
   const rawItems = Array.isArray(input.items) ? input.items : [];
   if (!rawItems.length) throw Object.assign(new Error('At least one receipt item is required'), { statusCode: 400, code: 'RECEIPT_ITEMS_REQUIRED' });
-  const poItems = db.prepare('SELECT * FROM purchase_order_items WHERE purchase_order_id = ? ORDER BY created_at, id').all(po.id);
-  const allowed = new Map(poItems.map(x => [String(x.id), x]));
-  const posted = db.prepare(`SELECT prl.purchase_order_item_id, SUM(prl.received_quantity) AS received_quantity
-    FROM procurement_receipt_lines prl JOIN procurement_receipts pr ON pr.id=prl.receipt_id
-    WHERE pr.purchase_order_id=? AND pr.status='POSTED' GROUP BY prl.purchase_order_item_id`).all(po.id);
-  const receivedByItem = new Map(posted.map(x => [String(x.purchase_order_item_id), Number(x.received_quantity || 0)]));
-  const seen = new Set();
-  const items = rawItems.map((x, index) => {
-    const itemId = String(x.purchaseOrderItemId ?? x.purchase_order_item_id ?? '').trim();
-    const poItem = allowed.get(itemId);
-    if (!poItem) throw Object.assign(new Error(`Receipt item ${index + 1} references a purchase-order item outside this order`), { statusCode: 400, code: 'INVALID_PO_ITEM' });
-    if (seen.has(itemId)) throw Object.assign(new Error('Duplicate purchase-order receipt item'), { statusCode: 400, code: 'DUPLICATE_RECEIPT_ITEM' });
-    seen.add(itemId);
-    const quantity = Number(x.receivedQuantity ?? x.received_quantity);
-    if (!Number.isInteger(quantity) || quantity <= 0) throw Object.assign(new Error(`Receipt item ${index + 1} receivedQuantity must be a positive integer`), { statusCode: 400, code: 'INVALID_RECEIVED_QUANTITY' });
-    const already = receivedByItem.get(itemId) || 0;
-    const ordered = Number(poItem.quantity);
-    if (already + quantity > ordered) throw Object.assign(new Error(`Receipt item ${index + 1} would exceed ordered quantity`), { statusCode: 409, code: 'OVER_RECEIPT' });
-    const productId = String(poItem.product_id || '').trim();
-    if (!productId) throw Object.assign(new Error('Procurement purchase-order items must reference catalog products before receiving'), { statusCode: 409, code: 'RECEIPT_PRODUCT_REQUIRED' });
-    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
-    if (!product) throw Object.assign(new Error('Purchase-order product is not present in the buyer catalog'), { statusCode: 409, code: 'RECEIPT_PRODUCT_NOT_FOUND' });
-    if (String((payload => payload.item_type ?? payload.type ?? '')(parseJSON(product.product_json, {}))).trim().toLowerCase() === 'service') {
-      throw Object.assign(new Error('Service catalog items cannot be received into physical inventory'), { statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY' });
-    }
-    return { purchaseOrderItemId: itemId, productId, receivedQuantity: quantity, notes: String(x.notes || '').trim().slice(0, 1000) };
-  });
-
   const requestedReceivedAt = input.receivedAt ?? input.received_at ?? null;
-  const receivedAt = String(requestedReceivedAt || nowIso());
+  let receivedAt = String(requestedReceivedAt || nowIso());
   const notes = String(input.notes || '').trim().slice(0, 4000);
-  const idempotencyKey = input.idempotencyKey ?? input.idempotency_key ?? null;
-  const hash = procurementReceiptHash({ purchaseOrderId: po.id, locationId, receivedAt: requestedReceivedAt ? receivedAt : null, notes, items });
-  if (idempotencyKey) {
-    const old = db.prepare('SELECT * FROM procurement_receipts WHERE organization_id=? AND idempotency_key=?').get(organizationId, String(idempotencyKey));
-    if (old) {
-      if (old.request_hash !== hash) throw Object.assign(new Error('Idempotency key was already used with a different receipt payload'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
-      if (old.status === 'POSTED') return getProcurementReceiptByIdSync(organizationId, old.id);
-    }
+  const rawIdempotencyKey = input.idempotencyKey ?? input.idempotency_key ?? null;
+  const idempotencyKey = rawIdempotencyKey == null || String(rawIdempotencyKey).trim() === ''
+    ? null : String(rawIdempotencyKey).trim();
+  if (idempotencyKey && idempotencyKey.length > 200) {
+    throw Object.assign(new Error('idempotencyKey is too long'), { statusCode: 400, code: 'INVALID_IDEMPOTENCY_KEY' });
   }
 
-  const receiptId = String(input.id || crypto.randomUUID());
-  const receiptNumber = String(input.receiptNumber ?? input.receipt_number ?? '').trim() || nextProcurementReceiptNumber(organizationId);
+  let receiptId = String(input.id || crypto.randomUUID());
+  let receiptNumber = String(input.receiptNumber ?? input.receipt_number ?? '').trim();
   const createdAt = nowIso();
-  const eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
+  const requestHashInput = () => ({
+    purchaseOrderId: String(purchaseOrderId),
+    locationId,
+    receivedAt: requestedReceivedAt ? receivedAt : null,
+    notes,
+    items,
+  });
+  let items = [];
+  let existingReceipt = null;
 
+  // Phase 1 reserves the ordered quantities with a durable PENDING receipt.
+  // All validation and idempotency reads that affect the reservation happen
+  // under the same SQLite write lock, preventing competing receipts from
+  // independently consuming the same remaining PO quantity.
+  await waitForInventoryTransactionSlot();
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.prepare(`INSERT INTO procurement_receipts(id,organization_id,purchase_order_id,location_id,receipt_number,status,received_at,notes,idempotency_key,request_hash,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,'PENDING',?,?,?,?,?,?,?)`)
-      .run(receiptId, organizationId, po.id, locationId, receiptNumber, receivedAt, notes, idempotencyKey, hash, actorId, createdAt, createdAt);
-    const insertLine = db.prepare(`INSERT INTO procurement_receipt_lines(id,receipt_id,purchase_order_item_id,product_id,received_quantity,notes,event_id,created_at) VALUES(?,?,?,?,?,?,?,?)`);
-    for (let i=0; i<items.length; i += 1) {
-      const item = items[i];
-      insertLine.run(crypto.randomUUID(), receiptId, item.purchaseOrderItemId, item.productId, item.receivedQuantity, item.notes, eventIds[i], createdAt);
+    assertProcurementActor(organizationId, actor);
+    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ? AND organization_id = ?')
+      .get(String(purchaseOrderId), organizationId);
+    if (!po) throw Object.assign(new Error('Purchase order not found'), { statusCode: 404, code: 'PO_NOT_FOUND' });
+    if (po.source_type !== 'PROCUREMENT_AWARD') throw Object.assign(new Error('Only procurement-origin purchase orders can use procurement receiving'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_SOURCE_REQUIRED' });
+    if (po.status !== 'APPROVED') throw Object.assign(new Error('Only approved procurement purchase orders can be received'), { statusCode: 409, code: 'PO_NOT_APPROVED' });
+
+    const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
+    if (!location) throw Object.assign(new Error('Receiving location does not belong to this organization'), { statusCode: 400, code: 'INVALID_RECEIVING_LOCATION' });
+
+    const poItems = db.prepare('SELECT * FROM purchase_order_items WHERE purchase_order_id = ? ORDER BY created_at, id').all(po.id);
+    const allowed = new Map(poItems.map(row => [String(row.id), row]));
+    const seen = new Set();
+    items = rawItems.map((raw, index) => {
+      const itemId = String(raw.purchaseOrderItemId ?? raw.purchase_order_item_id ?? '').trim();
+      const poItem = allowed.get(itemId);
+      if (!poItem) throw Object.assign(new Error(`Receipt item ${index + 1} references a purchase-order item outside this order`), { statusCode: 400, code: 'INVALID_PO_ITEM' });
+      if (seen.has(itemId)) throw Object.assign(new Error('Duplicate purchase-order receipt item'), { statusCode: 400, code: 'DUPLICATE_RECEIPT_ITEM' });
+      seen.add(itemId);
+      const quantity = Number(raw.receivedQuantity ?? raw.received_quantity);
+      if (!Number.isInteger(quantity) || quantity <= 0) throw Object.assign(new Error(`Receipt item ${index + 1} receivedQuantity must be a positive integer`), { statusCode: 400, code: 'INVALID_RECEIVED_QUANTITY' });
+      const productId = String(poItem.product_id || '').trim();
+      if (!productId) throw Object.assign(new Error('Procurement purchase-order items must reference catalog products before receiving'), { statusCode: 409, code: 'RECEIPT_PRODUCT_REQUIRED' });
+      const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+      if (!product) throw Object.assign(new Error('Purchase-order product is not present in the buyer catalog'), { statusCode: 409, code: 'RECEIPT_PRODUCT_NOT_FOUND' });
+      if (String((payload => payload.item_type ?? payload.type ?? '')(parseJSON(product.product_json, {}))).trim().toLowerCase() === 'service') {
+        throw Object.assign(new Error('Service catalog items cannot be received into physical inventory'), { statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY' });
+      }
+      return { purchaseOrderItemId: itemId, productId, receivedQuantity: quantity, notes: String(raw.notes || '').trim().slice(0, 1000) };
+    });
+
+    const hashInput = requestHashInput();
+    const requestHash = procurementReceiptHash(hashInput);
+    existingReceipt = idempotencyKey
+      ? db.prepare('SELECT * FROM procurement_receipts WHERE organization_id = ? AND idempotency_key = ?')
+        .get(organizationId, idempotencyKey)
+      : null;
+
+    if (existingReceipt) {
+      const storedLinesMatch = procurementReceiptLegacyLinesMatch(existingReceipt.id, items);
+      const legacyMatch = existingReceipt.request_hash === legacyProcurementReceiptHash(hashInput)
+        && String(existingReceipt.purchase_order_id) === String(po.id)
+        && String(existingReceipt.location_id) === locationId
+        && String(existingReceipt.notes || '') === notes
+        && (requestedReceivedAt == null || String(existingReceipt.received_at) === receivedAt)
+        && storedLinesMatch;
+      if (!storedLinesMatch || (existingReceipt.request_hash !== requestHash && !legacyMatch)) {
+        throw Object.assign(new Error('Idempotency key was already used with a different receipt payload'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+      }
+      if (existingReceipt.status === 'POSTED') {
+        db.exec('COMMIT');
+        return getProcurementReceiptByIdSync(organizationId, existingReceipt.id);
+      }
+      if (existingReceipt.status !== 'PENDING') {
+        throw Object.assign(new Error('Procurement receipt is not in a resumable state'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_PENDING' });
+      }
+      receiptId = String(existingReceipt.id);
+      receiptNumber = String(existingReceipt.receipt_number);
+      receivedAt = String(existingReceipt.received_at || receivedAt);
+      items = db.prepare('SELECT purchase_order_item_id, product_id, received_quantity, notes FROM procurement_receipt_lines WHERE receipt_id = ? ORDER BY created_at, id')
+        .all(receiptId).map(row => ({
+          purchaseOrderItemId: String(row.purchase_order_item_id),
+          productId: String(row.product_id),
+          receivedQuantity: Number(row.received_quantity),
+          notes: String(row.notes || ''),
+        }));
+    } else {
+      receiptNumber = receiptNumber || nextProcurementReceiptNumber(organizationId);
+    }
+
+    const excludedReceiptId = existingReceipt?.id || null;
+    const receivedRows = db.prepare(`SELECT prl.purchase_order_item_id, SUM(prl.received_quantity) AS received_quantity
+      FROM procurement_receipt_lines prl
+      JOIN procurement_receipts pr ON pr.id = prl.receipt_id
+      WHERE pr.purchase_order_id = ?
+        AND pr.status IN ('PENDING','POSTED')
+        AND (? IS NULL OR pr.id <> ?)
+      GROUP BY prl.purchase_order_item_id`).all(po.id, excludedReceiptId, excludedReceiptId);
+    const receivedByItem = new Map(receivedRows.map(row => [String(row.purchase_order_item_id), Number(row.received_quantity || 0)]));
+    for (const item of items) {
+      const poItem = allowed.get(item.purchaseOrderItemId);
+      const already = receivedByItem.get(item.purchaseOrderItemId) || 0;
+      if (already + item.receivedQuantity > Number(poItem.quantity)) {
+        throw Object.assign(new Error('Receipt would exceed ordered quantity'), { statusCode: 409, code: 'OVER_RECEIPT' });
+      }
+    }
+
+    if (!existingReceipt) {
+      const eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
+      db.prepare(`INSERT INTO procurement_receipts(id,organization_id,purchase_order_id,location_id,receipt_number,status,received_at,notes,idempotency_key,request_hash,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,'PENDING',?,?,?,?,?,?,?)`)
+        .run(receiptId, organizationId, po.id, locationId, receiptNumber, receivedAt, notes, idempotencyKey, requestHash, actorId, createdAt, createdAt);
+      const insertLine = db.prepare(`INSERT INTO procurement_receipt_lines(id,receipt_id,purchase_order_item_id,product_id,received_quantity,notes,event_id,created_at) VALUES(?,?,?,?,?,?,?,?)`);
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        insertLine.run(crypto.randomUUID(), receiptId, item.purchaseOrderItemId, item.productId, item.receivedQuantity,
+          item.notes, eventIds[index], createdAt);
+      }
     }
     db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
-
-  // Physical stock boundary: delegate each posted receipt line to the same
-  // canonical inventory movement authority used by Warehouse Receiving.
-  // The deterministic event id makes retries idempotent at the ledger boundary.
-  try {
-    for (let i=0; i<items.length; i += 1) {
-      await appendInventoryMovement(chatId, {
-        productId: items[i].productId,
-        locationId,
-        quantity: items[i].receivedQuantity,
-        movementType: 'PURCHASE',
-        referenceType: 'procurement_receipt',
-        referenceId: receiptId,
-        eventId: eventIds[i],
-        occurredAt: receivedAt,
-        reason: 'Procurement purchase-order receipt',
-        metadata: { purchaseOrderId: po.id, purchaseOrderItemId: items[i].purchaseOrderItemId, receiptNumber },
-      }, actor);
-    }
   } catch (error) {
-    audit(chatId, 'procurement.receipt.inventory_pending', 'procurement_receipt', receiptId, { purchaseOrderId: po.id, errorCode: error?.code || 'INVENTORY_SYNC_FAILED' }, { organizationId, actorId, locationId });
+    if (db.isTransaction) db.exec('ROLLBACK');
     throw error;
   }
 
-  db.prepare("UPDATE procurement_receipts SET status='POSTED',updated_at=? WHERE id=? AND organization_id=? AND status='PENDING'").run(nowIso(), receiptId, organizationId);
-  audit(chatId, 'procurement.receipt.posted', 'procurement_receipt', receiptId, { purchaseOrderId: po.id, receiptNumber, lineCount: items.length, locationId }, { organizationId, actorId, locationId });
+  // Phase 2 posts every canonical Inventory movement and the receipt state in
+  // one SQLite transaction. No asynchronous operation is allowed while this
+  // transaction is open: appendInventoryMovementInTransaction is synchronous.
+  try {
+    await waitForInventoryTransactionSlot();
+    db.exec('BEGIN IMMEDIATE');
+    assertProcurementActor(organizationId, actor);
+    const receipt = db.prepare('SELECT * FROM procurement_receipts WHERE id = ? AND organization_id = ?')
+      .get(receiptId, organizationId);
+    if (!receipt) throw Object.assign(new Error('Pending procurement receipt was not found'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_FOUND' });
+    const postingPo = db.prepare('SELECT source_type, status FROM purchase_orders WHERE id = ? AND organization_id = ?')
+      .get(receipt.purchase_order_id, organizationId);
+    if (!postingPo || postingPo.source_type !== 'PROCUREMENT_AWARD' || postingPo.status !== 'APPROVED') {
+      throw Object.assign(new Error('Purchase order is no longer eligible for receiving'), { statusCode: 409, code: 'PO_NOT_APPROVED' });
+    }
+    const postingLocation = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'")
+      .get(receipt.location_id, organizationId);
+    if (!postingLocation) {
+      throw Object.assign(new Error('Receiving location is no longer active in this organization'), { statusCode: 409, code: 'INVALID_RECEIVING_LOCATION' });
+    }
+    if (receipt.status === 'POSTED') {
+      db.exec('COMMIT');
+      return getProcurementReceiptByIdSync(organizationId, receiptId);
+    }
+    if (receipt.status !== 'PENDING') {
+      throw Object.assign(new Error('Procurement receipt is not in a postable state'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_PENDING' });
+    }
+
+    const lines = db.prepare('SELECT * FROM procurement_receipt_lines WHERE receipt_id = ? ORDER BY rowid')
+      .all(receiptId);
+    if (!lines.length) throw Object.assign(new Error('Pending procurement receipt has no lines'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_LINES_MISSING' });
+    for (const line of lines) {
+      appendInventoryMovementInTransaction(chatId, organizationId, {
+        productId: line.product_id,
+        locationId: receipt.location_id,
+        quantity: Number(line.received_quantity),
+        movementType: 'PURCHASE',
+        referenceType: 'procurement_receipt',
+        referenceId: receiptId,
+        eventId: line.event_id,
+        occurredAt: receipt.received_at,
+        reason: 'Procurement purchase-order receipt',
+        metadata: {
+          purchaseOrderId: receipt.purchase_order_id,
+          purchaseOrderItemId: line.purchase_order_item_id,
+          receiptNumber: receipt.receipt_number,
+        },
+      }, actor);
+    }
+
+    const update = db.prepare("UPDATE procurement_receipts SET status='POSTED',updated_at=? WHERE id=? AND organization_id=? AND status='PENDING'")
+      .run(nowIso(), receiptId, organizationId);
+    if (Number(update.changes) !== 1) {
+      throw Object.assign(new Error('Procurement receipt state changed; retry'), { statusCode: 409, code: 'PROCUREMENT_RECEIPT_STATE_CONFLICT' });
+    }
+    audit(chatId, 'procurement.receipt.posted', 'procurement_receipt', receiptId, {
+      purchaseOrderId: receipt.purchase_order_id, receiptNumber: receipt.receipt_number,
+      lineCount: lines.length, locationId: receipt.location_id,
+    }, { organizationId, actorId, locationId: receipt.location_id });
+    db.exec('COMMIT');
+  } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
+    try {
+      audit(chatId, 'procurement.receipt.inventory_pending', 'procurement_receipt', receiptId, {
+        purchaseOrderId: String(purchaseOrderId), errorCode: error?.code || 'INVENTORY_SYNC_FAILED',
+      }, { organizationId, actorId, locationId });
+    } catch (_) { /* Preserve the original posting failure. */ }
+    throw error;
+  }
+
   return getProcurementReceiptByIdSync(organizationId, receiptId);
 }
-
 export async function createPurchaseOrderFromProcurementAward(chatId, input = {}, actor = null) {
   const organizationId = await tenantOrganizationId(chatId);
   const actorId = assertProcurementActor(organizationId, actor);
