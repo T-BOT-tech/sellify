@@ -319,6 +319,60 @@ try {
   assert.equal(serviceRequestRetry.order_id, serviceRequestFirst.order_id);
   assert.equal(serviceRequestRetry.payment_id, serviceRequestFirst.payment_id);
 
+  // Characterize the existing legacy POS sync normalization before any
+  // pricing-provenance or strict-line-validation change is proposed. These
+  // assertions document current behavior; they do not endorse silent dropping
+  // as the desired long-term contract.
+  const fractionalInput = {
+    ...structuredClone(original),
+    id: 'local-order-fractional-normalization',
+    items: [{ id: 'coffee', name: 'Coffee', price: 100.6, qty: 2.9, currency: 'ETB' }],
+  };
+  const [fractionalSynced] = await store.saveQueuedOrders(tenant.chatId, [fractionalInput]);
+  assert.equal(fractionalSynced.status, 'synced',
+    'current POS sync accepts fractional minor-unit price and quantity inputs');
+  const fractionalStored = (await store.getOrders(tenant.chatId))
+    .find(order => order.id === fractionalInput.id);
+  assert.equal(fractionalStored.items[0].price, 101,
+    'current POS sync rounds submitted minor-unit price');
+  assert.equal(fractionalStored.items[0].qty, 2,
+    'current POS sync floors submitted quantity');
+  assert.equal(fractionalStored.total, 202,
+    'current POS sync recomputes total from normalized price and quantity');
+
+  const mixedValidityInput = {
+    ...structuredClone(original),
+    id: 'local-order-mixed-validity-lines',
+    items: [
+      { id: 'coffee', name: 'Coffee', price: 100, qty: 2, currency: 'ETB' },
+      { id: 'invalid-zero-qty', name: 'Invalid zero quantity', price: 500, qty: 0, currency: 'ETB' },
+      { id: 'invalid-fractional-under-one', name: 'Invalid fractional quantity', price: 500, qty: 0.5, currency: 'ETB' },
+      { id: 'invalid-currency', name: 'Wrong currency', price: 500, qty: 1, currency: 'USD' },
+    ],
+  };
+  const [mixedValiditySynced] = await store.saveQueuedOrders(tenant.chatId, [mixedValidityInput]);
+  assert.equal(mixedValiditySynced.status, 'synced',
+    'current POS sync accepts an order when at least one line remains valid');
+  const mixedValidityStored = (await store.getOrders(tenant.chatId))
+    .find(order => order.id === mixedValidityInput.id);
+  assert.deepEqual(mixedValidityStored.items.map(item => item.id), ['coffee'],
+    'current POS sync silently omits invalid-quantity and mismatched-currency lines');
+  assert.equal(mixedValidityStored.total, 200,
+    'current POS sync total includes only retained normalized lines');
+
+  const allInvalidInput = {
+    ...structuredClone(original),
+    id: 'local-order-all-invalid-lines',
+    items: [
+      { id: 'invalid-zero-qty', name: 'Invalid zero quantity', price: 100, qty: 0, currency: 'ETB' },
+      { id: 'invalid-currency', name: 'Wrong currency', price: 100, qty: 1, currency: 'USD' },
+    ],
+  };
+  const [allInvalidResult] = await store.saveQueuedOrders(tenant.chatId, [allInvalidInput]);
+  assert.equal(allInvalidResult.status, 'rejected',
+    'current POS sync rejects an order when no valid line remains');
+  assert.equal(allInvalidResult.error, 'No valid line items');
+
   console.log('Order sync idempotency regression: PASS');
 } finally {
   await rm(dir, { recursive: true, force: true });
